@@ -1,17 +1,96 @@
 {
   "name": "cockpit",
-  "version": "0.1.0",
+  "productName": "Cockpit",
+  "version": "0.4.0",
   "description": "Cabine de comando para múltiplos agentes de IA em vários projetos",
+  "homepage": "https://github.com/devnx/cockpit",
+  "author": {
+    "name": "Fabio",
+    "email": "fabio@devnx.com.br"
+  },
   "type": "module",
-  "main": "server.js",
+  "main": "electron-main.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "electron .",
+    "server": "node server.js",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "vendor": "node scripts/copy-vendor-assets.js",
+    "postinstall": "node scripts/copy-vendor-assets.js && (electron-rebuild -f -w node-pty || true)",
+    "icons": "node scripts/make-icons.js",
+    "dist": "npm run vendor && npm run icons && electron-builder",
+    "dist:linux": "npm run icons && electron-builder --linux",
+    "dist:win": "npm run icons && electron-builder --win",
+    "dist:mac": "npm run icons && electron-builder --mac"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@xterm/addon-clipboard": "^0.1.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-search": "^0.15.0",
+    "@xterm/addon-unicode11": "^0.8.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/addon-webgl": "^0.18.0",
+    "@xterm/xterm": "^5.5.0",
+    "monaco-editor": "^0.50.0",
     "node-pty": "^1.0.0",
     "typescript": "^6.0.3",
     "typescript-language-server": "^5.1.3",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
+    "sharp": "^0.34.5"
+  },
+  "build": {
+    "appId": "com.devnx.cockpit",
+    "productName": "Cockpit",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
+    ],
+    "files": [
+      "electron-main.js",
+      "preload.cjs",
+      "server.js",
+      "lib/**/*",
+      "modules/**/*",
+      "public/**/*",
+      "package.json",
+      "!**/*.md",
+      "!**/.DS_Store",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts"
+    ],
+    "extraResources": [
+      {
+        "from": "projects.example.json",
+        "to": "projects.example.json"
+      }
+    ],
+    "linux": {
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg",
+      "icon": "build/icon.icns"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

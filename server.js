@@ -2,6 +2,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import url from "url";
+import os from "os";
 import { execFile } from "child_process";
 import { WebSocketServer } from "ws";
 import pkg from "node-pty";
@@ -10,10 +11,21 @@ import * as dictation from "./lib/dictation.js";
 import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
 const { spawn } = pkg;
 
-const PORT = 3737;
-const ROOT = path.dirname(url.fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(ROOT, "public");
-const PROJECTS = JSON.parse(fs.readFileSync(path.join(ROOT, "projects.json"), "utf8"));
+// === config dinâmica — populada por startServer() ===
+const DEFAULT_ROOT = path.dirname(url.fileURLToPath(import.meta.url));
+let PORT = 3737;
+let ROOT = DEFAULT_ROOT;
+let PUBLIC_DIR = path.join(DEFAULT_ROOT, "public");
+let PROJECTS_PATH = path.join(DEFAULT_ROOT, "projects.json");
+let PROJECTS = []; // populado em startServer()
+
+// shell padrão por SO — usado quando o projeto não especifica
+function defaultShell() {
+  if (process.platform === "win32") {
+    return process.env.COMSPEC || "powershell.exe";
+  }
+  return process.env.SHELL || "/bin/bash";
+}
 
 // =========================================================
 // SESSÕES — agora 1 projeto contém N terminais (PTYs)
@@ -26,7 +38,7 @@ function createTerminalIn(session, name = null) {
   const tid = `t${session.nextId++}`;
   const cwd = fs.existsSync(session.proj.path) ? session.proj.path : process.env.HOME;
 
-  const pty = spawn(session.proj.shell || "bash", [], {
+  const pty = spawn(session.proj.shell || defaultShell(), [], {
     name: "xterm-256color",
     cols: 120,
     rows: 30,
@@ -509,7 +521,7 @@ function helloPayload() {
 
 async function persistProjects() {
   const json = JSON.stringify(PROJECTS, null, 2) + "\n";
-  await fs.promises.writeFile(path.join(ROOT, "projects.json"), json, "utf8");
+  await fs.promises.writeFile(PROJECTS_PATH, json, "utf8");
 }
 
 function broadcastProjectsChanged() {
@@ -1063,6 +1075,12 @@ const MIME = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".map": "application/json; charset=utf-8",
+  ".ttc": "font/collection",
 };
 
 const server = http.createServer((req, res) => {
@@ -1115,39 +1133,101 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 // =========================================================
-// BOOT
+// BOOT — exportado pra Electron e CLI
 // =========================================================
-console.log("\x1b[36m▸ cockpit\x1b[0m criando sessões…");
-PROJECTS.forEach((p) => {
-  const exists = fs.existsSync(p.path);
-  console.log(
-    `  \x1b[2m·\x1b[0m ${p.id.padEnd(12)} ${
-      exists ? "\x1b[32m✓\x1b[0m" : "\x1b[33m⚠\x1b[0m"
-    } ${p.path}`
-  );
-  createSession(p);
-});
-
-server.listen(PORT, async () => {
-  console.log(`\n\x1b[36m▸ cockpit\x1b[0m rodando em \x1b[1mhttp://localhost:${PORT}\x1b[0m\n`);
-  // sobe o daemon de voz em background — não bloqueia o boot
-  voice.start().catch((e) => console.log(`\x1b[31m▸ voice\x1b[0m falhou: ${e.message}`));
-});
-
-async function shutdown() {
-  console.log("\n\x1b[36m▸ cockpit\x1b[0m encerrando sessões…");
+async function shutdown(opts = {}) {
+  const log = opts.log || console;
+  log.log("\x1b[36m▸ cockpit\x1b[0m encerrando sessões…");
   for (const s of sessions.values()) {
     for (const t of s.terminals.values()) {
-      try {
-        t.pty.kill();
-      } catch {}
+      try { t.pty.kill(); } catch {}
     }
   }
-  dictation.stop();
+  try { dictation.stop(); } catch {}
   shutdownAllLsp();
   await voice.stop().catch(() => {});
-  process.exit(0);
+  if (opts.exit !== false) process.exit(0);
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+export async function startServer({
+  port = 3737,
+  rootDir = DEFAULT_ROOT,
+  publicDir = path.join(rootDir, "public"),
+  projectsPath = path.join(rootDir, "projects.json"),
+  voiceEnabled = true,
+  dictationEnabled = true,
+  log = console,
+} = {}) {
+  PORT = port;
+  ROOT = rootDir;
+  PUBLIC_DIR = publicDir;
+  PROJECTS_PATH = projectsPath;
+
+  // carrega projetos do path configurado
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(projectsPath, "utf8"));
+  } catch (e) {
+    log.log(`\x1b[31m▸ cockpit\x1b[0m falha ao ler ${projectsPath}: ${e.message}`);
+    raw = [];
+  }
+  PROJECTS.length = 0;
+  for (const p of raw) PROJECTS.push(p);
+
+  log.log("\x1b[36m▸ cockpit\x1b[0m criando sessões…");
+  PROJECTS.forEach((p) => {
+    const exists = fs.existsSync(p.path);
+    log.log(
+      `  \x1b[2m·\x1b[0m ${p.id.padEnd(12)} ${
+        exists ? "\x1b[32m✓\x1b[0m" : "\x1b[33m⚠\x1b[0m"
+      } ${p.path}`
+    );
+    createSession(p);
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  const addr = server.address();
+  const actualPort = typeof addr === "object" && addr ? addr.port : port;
+  const serverUrl = `http://127.0.0.1:${actualPort}`;
+  log.log(`\n\x1b[36m▸ cockpit\x1b[0m rodando em \x1b[1m${serverUrl}\x1b[0m\n`);
+
+  // voz/ditado opt-in — não derrubam o boot se faltar binário
+  if (voiceEnabled && process.platform === "linux") {
+    voice.start().catch((e) =>
+      log.log(`\x1b[33m▸ voice\x1b[0m offline: ${e.message}`)
+    );
+  } else if (voiceEnabled) {
+    log.log(`\x1b[33m▸ voice\x1b[0m disponível só em Linux por enquanto`);
+  }
+
+  return {
+    url: serverUrl,
+    port: actualPort,
+    shutdown: (opts) => shutdown({ exit: false, ...opts }),
+    server,
+    PROJECTS,
+  };
+}
+
+// CLI mode — `node server.js`
+const isCLI = (() => {
+  try {
+    const argvPath = process.argv[1] && fs.realpathSync(process.argv[1]);
+    const modPath = fs.realpathSync(url.fileURLToPath(import.meta.url));
+    return argvPath === modPath;
+  } catch {
+    return false;
+  }
+})();
+if (isCLI) {
+  await startServer();
+  process.on("SIGINT", () => shutdown());
+  process.on("SIGTERM", () => shutdown());
+}

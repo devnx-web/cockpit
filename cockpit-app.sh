@@ -34,7 +34,24 @@ if [ -z "$BROWSER" ]; then
   exit 1
 fi
 
-# 3. Abre em modo --app (janela isolada, sem chrome do navegador)
+# 3. (X11) remove a barra de título do sistema assim que a janela aparecer.
+#    Roda em background; quando o Chrome cria a janela, aplica _MOTIF_WM_HINTS.
+#    Se xdotool/xprop não estiverem instalados, simplesmente pula sem erro.
+if [ "${XDG_SESSION_TYPE:-x11}" = "x11" ] && command -v xdotool > /dev/null && command -v xprop > /dev/null; then
+  (
+    for i in $(seq 1 80); do
+      sleep 0.1
+      WIN_ID=$(xdotool search --class '^[Cc]ockpit$' 2>/dev/null | head -1)
+      if [ -n "$WIN_ID" ]; then
+        xprop -id "$WIN_ID" -f _MOTIF_WM_HINTS 32c \
+          -set _MOTIF_WM_HINTS "0x2, 0, 0, 0, 0" 2>/dev/null
+        exit 0
+      fi
+    done
+  ) &
+fi
+
+# 4. Abre em modo --app (janela isolada, sem chrome do navegador)
 exec "$BROWSER" \
   --app=http://localhost:3737 \
   --window-size=1500,950 \

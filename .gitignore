@@ -5,3 +5,6 @@ node_modules/
 .cache/
 dist/
 build/
+
+# Assets de terceiros copiados de node_modules pelo postinstall
+public/vendor/
