@@ -1,0 +1,156 @@
+[
+  {
+    "id": "academia",
+    "name": "Academia PHD",
+    "path": "/home/ftgk/Documentos/GitHub/academiaphd",
+    "color": "#5b8def",
+    "icon": "building",
+    "shell": "bash",
+    "commands": [
+      {
+        "label": "claude",
+        "cmd": "claude --dangerously-skip-permissions",
+        "color": "#FF79C6"
+      },
+      {
+        "label": "codex",
+        "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
+        "color": "#8BE9FD"
+      },
+      {
+        "label": "npm dev",
+        "cmd": "npm run dev",
+        "color": "#50FA7B"
+      },
+      {
+        "label": "artisan",
+        "cmd": "php artisan serve",
+        "color": "#FFB86C"
+      }
+    ]
+  },
+  {
+    "id": "comercial",
+    "name": "Comercial Multimarcas",
+    "path": "/home/ftgk/Documentos/GitHub/comercial-multimarcas",
+    "color": "#34d399",
+    "icon": "truck",
+    "shell": "bash",
+    "commands": [
+      {
+        "label": "kimi",
+        "cmd": "kimi --yolo",
+        "color": "#BD93F9"
+      },
+      {
+        "label": "claude",
+        "cmd": "claude --dangerously-skip-permissions",
+        "color": "#FF79C6"
+      },
+      {
+        "label": "codex",
+        "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
+        "color": "#8BE9FD"
+      },
+      {
+        "label": "npm dev",
+        "cmd": "npm run dev",
+        "color": "#50FA7B"
+      },
+      {
+        "label": "artisan serve",
+        "cmd": "php artisan serve",
+        "color": "#FFB86C"
+      }
+    ]
+  },
+  {
+    "id": "voice",
+    "name": "Claude Voice",
+    "path": "/home/ftgk/Documentos/claude-voice",
+    "color": "#22d3ee",
+    "icon": "mic",
+    "shell": "bash",
+    "commands": [
+      {
+        "label": "claude",
+        "cmd": "claude --dangerously-skip-permissions",
+        "color": "#FF79C6"
+      },
+      {
+        "label": "codex",
+        "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
+        "color": "#8BE9FD"
+      },
+      {
+        "label": "npm dev",
+        "cmd": "npm run dev",
+        "color": "#50FA7B"
+      },
+      {
+        "label": "artisan serve",
+        "cmd": "php artisan serve",
+        "color": "#FFB86C"
+      }
+    ]
+  },
+  {
+    "id": "gralha",
+    "name": "Postos Gralha",
+    "path": "/home/ftgk/postos-gralha",
+    "color": "#fb923c",
+    "icon": "fuel",
+    "shell": "bash",
+    "commands": [
+      {
+        "label": "claude",
+        "cmd": "claude --dangerously-skip-permissions",
+        "color": "#FF79C6"
+      },
+      {
+        "label": "codex",
+        "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
+        "color": "#8BE9FD"
+      },
+      {
+        "label": "npm dev",
+        "cmd": "npm run dev",
+        "color": "#50FA7B"
+      },
+      {
+        "label": "artisan",
+        "cmd": "php artisan serve",
+        "color": "#FFB86C"
+      }
+    ]
+  },
+  {
+    "id": "cockpit",
+    "name": "Cockpit",
+    "path": "/home/ftgk/cockpit",
+    "color": "#b07dff",
+    "icon": "cog",
+    "shell": "bash",
+    "commands": [
+      {
+        "label": "claude",
+        "cmd": "claude --dangerously-skip-permissions",
+        "color": "#FF79C6"
+      },
+      {
+        "label": "node server",
+        "cmd": "node server.js",
+        "color": "#50FA7B"
+      }
+    ]
+  },
+  {
+    "id": "rede-urbana",
+    "name": "Rede Urbana",
+    "path": "/home/ftgk/Documentos/GitHub/rede-urbana",
+    "color": "#5b8def",
+    "icon": "building",
+    "shell": "bash",
+    "commands": []
+  }
+]

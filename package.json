@@ -1,0 +1,17 @@
+{
+  "name": "cockpit",
+  "version": "0.1.0",
+  "description": "Cabine de comando para múltiplos agentes de IA em vários projetos",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "typescript": "^6.0.3",
+    "typescript-language-server": "^5.1.3",
+    "ws": "^8.18.0"
+  }
+}

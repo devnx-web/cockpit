@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Cockpit
+GenericName=Cabine de Comando
+Comment=Multi-projeto multi-agente
+Exec=/home/ftgk/cockpit/cockpit-app.sh
+Icon=/home/ftgk/cockpit/public/icon.svg
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=Cockpit
+Keywords=cockpit;terminal;agent;claude;

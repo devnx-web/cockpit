@@ -1,0 +1,26 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#1a1d23"/>
+      <stop offset="100%" stop-color="#0a0b0d"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect x="2" y="2" width="252" height="252" rx="54" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <g filter="url(#glow)">
+    <circle cx="80" cy="80" r="14" fill="#5b8def"/>
+    <circle cx="176" cy="80" r="14" fill="#fb923c"/>
+    <circle cx="80" cy="176" r="14" fill="#34d399"/>
+    <circle cx="176" cy="176" r="14" fill="#b07dff"/>
+  </g>
+  <rect x="74" y="124" width="108" height="2" fill="rgba(255,255,255,0.08)"/>
+  <rect x="124" y="74" width="2" height="108" fill="rgba(255,255,255,0.08)"/>
+  <text x="128" y="248" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-family="ui-monospace, monospace" font-size="14" font-weight="600" letter-spacing="4">COCKPIT</text>
+</svg>
