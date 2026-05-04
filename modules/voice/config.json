@@ -1,7 +1,7 @@
 {
     "enabled": false,
     "voice_ref": "/home/ftgk/cockpit/modules/voice/voice_ref.wav",
-    "voice_ref_text": "Senhor, renderização pronta. Mil perdões, senhor. Afinal, o senhor é sempre tão discreto.",
+    "voice_ref_text": "Senhor, renderização pronta. Um pouco de ostentação, né? Mil perdões, senhor. Afinal, o senhor é sempre tão discreto.",
     "speech_mode": "verbatim",
     "max_chars": 4000,
     "speed": 1.4,

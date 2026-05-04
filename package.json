@@ -1,7 +1,7 @@
 {
   "name": "cockpit",
   "productName": "Cockpit",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "Cabine de comando para múltiplos agentes de IA em vários projetos",
   "homepage": "https://github.com/devnx/cockpit",
   "author": {

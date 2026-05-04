@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.5.6] — 2026-05-04
+
+### Corrigido
+- **Voz Jarvis sintetizada estava com timbre degradado.** Causa raiz: o `voice_ref.txt` (transcrição da voz de referência) estava com **uma frase faltando** — o áudio diz "Senhor, renderização pronta. **Um pouco de ostentação, né?** Mil perdões, senhor. Afinal, o senhor é sempre tão discreto." mas o txt só tinha "Senhor, renderização pronta. Mil perdões, senhor. Afinal...". O OmniVoice usa áudio+texto pra alinhar fonemas e clonar voz; com o texto incompleto, o cloning saía ruim. Corrigido em `modules/voice/voice_ref.txt` e no `voice_ref_text` do config seed.
+- **Switch do Járvis ficava preso em "offline" mesmo com daemon vivo**, especialmente após desativar/ativar várias vezes seguidas. O polling de status durava só 30s; depois disso a UI parava de checar. Agora o popover faz polling contínuo (2s) enquanto está aberto, e para quando fecha ou quando o daemon fica vivo.
+- **CUDA out-of-memory ao clicar rápido no switch.** Cada toggle spawna/mata o daemon; tentativas em série não dão tempo da GPU liberar e o segundo daemon morre com OOM. Agora o switch tem debounce de 200ms e fica disabled por 3s após cada toggle, evitando o problema.
+
+### Adicionado
+- `scripts/voice-diag.py` — busca brute-force de `seed`/`speed` que produz síntese mais similar à `AMOSTRA_APROVADA.wav` (referência da voz Jarvis aprovada). Usa similaridade espectral log-mel pra rankear automaticamente. Útil pra reajustar parâmetros se o modelo OmniVoice for atualizado.
+
+---
+
 ## [0.5.5] — 2026-05-04
 
 ### Corrigido

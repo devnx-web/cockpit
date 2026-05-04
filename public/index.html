@@ -6743,6 +6743,29 @@
       // já tratado via switch — só precisamos extender o case voice_config
     }
 
+    // Polling enquanto o popover está aberto: re-checa status a cada 2s pra
+    // capturar o momento em que o daemon termina de carregar (10-30s típicos)
+    // sem o usuário precisar fechar/abrir o popover. Para automaticamente
+    // quando o popover fecha ou quando o daemon fica vivo.
+    let voicePopoverPollTimer = null;
+    function startVoicePopoverPoll() {
+      if (voicePopoverPollTimer) return;
+      voicePopoverPollTimer = setInterval(() => {
+        const pop = document.getElementById("voicePopover");
+        if (!pop.classList.contains("open")) {
+          stopVoicePopoverPoll();
+          return;
+        }
+        requestVoiceStatus();
+      }, 2000);
+    }
+    function stopVoicePopoverPoll() {
+      if (voicePopoverPollTimer) {
+        clearInterval(voicePopoverPollTimer);
+        voicePopoverPollTimer = null;
+      }
+    }
+
     document.getElementById("voiceIndicator").addEventListener("click", (e) => {
       e.stopPropagation();
       const pop = document.getElementById("voicePopover");
@@ -6751,6 +6774,9 @@
       if (!wasOpen) {
         requestVoiceStatus();
         requestVoiceConfig();
+        startVoicePopoverPoll();
+      } else {
+        stopVoicePopoverPoll();
       }
     });
     document.addEventListener("click", (e) => {
@@ -6758,13 +6784,25 @@
       const ind = document.getElementById("voiceIndicator");
       if (pop.classList.contains("open") && !pop.contains(e.target) && !ind.contains(e.target)) {
         pop.classList.remove("open");
+        stopVoicePopoverPoll();
       }
     });
 
-    // Toggle on/off
+    // Toggle on/off — debounce pra evitar disparos em série quando o usuário
+    // clica rápido (cada toggle spawna/mata daemon, e tentativas seguidas
+    // dão CUDA OOM porque a GPU ainda não liberou).
+    let voiceSwitchDebounce = null;
     document.getElementById("vpEnabledSwitch").addEventListener("change", (e) => {
       if (ws?.readyState !== 1) return;
-      ws.send(JSON.stringify({ type: "voice_set_enabled", enabled: e.target.checked }));
+      const desired = e.target.checked;
+      e.target.disabled = true;
+      clearTimeout(voiceSwitchDebounce);
+      voiceSwitchDebounce = setTimeout(() => {
+        ws.send(JSON.stringify({ type: "voice_set_enabled", enabled: desired }));
+        // reabilita após 3s — se daemon estiver subindo, polling do popover
+        // atualiza o estado sozinho sem o usuário poder mexer no meio.
+        setTimeout(() => { e.target.disabled = false; }, 3000);
+      }, 200);
     });
 
     // Sliders com debounce — manda patch só após 350ms parado
