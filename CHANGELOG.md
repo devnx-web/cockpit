@@ -10,6 +10,29 @@ _(nada ainda)_
 
 ---
 
+## [0.6.0] — 2026-05-04
+
+Reescrita do módulo de voz com 3 engines TTS plugáveis. **Default agora é OpenAI TTS** (cloud, voz `nova`) em vez de OmniVoice local.
+
+### Adicionado
+- **Engine OpenAI TTS** (`tts_engine: "openai"`, default) — usa a API `tts-1-hd` da OpenAI. Vantagens: zero GPU, zero modelo carregado, boot do daemon em ~2s, voz idêntica sempre, funciona em qualquer máquina cliente. Custo ~$0.030 por 1k chars (~R$ 5-25/mês de uso típico). Reaproveita a `api_key` que o módulo `summarize` já configura.
+- **Engine XTTS-v2** (`tts_engine: "xtts"`) — Coqui XTTS-v2 local. Opcional pra quem prefere off-line e tem GPU 3GB+. Clonagem de voz funcional mas não chegou na qualidade da OpenAI no caso Jarvis.
+- **`daemon-openai.py`** — daemon novo, ~150 linhas, sem dependências de modelo. Usa `response_format=pcm` da OpenAI pra evitar decodificar MP3. Mesma API socket dos outros daemons (ping/speak/stop/reload/shutdown).
+- **`daemon-xtts.py`** — daemon XTTS, mantém mesma API socket. Cacheia `gpt_cond_latent` no boot pra acelerar síntese (~5s pra 6s áudio em GPU).
+- **Seletor de voz** no popover do Járvis — quando `tts_engine: openai`, aparece um dropdown com as 6 vozes (alloy/echo/fable/onyx/nova/shimmer). Trocar dispara `voice_reload` no daemon.
+
+### Alterado
+- **`lib/voice.js`**: `ENGINE_DEFAULTS` mapeia engine → script + venv. `spawnDaemon` lê `cfg.tts_engine` e escolhe o daemon correto. Suporta `omnivoice`, `xtts` e `openai`.
+- **`server.js`**: whitelist do `voice_patch_config` aceita `tts_engine`, `openai_voice`, `openai_model`.
+- **Config seed** vem com `tts_engine: "openai"` e `openai_voice: "nova"` por padrão. Cliente que prefere off-line muda manualmente.
+
+### Notas técnicas
+- OpenAI TTS suporta streaming nativo (~500ms primeira chunk). Não implementado nesta release — request/response inteiro fica em ~3s pra frases médias e está OK pro UX.
+- XTTS é mais portável (roda em CPU também), mas em testes locais não reproduziu o timbre Jarvis específico — provavelmente porque a referência aprovada original foi gerada por TTS cloud. OmniVoice fica como fallback histórico.
+- Venv do XTTS (~6GB) é opcional e fica em `~/.local/share/cockpit/venv-xtts/` quando o usuário escolher esse engine.
+
+---
+
 ## [0.5.6] — 2026-05-04
 
 ### Corrigido

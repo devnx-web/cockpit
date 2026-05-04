@@ -2079,6 +2079,17 @@
               <option value="summary">Resumo via LLM</option>
             </select>
           </div>
+          <div class="vp-control" id="vpVoiceRow" style="display:none">
+            <label>Voz (OpenAI)</label>
+            <select id="vpOpenaiVoice">
+              <option value="alloy">alloy — neutra</option>
+              <option value="echo">echo — masculina média</option>
+              <option value="fable">fable — britânica</option>
+              <option value="onyx">onyx — grave</option>
+              <option value="nova">nova — feminina</option>
+              <option value="shimmer">shimmer — feminina suave</option>
+            </select>
+          </div>
         </div>
 
         <div class="vp-section">
@@ -6703,6 +6714,8 @@
       const spd = document.getElementById("vpSpeed");
       const spdV = document.getElementById("vpSpeedVal");
       const mode = document.getElementById("vpMode");
+      const voiceRow = document.getElementById("vpVoiceRow");
+      const voiceSel = document.getElementById("vpOpenaiVoice");
       if (typeof cfg.volume === "number") {
         vol.value = cfg.volume; volV.textContent = `${cfg.volume.toFixed(1)}×`;
       }
@@ -6710,6 +6723,15 @@
         spd.value = cfg.speed; spdV.textContent = `${cfg.speed.toFixed(2)}×`;
       }
       if (cfg.speech_mode) mode.value = cfg.speech_mode;
+      // Seletor de voz só aparece quando engine=openai
+      if (voiceRow && voiceSel) {
+        if (cfg.tts_engine === "openai") {
+          voiceRow.style.display = "";
+          if (cfg.openai_voice) voiceSel.value = cfg.openai_voice;
+        } else {
+          voiceRow.style.display = "none";
+        }
+      }
     }
     function handleVoiceResult(msg) {
       if (!msg.result?.ok) {
@@ -6824,6 +6846,11 @@
     });
     document.getElementById("vpMode").addEventListener("change", (e) => {
       sendVoicePatch({ speech_mode: e.target.value });
+    });
+    document.getElementById("vpOpenaiVoice").addEventListener("change", (e) => {
+      sendVoicePatch({ openai_voice: e.target.value });
+      // Manda reload pro daemon pegar a voz nova sem precisar reiniciar.
+      if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "voice_reload" }));
     });
 
     // Botões

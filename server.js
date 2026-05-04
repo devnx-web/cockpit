@@ -746,6 +746,7 @@ wss.on("connection", (ws) => {
       const ALLOWED = new Set([
         "enabled", "volume", "speed", "speech_mode",
         "max_chars", "seed", "voice_ref_text",
+        "tts_engine", "openai_voice", "openai_model",
       ]);
       const patch = {};
       const incoming = msg.patch || {};
