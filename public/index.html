@@ -2405,7 +2405,7 @@
     let autoSaveTimer = null;
 
     // Settings (persistidas no localStorage)
-    const DEFAULT_SETTINGS = { autoSave: false, ligatures: false };
+    const DEFAULT_SETTINGS = { autoSave: false, webglFast: false };
     let cockpitSettings = (() => {
       try { return JSON.parse(localStorage.getItem("cockpit-settings") || "{}"); } catch { return {}; }
     })();
@@ -2518,16 +2518,17 @@
       // Clipboard: suporte a OSC 52 (copy/paste vindo de tmux/ssh remoto)
       try { xt.loadAddon(new window.ClipboardAddon.ClipboardAddon()); } catch {}
       xt.open(container);
-      // Ligaduras: pulamos WebGL quando ligado e ativamos shaping no DOM.
-      // O renderer DOM preserva ligaduras tipográficas (=>, !==, >=, etc.)
-      // automaticamente via shaping nativo do browser. WebGL desenha char-por-char
-      // e quebra ligaduras.
-      const ligaturesOn = !!getSetting("ligatures");
+      // Renderer: DOM por padrão (faz fallback de fonte por glyph via browser, então
+      // símbolos como ⎿/⏺ que não estão na fonte primária caem corretamente pra
+      // outras fontes do sistema). WebGL é opcional — mais rápido em logs gigantes,
+      // mas rasteriza com UMA fonte só e mostra "tofu" preto em qualquer glyph fora dela.
+      const useWebgl = !!getSetting("webglFast");
       let webglAddon = null;
-      if (ligaturesOn) {
-        container.style.fontFeatureSettings = '"calt", "liga", "dlig"';
-        container.style.fontVariantLigatures = "contextual";
-      } else {
+      // Em ambos os modos ativamos ligaduras tipográficas via CSS — o DOM honra
+      // automaticamente; o WebGL ignora (rasteriza char-por-char), e tudo bem.
+      container.style.fontFeatureSettings = '"calt", "liga", "dlig"';
+      container.style.fontVariantLigatures = "contextual";
+      if (useWebgl) {
         try {
           webglAddon = new window.WebglAddon.WebglAddon();
           webglAddon.onContextLoss(() => {
@@ -6259,12 +6260,12 @@
                   <span class="toggle-knob"></span>
                 </button>
               </div>
-              <div class="settings-row" id="sRowLigatures">
+              <div class="settings-row" id="sRowWebgl">
                 <div class="settings-row-text">
-                  <div class="settings-row-label">Ligaduras tipográficas no terminal</div>
-                  <div class="settings-row-hint">Renderiza =&gt;, !==, &gt;= como glifos únicos. Desativa o renderer WebGL (perde performance em logs grandes). Recarrega ao alternar.</div>
+                  <div class="settings-row-label">Renderer WebGL (rápido, mas com limitações)</div>
+                  <div class="settings-row-hint">Acelera scroll em logs gigantes. Trade-off: rasteriza com uma fonte só, então símbolos que caem em fonte fallback do sistema (⎿, ⏺, etc.) viram retângulos pretos. Ligaduras tipográficas também são desativadas. Recarrega ao alternar.</div>
                 </div>
-                <button class="settings-toggle ${getSetting("ligatures") ? "on" : ""}" data-key="ligatures" data-reload="1" aria-label="Ligaduras" role="switch" aria-checked="${getSetting("ligatures")}">
+                <button class="settings-toggle ${getSetting("webglFast") ? "on" : ""}" data-key="webglFast" data-reload="1" aria-label="WebGL" role="switch" aria-checked="${getSetting("webglFast")}">
                   <span class="toggle-knob"></span>
                 </button>
               </div>

@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.5.2] — 2026-05-04
+
+### Corrigido
+- **Caracteres `⎿`, `⏺` e similares ainda apareciam pretos** mesmo com a fonte do sistema. Causa real: o renderer **WebGL** do xterm.js rasteriza tudo com UMA fonte só — quando o glyph cai em fonte de fallback do SO (`⎿` mora no Noto CJK, `⏺` no FreeMono no Linux), ele mostra "tofu" preto. Não tem nada a ver com fontes custom.
+
+### Alterado
+- **Renderer DOM agora é o default** no terminal — o browser faz fallback de fonte por glyph automaticamente, então qualquer caractere Unicode renderiza correto desde que alguma fonte do sistema o tenha.
+- **Setting renomeado**: `ligatures` → `webglFast` (default `false`). Quem quiser a aceleração WebGL pra logs gigantes liga manualmente em Configurações → "Renderer WebGL (rápido, mas com limitações)". O hint deixa claro o trade-off.
+- Ligaduras tipográficas (`=>`, `!==`, `>=`) ficam **sempre ativas** agora — o DOM honra; o WebGL ignora silenciosamente, e tudo bem.
+
+---
+
 ## [0.5.1] — 2026-05-04
 
 ### Corrigido
