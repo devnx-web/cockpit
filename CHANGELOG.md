@@ -10,6 +10,13 @@ _(nada ainda)_
 
 ---
 
+## [0.5.4] — 2026-05-04
+
+### Corrigido
+- **Versão na barra de título estava cravada em `v0.4 · alpha`** desde o commit inicial — não acompanhava o `package.json`. Agora o servidor lê `version` do `package.json` no boot, manda no `helloPayload`, e o cliente exibe automaticamente. Nunca mais sai de sincronia.
+
+---
+
 ## [0.5.3] — 2026-05-04
 
 ### Corrigido

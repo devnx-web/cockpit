@@ -2026,7 +2026,7 @@
       <div class="title-bar-text">
         <strong>COCKPIT</strong>
         <span>· cabine de comando</span>
-        <span class="title-version">v0.4 · alpha</span>
+        <span class="title-version" id="titleVersion">…</span>
       </div>
       <div class="title-spacer"></div>
       <div class="conn-indicator">
@@ -5323,6 +5323,11 @@
       xtermInstances.clear();
 
       systemInfo = msg.system || systemInfo;
+
+      // Versão do app — vinda do package.json no servidor. Antes ficava hardcoded
+      // no HTML como "v0.4 · alpha" e dessincronizava todo release.
+      const versionEl = document.getElementById("titleVersion");
+      if (versionEl) versionEl.textContent = msg.version ? `v${msg.version}` : "";
 
       projects = msg.projects.map((p) => ({
         id: p.id, name: p.name, path: p.path,

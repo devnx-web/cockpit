@@ -18,6 +18,16 @@ let ROOT = DEFAULT_ROOT;
 let PUBLIC_DIR = path.join(DEFAULT_ROOT, "public");
 let PROJECTS_PATH = path.join(DEFAULT_ROOT, "projects.json");
 let PROJECTS = []; // populado em startServer()
+// Versão do app — lida uma vez do package.json e enviada ao cliente no hello.
+// Evita ter o número hardcoded em vários lugares e sair de sincronia.
+const APP_VERSION = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(DEFAULT_ROOT, "package.json"), "utf8"));
+    return pkg.version || "?";
+  } catch {
+    return "?";
+  }
+})();
 
 // shell padrão por SO — usado quando o projeto não especifica
 function defaultShell() {
@@ -503,6 +513,7 @@ const clients = new Set();
 function helloPayload() {
   return {
     type: "hello",
+    version: APP_VERSION,
     system: {
       home: os.homedir(),
       platform: process.platform,
