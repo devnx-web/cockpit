@@ -10,6 +10,22 @@ _(nada ainda)_
 
 ---
 
+## [0.4.2] — 2026-05-04
+
+### Alterado
+- **Fontes custom removidas** — JetBrains Mono e IBM Plex Mono saíram. App inteiro (UI, terminal, editor Monaco) agora usa a stack monospace nativa do SO: `ui-monospace, "SF Mono", "DejaVu Sans Mono", "Consolas", "Liberation Mono", monospace`. Decisão tomada após dois bugs seguidos (v0.4.0/v0.4.1) com glyphs faltando no boot por causa do atlas WebGL pré-rasterizando antes da `@font-face` baixar. Eliminar a `@font-face` elimina o problema de raiz, e a fonte do SO ainda traz suporte mais amplo a Unicode (acentos, box-drawing, símbolos) que os subsets latin do Fontsource não cobriam.
+
+### Removido
+- `@fontsource/jetbrains-mono` e `@fontsource/ibm-plex-mono` das dependências.
+- Diretório `public/vendor/fonts/` e todos os preloads/`@font-face` no `<head>`.
+- Warmup `document.fonts.load()` e o `clearTextureAtlas`/`refresh` no terminal — não são mais necessários sem fontes externas.
+
+### Notas
+- Bundle `public/vendor/` reduz ~200 KB (Monaco continua dominando com ~14 MB).
+- Visual fica menos "premium" que com JetBrains Mono, mas o terminal **sempre** funciona — qualquer caractere que o sistema operacional desenha, o app desenha.
+
+---
+
 ## [0.4.1] — 2026-05-04
 
 ### Corrigido

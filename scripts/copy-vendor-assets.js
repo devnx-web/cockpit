@@ -4,7 +4,12 @@
 // Pacotes:
 //   - @xterm/xterm + addons (UMDs + css)
 //   - monaco-editor (min/vs inteiro)
-//   - @fontsource/jetbrains-mono + @fontsource/ibm-plex-mono (subset latin)
+//
+// Fontes: usamos a fonte monospace nativa do sistema (ui-monospace, monospace).
+// Decisão tomada após bug recorrente em que o atlas WebGL pré-rasterizava com
+// fonte fallback antes da @font-face baixar — eliminar @font-face elimina o
+// problema de raiz e ainda dá glyphs Unicode mais amplos (acentos, box-drawing,
+// símbolos) que vêm com a fonte do SO.
 
 import fs from "fs";
 import path from "path";
@@ -74,38 +79,9 @@ function copyMonaco() {
   console.log(`[vendor] monaco: copiado para ${path.relative(ROOT, dst)}`);
 }
 
-// ---------------- fontsource (subset latin) ----------------
-function copyFontsource(pkg, family, weights) {
-  const srcRoot = path.join(NM, "@fontsource", pkg);
-  if (!fs.existsSync(srcRoot)) {
-    console.warn(`[vendor] @fontsource/${pkg} não encontrado`);
-    return;
-  }
-  const dstRoot = path.join(VENDOR, "fonts", pkg);
-  rmrf(dstRoot);
-  fs.mkdirSync(path.join(dstRoot, "files"), { recursive: true });
-  const cssBlocks = [];
-  let copied = 0;
-  for (const w of weights) {
-    const woff2 = `${pkg}-latin-${w}-normal.woff2`;
-    const srcWoff = path.join(srcRoot, "files", woff2);
-    if (!fs.existsSync(srcWoff)) {
-      console.warn(`[vendor] font faltando: ${woff2}`);
-      continue;
-    }
-    copyFile(srcWoff, path.join(dstRoot, "files", woff2));
-    copied++;
-    cssBlocks.push(
-      `@font-face {\n  font-family: '${family}';\n  font-style: normal;\n  font-display: swap;\n  font-weight: ${w};\n  src: url('./files/${woff2}') format('woff2');\n}`
-    );
-  }
-  fs.writeFileSync(path.join(dstRoot, "index.css"), cssBlocks.join("\n\n") + "\n");
-  console.log(`[vendor] fonts/${pkg}: ${copied} woff2 (latin, pesos ${weights.join(",")})`);
-}
-
 // ---------------- run ----------------
 fs.mkdirSync(VENDOR, { recursive: true });
 copyXterm();
 copyMonaco();
-copyFontsource("jetbrains-mono", "JetBrains Mono", ["400", "500", "600", "700"]);
-copyFontsource("ibm-plex-mono", "IBM Plex Mono", ["300", "400", "500", "600", "700"]);
+// Garante que um diretório de fontes legado não fique para trás após o downgrade.
+rmrf(path.join(VENDOR, "fonts"));
