@@ -56,10 +56,14 @@ def apply_pronunciation(text: str, pron_map: dict | None) -> str:
 def log(msg: str, cfg: dict | None = None) -> None:
     line = f"[{time.strftime('%H:%M:%S')}] {msg}"
     print(line, flush=True)
-    if cfg and cfg.get("log_file"):
+    # Override do config: o cockpit Node passa VOICE_LOG_FILE pra apontar pra
+    # userData/voice-logs/daemon.log em produção (o caminho do config.json é
+    # hardcoded e em geral não é gravável fora da máquina do desenvolvedor).
+    log_file = os.environ.get("VOICE_LOG_FILE") or (cfg.get("log_file") if cfg else None)
+    if log_file:
         try:
-            Path(cfg["log_file"]).parent.mkdir(parents=True, exist_ok=True)
-            with open(cfg["log_file"], "a", encoding="utf-8") as f:
+            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(log_file, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
         except Exception:
             pass

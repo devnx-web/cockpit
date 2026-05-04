@@ -59,18 +59,32 @@ function ensureVoiceConfigFile() {
   return target;
 }
 
+// Logs do daemon Python — em produção o asar.unpacked também não é gravável
+// (instalado como root pelo .deb), então jogamos em userData/voice-logs/.
+// Em dev fica ao lado do módulo, facilita inspeção.
+function ensureVoiceLogsDir() {
+  if (isDev) {
+    return path.join(__dirname, "modules", "voice", "logs");
+  }
+  const dir = path.join(app.getPath("userData"), "voice-logs");
+  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  return dir;
+}
+
 let mainWindow = null;
 let serverInstance = null;
 
 async function bootServer() {
   const projectsPath = ensureProjectsFile();
   const voiceConfigPath = ensureVoiceConfigFile();
+  const voiceLogsDir = ensureVoiceLogsDir();
   serverInstance = await startServer({
     port: 0, // OS escolhe
     rootDir: __dirname,
     publicDir: path.join(__dirname, "public"),
     projectsPath,
     voiceConfigPath,
+    voiceLogsDir,
     voiceEnabled: process.platform === "linux",
     dictationEnabled: process.platform === "linux",
   });

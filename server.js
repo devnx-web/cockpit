@@ -1236,6 +1236,7 @@ export async function startServer({
   publicDir = path.join(rootDir, "public"),
   projectsPath = path.join(rootDir, "projects.json"),
   voiceConfigPath = null,
+  voiceLogsDir = null,
   voiceEnabled = true,
   dictationEnabled = true,
   log = console,
@@ -1245,9 +1246,11 @@ export async function startServer({
   PUBLIC_DIR = publicDir;
   PROJECTS_PATH = projectsPath;
 
-  // Em produção (Electron empacotado) o config do voice fica no userData,
-  // não dentro do asar. O electron-main passa o caminho via voiceConfigPath.
-  if (voiceConfigPath) voice.init({ configPath: voiceConfigPath });
+  // Em produção (Electron empacotado) o config e os logs do voice ficam no
+  // userData, fora do asar (que é read-only). O electron-main injeta os caminhos.
+  if (voiceConfigPath || voiceLogsDir) {
+    voice.init({ configPath: voiceConfigPath, logsDir: voiceLogsDir });
+  }
 
   // carrega projetos do path configurado
   let raw;

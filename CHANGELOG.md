@@ -10,6 +10,21 @@ _(nada ainda)_
 
 ---
 
+## [0.5.5] — 2026-05-04
+
+### Corrigido
+- **Daemon do Járvis nunca subia no `.deb` instalado.** Causa raiz: o `cwd` do `spawn(python3, ['daemon.py'])` apontava pra dentro do `app.asar` — e asar é um arquivo monolítico, não diretório, então Node retornava `ENOTDIR` silenciosamente. Os fixes anteriores (config no userData, fluxo do switch, polling) eram corretos mas não bastavam: o daemon Python literalmente não chegava a executar.
+- **Socket zumbi em `/tmp/claude-voice.sock`** (de daemon morto sem cleanup) bloqueava o spawn do novo. Agora o `spawnDaemon` remove o socket stale antes de subir.
+- **Logs do daemon iam pra um caminho hardcoded** (`/home/ftgk/cockpit/modules/voice/logs/`) que não existia fora da máquina do desenvolvedor — `try/except` no daemon escondia o erro. Agora `VOICE_LOG_FILE` env var aponta pra `userData/voice-logs/`, sempre gravável.
+
+### Alterado
+- **`asarUnpack`** em `package.json` agora inclui `modules/voice/**/*` — electron-builder extrai o módulo pra `app.asar.unpacked/modules/voice/` durante o build, transformando-o num diretório real.
+- **`lib/voice.js`** detecta produção via path e substitui `app.asar` por `app.asar.unpacked` no `VOICE_DIR` antes de spawnar.
+- **`voice.init({ configPath, logsDir })`** aceita os dois caminhos; electron-main passa userData/voice-logs/ como logsDir.
+- **`daemon.py`** lê `VOICE_LOG_FILE` do ambiente como override do `log_file` no config.
+
+---
+
 ## [0.5.4] — 2026-05-04
 
 ### Corrigido
