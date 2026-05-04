@@ -26,7 +26,10 @@ import torch
 from omnivoice import OmniVoice
 
 ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT / "config.json"
+# Em produção (Electron + asar) o config fica no userData do app — gravável.
+# O cockpit injeta o caminho via VOICE_CONFIG_PATH; sem env var caímos no
+# arquivo ao lado do daemon (modo dev / execução standalone).
+CONFIG_PATH = Path(os.environ.get("VOICE_CONFIG_PATH") or (ROOT / "config.json"))
 
 
 def apply_pronunciation(text: str, pron_map: dict | None) -> str:

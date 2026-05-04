@@ -10,6 +10,19 @@ _(nada ainda)_
 
 ---
 
+## [0.5.1] — 2026-05-04
+
+### Corrigido
+- **Switch de ativação do Járvis ficava preso em "desativado"** no `.deb` instalado. Causa: `modules/voice/config.json` viajava dentro do `app.asar`, que é read-only — quando o switch tentava gravar `enabled: true`, o `fs.writeFileSync` falhava silenciosamente e o daemon nunca subia. Mesma armadilha que o `projects.json` já tinha resolvido em versão anterior.
+
+### Alterado
+- `voice-config.json` agora vive em `userData` (gravável em produção). Electron-main copia o seed do asar na primeira execução; depois disso é a fonte da verdade.
+- `lib/voice.js` exporta `init({ configPath })` — o caminho do config é injetado pelo electron-main via `startServer({ voiceConfigPath })`. Em modo dev o caminho continua sendo `modules/voice/config.json` ao lado do código.
+- `modules/voice/daemon.py` lê `VOICE_CONFIG_PATH` da env var (com fallback pro `config.json` ao lado do script). O cockpit Node passa essa env var ao spawnar o daemon, garantindo que ambos os processos leiam o mesmo arquivo.
+- `VENV_PYTHON` em `lib/voice.js` agora respeita `COCKPIT_VOICE_PYTHON` (env var) — facilita apontar pra um Python diferente sem editar o source.
+
+---
+
 ## [0.5.0] — 2026-05-04
 
 Redesign do seletor de pastas — quebra a dependência do `/home/ftgk/` hardcoded

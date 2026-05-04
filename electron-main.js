@@ -36,16 +36,41 @@ function ensureProjectsFile() {
   return target;
 }
 
+// voice-config.json fica em userData. Em produção o config dentro do asar é
+// read-only — sem este seed, o switch "ativar Járvis" no popover falhava
+// silenciosamente e o daemon nunca subia. No dev, fica ao lado de modules/voice/
+// como antes pra facilitar edição manual.
+function ensureVoiceConfigFile() {
+  if (isDev) {
+    return path.join(__dirname, "modules", "voice", "config.json");
+  }
+  const dir = app.getPath("userData");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, "voice-config.json");
+  if (!fs.existsSync(target)) {
+    // o asar é read-only, mas readable — copiamos o seed embutido
+    const seed = path.join(__dirname, "modules", "voice", "config.json");
+    try {
+      if (fs.existsSync(seed)) fs.copyFileSync(seed, target);
+    } catch (e) {
+      console.warn("voice config seed falhou:", e.message);
+    }
+  }
+  return target;
+}
+
 let mainWindow = null;
 let serverInstance = null;
 
 async function bootServer() {
   const projectsPath = ensureProjectsFile();
+  const voiceConfigPath = ensureVoiceConfigFile();
   serverInstance = await startServer({
     port: 0, // OS escolhe
     rootDir: __dirname,
     publicDir: path.join(__dirname, "public"),
     projectsPath,
+    voiceConfigPath,
     voiceEnabled: process.platform === "linux",
     dictationEnabled: process.platform === "linux",
   });
