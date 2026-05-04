@@ -10,6 +10,14 @@ _(nada ainda)_
 
 ---
 
+## [0.5.3] — 2026-05-04
+
+### Corrigido
+- **Switch do Járvis ficava desabilitado quando o daemon estava offline**, criando um catch-22: pra subir o daemon você precisa ligar o switch, mas o switch só fica habilitado quando o daemon já está vivo. Agora ele reflete o estado de `enabled` na config — habilitado em qualquer cenário, com mensagem clara em caso de daemon offline ("ative no switch pra subir").
+- **Feedback visual durante o boot do daemon**: o OmniVoice leva 10-30s pra carregar o modelo no GPU. Antes a UI fazia uma única checagem 150ms depois do `set_enabled` e mostrava "offline" pra sempre. Agora faz polling 1×/s por até 30s e mostra um toast "ativando Járvis (carregando modelo)…" enquanto isso.
+
+---
+
 ## [0.5.2] — 2026-05-04
 
 ### Corrigido

@@ -6666,8 +6666,16 @@
       if (!msg.alive) {
         dot.classList.add("offline"); pill.classList.add("offline");
         text.textContent = "offline"; pill.textContent = "offline";
-        info.textContent = "daemon offline";
-        swt.disabled = true; swt.checked = false;
+        // O switch precisa ficar habilitado mesmo com daemon offline — é o
+        // gatilho que faz o cockpit spawnar o daemon. Antes ficava disabled
+        // e gerava um catch-22: switch desabilitado → não consegue ligar →
+        // daemon nunca sobe. Reflete o estado da config (enabled), não do
+        // daemon vivo.
+        swt.disabled = false;
+        swt.checked = !!msg.enabled;
+        info.textContent = msg.enabled
+          ? "daemon offline — clique no switch pra reiniciar"
+          : "daemon offline — ative no switch pra subir";
         if (testBtn) testBtn.disabled = true;
       } else if (!msg.enabled) {
         dot.classList.add("muted"); pill.classList.add("muted");
@@ -6704,7 +6712,20 @@
       } else if (msg.action === "reload") {
         showSimpleToast("Voice", "config recarregada");
       } else if (msg.action === "set_enabled") {
-        setTimeout(requestVoiceStatus, 150);
+        // Subir o daemon Python carrega o modelo no GPU — leva 10-30s.
+        // Faz polling do status nos primeiros 30s pra atualizar a UI assim
+        // que ele ficar pronto, em vez de só uma checagem aos 150ms.
+        if (msg.result?.enabled) {
+          showSimpleToast("Voice", "ativando Járvis (carregando modelo)…");
+          let tries = 0;
+          const t = setInterval(() => {
+            tries++;
+            requestVoiceStatus();
+            if (voiceState.alive || tries > 30) clearInterval(t);
+          }, 1000);
+        } else {
+          setTimeout(requestVoiceStatus, 150);
+        }
       } else if (msg.action === "dictation_start" || msg.action === "dictation_stop") {
         setTimeout(requestDictationStatus, 200);
       }
