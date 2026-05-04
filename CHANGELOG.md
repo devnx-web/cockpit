@@ -10,6 +10,31 @@ _(nada ainda)_
 
 ---
 
+## [0.5.0] — 2026-05-04
+
+Redesign do seletor de pastas — quebra a dependência do `/home/ftgk/` hardcoded
+e prepara o app para distribuição a clientes em qualquer SO.
+
+### Adicionado
+- **`system` no `hello` payload** — servidor agora envia `home`, `platform`, `sep` e `commonPaths` (lista de atalhos detectados que existem de fato no SO do usuário).
+- **Atalhos dinâmicos no picker** — sidebar agrupa locais por categoria (Início, Desktop, Documentos, Downloads, Projetos), populada a partir do que o servidor encontrou (`Documents`/`Documentos`, `code`, `dev`, `Projects`/`Projetos`, `GitHub` em vários locais comuns, etc.).
+- **Badge "git"** ao lado de pastas que contêm `.git` — destaca repositórios na navegação.
+- **Banner "✓ pasta com repositório Git"** quando o diretório atual é um repo — sinaliza um bom candidato a projeto.
+- **Toggle "mostrar ocultos"** — controla pastas começando com `.` (Ctrl+H).
+- **Atalhos de teclado**: `Backspace` sobe um nível, `↑/↓` navegam, `Enter` abre a pasta selecionada (ou confirma se nenhuma estiver selecionada), `~` no input expande pra HOME real.
+- **Botão "Home"** dedicado na barra de ferramentas.
+
+### Alterado
+- **`showPathPicker`** reescrito com layout de 2 colunas (sidebar 180px + lista). Modal cresceu de 520px para 720px.
+- **Caminho exibido com `~`** quando dentro do home — reduz ruído visual.
+- **`listDirs` no servidor** retorna agora `entries` (com `name`, `hidden`, `isGit` por subpasta), `parent`, `home` e `isGitDir`. Campo legado `dirs` mantido para compat.
+- **Default do picker** caiu de `/home/ftgk` para `systemInfo.home` — vindo do servidor, sempre correto pro SO atual.
+
+### Removido
+- Hardcode de `/home/ftgk` em `showPathPicker` e nos shortcuts.
+
+---
+
 ## [0.4.2] — 2026-05-04
 
 ### Alterado

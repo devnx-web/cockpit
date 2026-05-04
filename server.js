@@ -503,6 +503,12 @@ const clients = new Set();
 function helloPayload() {
   return {
     type: "hello",
+    system: {
+      home: os.homedir(),
+      platform: process.platform,
+      sep: path.sep,
+      commonPaths: detectCommonPaths(),
+    },
     projects: PROJECTS.map((p) => {
       const s = sessions.get(p.id);
       return {
@@ -561,17 +567,81 @@ function validateProjectShape(p, { isNew = true, ignoreId = null } = {}) {
 
 async function listDirs(absPath) {
   try {
-    const target = absPath && absPath.trim() ? absPath : process.env.HOME;
+    const home = os.homedir();
+    const target = absPath && absPath.trim() ? absPath : home;
     if (!path.isAbsolute(target)) return { ok: false, error: "caminho deve ser absoluto" };
-    const entries = await fs.promises.readdir(target, { withFileTypes: true });
-    const dirs = entries
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name)
-      .sort((a, b) => a.localeCompare(b, "pt-BR"));
-    return { ok: true, path: target, dirs };
+    const raw = await fs.promises.readdir(target, { withFileTypes: true });
+    const entries = await Promise.all(
+      raw
+        .filter((e) => e.isDirectory() || e.isSymbolicLink())
+        .map(async (e) => {
+          const name = e.name;
+          const full = path.join(target, name);
+          let isGit = false;
+          try {
+            const st = await fs.promises.stat(path.join(full, ".git"));
+            isGit = st.isDirectory() || st.isFile();
+          } catch {}
+          return { name, hidden: name.startsWith("."), isGit };
+        })
+    );
+    entries.sort((a, b) => {
+      if (a.hidden !== b.hidden) return a.hidden ? 1 : -1;
+      return a.name.localeCompare(b.name, "pt-BR");
+    });
+    // o pai existe sempre que não estamos na raiz; serve pra UI desabilitar o botão "subir"
+    const parent = path.dirname(target);
+    const isGitDir = await (async () => {
+      try { return (await fs.promises.stat(path.join(target, ".git"))).isDirectory(); } catch { return false; }
+    })();
+    return {
+      ok: true,
+      path: target,
+      parent: parent === target ? null : parent,
+      home,
+      isGitDir,
+      entries,
+      // legado: campo `dirs` (array de strings) — mantido para compat com clientes antigos
+      dirs: entries.filter((e) => !e.hidden).map((e) => e.name),
+    };
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+// Lista de "lugares conhecidos" que existem no SO atual. Usado pelo picker
+// pra montar atalhos sem hardcodar caminhos do desenvolvedor (ex.: /home/ftgk).
+function detectCommonPaths() {
+  const home = os.homedir();
+  const candidates = [
+    { label: "Home", path: home, kind: "home" },
+    { label: "Desktop", path: path.join(home, "Desktop"), kind: "desktop" },
+    { label: "Área de Trabalho", path: path.join(home, "Área de Trabalho"), kind: "desktop" },
+    { label: "Documents", path: path.join(home, "Documents"), kind: "documents" },
+    { label: "Documentos", path: path.join(home, "Documentos"), kind: "documents" },
+    { label: "Downloads", path: path.join(home, "Downloads"), kind: "downloads" },
+    { label: "Projects", path: path.join(home, "Projects"), kind: "projects" },
+    { label: "Projetos", path: path.join(home, "Projetos"), kind: "projects" },
+    { label: "code", path: path.join(home, "code"), kind: "projects" },
+    { label: "dev", path: path.join(home, "dev"), kind: "projects" },
+    { label: "src", path: path.join(home, "src"), kind: "projects" },
+    { label: "workspace", path: path.join(home, "workspace"), kind: "projects" },
+    { label: "GitHub", path: path.join(home, "Documents", "GitHub"), kind: "projects" },
+    { label: "GitHub", path: path.join(home, "Documentos", "GitHub"), kind: "projects" },
+    { label: "GitHub", path: path.join(home, "GitHub"), kind: "projects" },
+  ];
+  const out = [];
+  const seen = new Set();
+  for (const c of candidates) {
+    if (seen.has(c.path)) continue;
+    try {
+      if (fs.statSync(c.path).isDirectory()) {
+        out.push(c);
+        seen.add(c.path);
+      }
+    } catch {}
+  }
+  return out;
 }
 
 function terminalSummary(t) {

@@ -1476,47 +1476,99 @@
     .icon-option svg { width: 14px; height: 14px; stroke-width: 1.5; }
 
     /* PATH PICKER */
-    .modal.modal-picker { width: 520px; }
-    .modal-picker .modal-content { padding: 16px 18px 8px; }
-    .picker-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 0;
-      font-family: var(--font-term);
-      font-size: 11.5px;
-      color: var(--text-secondary);
+    .modal.modal-picker { width: 720px; max-width: calc(100vw - 40px); }
+    .modal-picker .modal-content { padding: 16px 18px 10px; }
+    .picker-toolbar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 10px 0;
     }
-    .picker-up {
-      width: 26px; height: 26px;
+    .picker-icon-btn {
+      width: 28px; height: 28px;
       flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
       background: var(--bg-3);
       border: 1px solid var(--border-default);
-      border-radius: 4px;
+      border-radius: 5px;
       color: var(--text-secondary);
       cursor: pointer;
       transition: all 120ms;
     }
-    .picker-up:hover { background: var(--bg-4); color: var(--text-primary); }
-    .picker-up:disabled { opacity: 0.4; cursor: not-allowed; }
-    .picker-up svg { width: 13px; height: 13px; stroke-width: 1.8; }
+    .picker-icon-btn:hover { background: var(--bg-4); color: var(--text-primary); }
+    .picker-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .picker-icon-btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .picker-icon-btn.picker-toggle.active {
+      background: var(--bg-4);
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+      box-shadow: inset 0 0 0 1px var(--border-strong);
+    }
     .picker-path {
       flex: 1;
       padding: 6px 10px;
       background: var(--bg-0);
       border: 1px solid var(--border-default);
-      border-radius: 4px;
+      border-radius: 5px;
       color: var(--text-primary);
+      font-family: var(--font-term);
+      font-size: 12px;
+      outline: none;
+      transition: border-color 120ms;
+    }
+    .picker-path:focus { border-color: var(--border-strong); }
+    .picker-body {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 10px;
+      min-height: 360px;
+    }
+    .picker-sidebar {
+      background: var(--bg-0);
+      border: 1px solid var(--border-default);
+      border-radius: 5px;
+      padding: 8px 6px;
+      overflow-y: auto;
+      max-height: 380px;
+    }
+    .picker-side-group { margin-bottom: 10px; }
+    .picker-side-group:last-child { margin-bottom: 0; }
+    .picker-side-label {
+      font-family: var(--font-term);
+      font-size: 9.5px;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+      padding: 4px 8px;
+      text-transform: uppercase;
+    }
+    .picker-side-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 80ms;
+    }
+    .picker-side-item:hover { background: var(--bg-2); color: var(--text-primary); }
+    .picker-side-item.active { background: var(--bg-3); color: var(--text-primary); }
+    .picker-side-item .tree-icon { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.85; }
+    .picker-side-name {
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+    .picker-main {
+      display: flex; flex-direction: column;
+      min-width: 0;
+    }
     .picker-list {
-      max-height: 320px;
+      flex: 1;
+      max-height: 360px;
       overflow-y: auto;
       border: 1px solid var(--border-default);
       border-radius: 5px;
       background: var(--bg-0);
       padding: 4px 0;
-      margin-top: 4px;
+      outline: none;
     }
+    .picker-list:focus { border-color: var(--border-strong); }
     .picker-item {
       display: flex; align-items: center; gap: 9px;
       padding: 6px 12px;
@@ -1527,33 +1579,42 @@
       font-family: var(--font-ui);
     }
     .picker-item:hover { background: var(--bg-2); color: var(--text-primary); }
-    .picker-item .tree-icon { width: 14px; height: 14px; }
+    .picker-item.active { background: var(--bg-3); color: var(--text-primary); }
+    .picker-item .tree-icon { width: 14px; height: 14px; flex-shrink: 0; }
+    .picker-item-name {
+      flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .picker-item.is-hidden { opacity: 0.55; }
+    .picker-item.is-git .tree-icon { color: #f97316; }
+    .picker-badge {
+      font-family: var(--font-term);
+      font-size: 9.5px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(249, 115, 22, 0.15);
+      color: #fdba74;
+      border: 1px solid rgba(249, 115, 22, 0.35);
+    }
     .picker-empty {
       padding: 24px 16px;
       text-align: center;
       color: var(--text-tertiary);
       font-size: 12px;
     }
-    .picker-shortcuts {
-      display: flex; gap: 6px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-    .picker-shortcut {
-      padding: 3px 9px;
-      background: var(--bg-3);
-      border: 1px solid var(--border-default);
-      border-radius: 12px;
-      font-size: 10.5px;
-      color: var(--text-secondary);
-      cursor: pointer;
+    .picker-status {
+      padding: 8px 4px 0;
       font-family: var(--font-term);
-      transition: all 100ms;
+      font-size: 11px;
+      min-height: 22px;
     }
-    .picker-shortcut:hover {
-      background: var(--bg-4);
-      color: var(--text-primary);
-      border-color: var(--border-strong);
+    .picker-status-ok {
+      color: #4ade80;
+    }
+    .picker-status-hint {
+      color: var(--text-tertiary);
     }
 
     /* SIDEBAR — extras */
@@ -2295,6 +2356,8 @@
       more: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg>`,
       arrowUp: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`,
       play: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+      home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+      eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`,
     };
 
     const COLOR_SWATCHES = [
@@ -2370,6 +2433,10 @@
     const collapsedGroups = new Set(); // grupos colapsados (default expandidos)
     let pickerCallback = null; // path picker waiting
     let projectAdminCallback = null; // form modal waiting
+
+    // info do servidor (sistema operacional, home real do usuário, atalhos detectados).
+    // populado no handleHello — antes disso usamos defaults vazios.
+    let systemInfo = { home: "/", platform: "linux", sep: "/", commonPaths: [] };
 
     const k = (projId, tid) => `${projId}:${tid}`;
 
@@ -4031,8 +4098,11 @@
 
     function renderFilesRoot() {
       const p = getActiveProj();
-      const home = "/home/ftgk/";
-      const txt = p ? (p.path.startsWith(home) ? "~/" + p.path.slice(home.length) : p.path) : "—";
+      const sep = systemInfo.sep || "/";
+      const home = (systemInfo.home || "") + sep;
+      const txt = p
+        ? (home.length > 1 && p.path.startsWith(home) ? "~" + sep + p.path.slice(home.length) : p.path)
+        : "—";
       document.getElementById("filesRoot").textContent = txt;
     }
 
@@ -5251,6 +5321,8 @@
       });
       xtermInstances.clear();
 
+      systemInfo = msg.system || systemInfo;
+
       projects = msg.projects.map((p) => ({
         id: p.id, name: p.name, path: p.path,
         color: p.color, icon: p.icon, shell: p.shell,
@@ -5631,6 +5703,10 @@
         const overlay = document.createElement("div");
         overlay.className = "modal-overlay visible";
         const groups = Array.from(new Set(projects.map((p) => p.group).filter(Boolean)));
+        // Placeholder do campo de caminho — usa um local de "projetos" detectado
+        // pelo servidor quando existe, senão a home real. Antes era hardcoded.
+        const projectsHint = (systemInfo.commonPaths || []).find((c) => c.kind === "projects");
+        const pathPlaceholder = projectsHint ? projectsHint.path + (systemInfo.sep || "/") + "..." : (systemInfo.home || "/");
         overlay.innerHTML = `
           <div class="modal modal-form" role="dialog" aria-modal="true">
             <div class="modal-content">
@@ -5649,7 +5725,7 @@
                 <label class="form-label">Caminho</label>
                 <div>
                   <div class="form-row">
-                    <input id="pPath" class="form-input" placeholder="/home/ftgk/Documentos/GitHub/..." autocomplete="off" />
+                    <input id="pPath" class="form-input" placeholder="${escapeHtml(pathPlaceholder)}" autocomplete="off" />
                     <button type="button" id="pBrowse">Navegar…</button>
                   </div>
                   <div class="form-helper">pasta absoluta no sistema de arquivos</div>
@@ -5792,7 +5868,7 @@
         idI.addEventListener("input", () => { idAuto = false; });
 
         $("pBrowse").addEventListener("click", async () => {
-          const initial = pathI.value.trim() || (existing && existing.path) || "/home/ftgk";
+          const initial = pathI.value.trim() || (existing && existing.path) || systemInfo.home;
           const chosen = await showPathPicker({ initial });
           if (chosen) pathI.value = chosen;
         });
@@ -5853,26 +5929,56 @@
       });
     }
 
-    function showPathPicker({ initial = "/home/ftgk" } = {}) {
+    function showPathPicker({ initial } = {}) {
       return new Promise((resolve) => {
-        let current = initial;
+        const home = systemInfo.home || "/";
+        const sep = systemInfo.sep || "/";
+        let current = initial && initial.trim() ? initial : home;
+        let showHidden = false;
+        let lastEntries = [];
+        let selectedIdx = -1;
+
+        // formata um caminho com ~ quando dentro do home — só pra display
+        const displayPath = (p) => {
+          if (!p) return "";
+          if (p === home) return "~";
+          if (home && p.startsWith(home + sep)) return "~" + p.slice(home.length);
+          return p;
+        };
+        // junta um caminho com um nome respeitando o separador do SO, sem dobrar
+        const joinPath = (parent, name) => {
+          if (!parent) return name;
+          if (parent.endsWith(sep)) return parent + name;
+          return parent + sep + name;
+        };
+
+        // Atalhos do servidor (só os que existem). Cai no home se vier vazio.
+        const shortcuts = (systemInfo.commonPaths && systemInfo.commonPaths.length > 0)
+          ? systemInfo.commonPaths
+          : [{ label: "Home", path: home, kind: "home" }];
+
         const overlay = document.createElement("div");
         overlay.className = "modal-overlay visible";
         overlay.innerHTML = `
           <div class="modal modal-picker" role="dialog" aria-modal="true">
             <div class="modal-content">
-              <div class="modal-title" style="text-align:left">Escolher pasta</div>
-              <div class="picker-header">
-                <button class="picker-up" id="pickUp" title="Subir um nível">${ICONS.arrowUp}</button>
-                <input class="picker-path" id="pickPath" />
+              <div class="modal-title" style="text-align:left">Escolher pasta do projeto</div>
+
+              <div class="picker-toolbar">
+                <button class="picker-icon-btn" id="pickUp" title="Subir um nível (Backspace)">${ICONS.arrowUp}</button>
+                <button class="picker-icon-btn" id="pickHome" title="Ir para Home">${ICONS.home || ICONS.folder}</button>
+                <input class="picker-path" id="pickPath" spellcheck="false" autocomplete="off" />
+                <button class="picker-icon-btn picker-toggle" id="pickHidden" title="Mostrar pastas ocultas (Ctrl+H)" aria-pressed="false">${ICONS.eye || "."}</button>
               </div>
-              <div class="picker-shortcuts" id="pickShortcuts">
-                <div class="picker-shortcut" data-path="/home/ftgk">~ home</div>
-                <div class="picker-shortcut" data-path="/home/ftgk/Documentos/GitHub">~/Documentos/GitHub</div>
-                <div class="picker-shortcut" data-path="/home/ftgk/Documentos">~/Documentos</div>
-              </div>
-              <div class="picker-list" id="pickList">
-                <div class="picker-empty">carregando…</div>
+
+              <div class="picker-body">
+                <aside class="picker-sidebar" id="pickSidebar"></aside>
+                <div class="picker-main">
+                  <div class="picker-list" id="pickList" tabindex="0">
+                    <div class="picker-empty">carregando…</div>
+                  </div>
+                  <div class="picker-status" id="pickStatus"></div>
+                </div>
               </div>
             </div>
             <div class="modal-buttons">
@@ -5886,54 +5992,146 @@
         const list = overlay.querySelector("#pickList");
         const pathInput = overlay.querySelector("#pickPath");
         const upBtn = overlay.querySelector("#pickUp");
+        const homeBtn = overlay.querySelector("#pickHome");
+        const hiddenBtn = overlay.querySelector("#pickHidden");
+        const statusEl = overlay.querySelector("#pickStatus");
+        const sidebar = overlay.querySelector("#pickSidebar");
+        const confirmBtn = overlay.querySelector(".confirm-btn");
 
-        const renderList = (dirs, error) => {
-          if (error) {
-            list.innerHTML = `<div class="picker-empty">erro: ${escapeHtml(error)}</div>`;
-            return;
+        // Sidebar de atalhos — agrupada por categoria
+        const renderSidebar = () => {
+          const groups = {};
+          shortcuts.forEach((s) => {
+            const k = s.kind || "other";
+            (groups[k] = groups[k] || []).push(s);
+          });
+          const order = ["home", "desktop", "documents", "downloads", "projects", "other"];
+          const labels = {
+            home: "Início",
+            desktop: "Desktop",
+            documents: "Documentos",
+            downloads: "Downloads",
+            projects: "Projetos",
+            other: "Outros",
+          };
+          let html = "";
+          for (const k of order) {
+            if (!groups[k] || groups[k].length === 0) continue;
+            html += `<div class="picker-side-group"><div class="picker-side-label">${labels[k]}</div>`;
+            for (const s of groups[k]) {
+              html += `<div class="picker-side-item" data-path="${escapeHtml(s.path)}" title="${escapeHtml(s.path)}">
+                <span class="tree-icon">${ICONS.folder}</span>
+                <span class="picker-side-name">${escapeHtml(s.label)}</span>
+              </div>`;
+            }
+            html += `</div>`;
           }
-          if (!dirs || dirs.length === 0) {
-            list.innerHTML = `<div class="picker-empty">sem subpastas</div>`;
-            return;
-          }
-          list.innerHTML = dirs.map((d) => `
-            <div class="picker-item" data-name="${escapeHtml(d)}">
-              <span class="tree-icon dir">${window.MaterialIcons ? window.MaterialIcons.iconHTML(d, true, false) : ICONS.folder}</span>
-              <span>${escapeHtml(d)}</span>
-            </div>
-          `).join("");
-          list.querySelectorAll(".picker-item").forEach((el) => {
-            el.addEventListener("click", () => {
-              const newPath = current.endsWith("/") ? current + el.dataset.name : current + "/" + el.dataset.name;
-              navigate(newPath);
-            });
+          sidebar.innerHTML = html || `<div class="picker-empty" style="padding:14px">sem atalhos</div>`;
+          sidebar.querySelectorAll(".picker-side-item").forEach((el) => {
+            el.addEventListener("click", () => navigate(el.dataset.path));
           });
         };
 
+        const renderList = (data, error) => {
+          selectedIdx = -1;
+          if (error) {
+            list.innerHTML = `<div class="picker-empty">erro: ${escapeHtml(error)}</div>`;
+            statusEl.innerHTML = "";
+            return;
+          }
+          const entries = (data && data.entries) || [];
+          lastEntries = showHidden ? entries : entries.filter((e) => !e.hidden);
+
+          if (lastEntries.length === 0) {
+            list.innerHTML = `<div class="picker-empty">${entries.length > 0 ? "só pastas ocultas — ative ‘mostrar ocultos’ pra ver" : "sem subpastas"}</div>`;
+          } else {
+            list.innerHTML = lastEntries.map((e, i) => `
+              <div class="picker-item${e.isGit ? " is-git" : ""}${e.hidden ? " is-hidden" : ""}" data-idx="${i}" data-name="${escapeHtml(e.name)}">
+                <span class="tree-icon dir">${window.MaterialIcons ? window.MaterialIcons.iconHTML(e.name, true, false) : ICONS.folder}</span>
+                <span class="picker-item-name">${escapeHtml(e.name)}</span>
+                ${e.isGit ? `<span class="picker-badge">git</span>` : ""}
+              </div>
+            `).join("");
+            list.querySelectorAll(".picker-item").forEach((el) => {
+              el.addEventListener("click", () => {
+                selectIdx(parseInt(el.dataset.idx, 10));
+              });
+              el.addEventListener("dblclick", () => {
+                navigate(joinPath(current, el.dataset.name));
+              });
+            });
+          }
+
+          // Banner de status — destaca quando o diretório atual é repo git
+          if (data && data.isGitDir) {
+            statusEl.innerHTML = `<span class="picker-status-ok">✓ pasta com repositório Git — bom candidato a projeto</span>`;
+          } else {
+            statusEl.innerHTML = `<span class="picker-status-hint">Clique duplo para abrir · Enter para selecionar esta pasta</span>`;
+          }
+        };
+
+        const selectIdx = (i) => {
+          list.querySelectorAll(".picker-item").forEach((el) => el.classList.remove("active"));
+          if (i < 0 || i >= lastEntries.length) { selectedIdx = -1; return; }
+          selectedIdx = i;
+          const el = list.querySelector(`.picker-item[data-idx="${i}"]`);
+          if (el) {
+            el.classList.add("active");
+            el.scrollIntoView({ block: "nearest" });
+          }
+        };
+
         const navigate = (p) => {
+          if (!p) p = home;
           current = p;
-          pathInput.value = p;
+          pathInput.value = displayPath(p);
           list.innerHTML = `<div class="picker-empty">carregando…</div>`;
+          statusEl.innerHTML = "";
+          // marca o atalho ativo na sidebar
+          sidebar.querySelectorAll(".picker-side-item").forEach((el) => {
+            el.classList.toggle("active", el.dataset.path === p);
+          });
           if (ws?.readyState === 1) {
             pickerCallback = (result) => {
-              if (result.ok) renderList(result.dirs);
+              if (result.ok) renderList(result);
               else renderList(null, result.error);
             };
             ws.send(JSON.stringify({ type: "list_dirs", path: p }));
           }
         };
 
+        // Resolve um caminho digitado pelo usuário, expandindo "~" e "~/..." pra home real
+        const expandTilde = (raw) => {
+          const v = (raw || "").trim();
+          if (!v) return home;
+          if (v === "~") return home;
+          if (v.startsWith("~/") || v.startsWith("~" + sep)) return home + v.slice(1);
+          return v;
+        };
+
         upBtn.addEventListener("click", () => {
-          const parent = current.replace(/\/[^/]+\/?$/, "") || "/";
+          const parent = current.replace(/[\\/][^\\/]+[\\/]?$/, "") || sep;
           if (parent !== current) navigate(parent);
         });
+        homeBtn.addEventListener("click", () => navigate(home));
+        hiddenBtn.addEventListener("click", () => {
+          showHidden = !showHidden;
+          hiddenBtn.classList.toggle("active", showHidden);
+          hiddenBtn.setAttribute("aria-pressed", showHidden ? "true" : "false");
+          // recarrega o diretório atual — o servidor sempre devolve `entries` com a flag
+          // `hidden`, e o filtro acontece no cliente conforme `showHidden`.
+          navigate(current);
+        });
+
         pathInput.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") { e.preventDefault(); navigate(pathInput.value.trim() || "/"); }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            navigate(expandTilde(pathInput.value));
+          }
           e.stopPropagation();
         });
-        overlay.querySelectorAll("#pickShortcuts .picker-shortcut").forEach((el) => {
-          el.addEventListener("click", () => navigate(el.dataset.path));
-        });
+
+        renderSidebar();
 
         let resolved = false;
         const close = (val) => {
@@ -5947,14 +6145,31 @@
           resolve(val);
         };
         overlay.querySelector(".cancel-btn").addEventListener("click", () => close(null));
-        overlay.querySelector(".confirm-btn").addEventListener("click", () => close(current));
+        confirmBtn.addEventListener("click", () => close(current));
         overlay.addEventListener("click", (e) => { if (e.target === overlay) close(null); });
+
         const kb = (e) => {
-          if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(null); }
+          if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(null); return; }
+          // atalhos só quando o foco não está no input de caminho
+          if (document.activeElement === pathInput) return;
+          if (e.key === "Backspace") { e.preventDefault(); upBtn.click(); return; }
+          if (e.ctrlKey && e.key.toLowerCase() === "h") { e.preventDefault(); hiddenBtn.click(); return; }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (selectedIdx >= 0 && lastEntries[selectedIdx]) {
+              navigate(joinPath(current, lastEntries[selectedIdx].name));
+            } else {
+              close(current);
+            }
+            return;
+          }
+          if (e.key === "ArrowDown") { e.preventDefault(); selectIdx(Math.min(lastEntries.length - 1, selectedIdx + 1)); return; }
+          if (e.key === "ArrowUp") { e.preventDefault(); selectIdx(Math.max(0, selectedIdx - 1)); return; }
         };
         document.addEventListener("keydown", kb, true);
 
-        navigate(initial);
+        navigate(current);
+        setTimeout(() => list.focus(), 80);
       });
     }
 
