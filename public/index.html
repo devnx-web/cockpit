@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cockpit · Cabine de Comando</title>
+  <link rel="preload" href="/vendor/fonts/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/vendor/fonts/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/fonts/jetbrains-mono/index.css" />
   <link rel="stylesheet" href="/vendor/fonts/ibm-plex-mono/index.css" />
   <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
@@ -2470,6 +2472,16 @@
             webglAddon = null;
           });
           xt.loadAddon(webglAddon);
+          // Bug conhecido: o WebGL pré-rasteriza o atlas de glyphs no momento do
+          // loadAddon. Se a @font-face ainda não baixou, o atlas captura o
+          // fallback (ou glyphs vazios) e palavras aparecem com buracos. Quando
+          // a fonte fica pronta, limpamos o atlas e forçamos um redraw.
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => {
+              try { webglAddon?.clearTextureAtlas?.(); } catch {}
+              try { xt.refresh(0, xt.rows - 1); } catch {}
+            });
+          }
         } catch (e) {
           console.warn("[xterm] WebGL indisponível, usando renderer DOM:", e?.message || e);
           webglAddon = null;
@@ -2564,25 +2576,31 @@
     let qcmdPopoverOpen = false;
 
     function renderQuickCmds() {
-      // atualiza o botão ⚡ no tab bar (adicionado por renderTabs)
+      // botão ⚡ no tab bar fica sempre visível (mesmo sem comandos), pra
+      // permitir adicionar o primeiro pelo popover.
       const btn = document.getElementById("qcmdBtn");
       if (!btn) return;
-      const p = getActiveProj();
-      const cmds = p?.commands || [];
-      btn.style.display = cmds.length > 0 ? "" : "none";
+      btn.style.display = "";
     }
 
     function openQcmdPopover(anchorEl) {
       document.querySelectorAll(".qcmd-popover").forEach((el) => el.remove());
       const p = getActiveProj();
       const cmds = p?.commands || [];
-      if (cmds.length === 0 && true) return;
 
       qcmdPopoverOpen = true;
       anchorEl.classList.add("open");
 
       const pop = document.createElement("div");
       pop.className = "qcmd-popover";
+
+      if (cmds.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "qcmd-empty";
+        empty.style.cssText = "padding: 4px 8px; font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap;";
+        empty.textContent = "Nenhum comando ainda";
+        pop.appendChild(empty);
+      }
 
       let dragSrcIdx = null;
       cmds.forEach((c, i) => {
@@ -3376,8 +3394,9 @@
       if (p.terminals.length === 0 && files.length === 0) {
         html += `<div class="tab-empty">sem abas — <span class="kbd">⌘B</span> novo terminal · <span class="kbd">⌘E</span> arquivos</div>`;
       }
-      const hasCmds = (getActiveProj()?.commands?.length || 0) > 0;
-      html += `<button class="qcmd-btn${hasCmds ? "" : " hidden-btn"}" id="qcmdBtn" title="Comandos rápidos" style="${hasCmds ? "" : "display:none"}">
+      // Botão ⚡ sempre visível — mesmo sem comandos, abre o popover com a opção
+      // de adicionar o primeiro.
+      html += `<button class="qcmd-btn" id="qcmdBtn" title="Comandos rápidos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
       </button>`;
       html += `<button class="tab-add" id="tabAdd" title="Novo terminal (⌘B)">${ICONS.plus}</button>`;

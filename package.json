@@ -1,7 +1,7 @@
 {
   "name": "cockpit",
   "productName": "Cockpit",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Cabine de comando para múltiplos agentes de IA em vários projetos",
   "homepage": "https://github.com/devnx/cockpit",
   "author": {
@@ -18,9 +18,9 @@
     "postinstall": "node scripts/copy-vendor-assets.js && (electron-rebuild -f -w node-pty || true)",
     "icons": "node scripts/make-icons.js",
     "dist": "npm run vendor && npm run icons && electron-builder",
-    "dist:linux": "npm run icons && electron-builder --linux",
-    "dist:win": "npm run icons && electron-builder --win",
-    "dist:mac": "npm run icons && electron-builder --mac"
+    "dist:linux": "npm run vendor && npm run icons && electron-builder --linux",
+    "dist:win": "npm run vendor && npm run icons && electron-builder --win",
+    "dist:mac": "npm run vendor && npm run icons && electron-builder --mac"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",
