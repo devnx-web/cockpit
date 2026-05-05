@@ -10,6 +10,19 @@ _(nada ainda)_
 
 ---
 
+## [0.6.1] — 2026-05-05
+
+### Corrigido
+- **Ctrl+C no terminal não copiava** quando havia texto selecionado — sempre mandava SIGINT pra shell. Agora: com seleção ativa, copia pro clipboard; sem seleção, mantém o SIGINT (comportamento padrão de qualquer terminal moderno tipo iTerm2/Konsole).
+- **Ctrl+V agora cola** do clipboard direto no pty.
+- **Botão direito no terminal** abre menu de contexto novo: Copiar / Colar / Selecionar tudo / Buscar / Limpar. Antes não tinha menu — clicar com direito não fazia nada.
+- **Botão do meio do mouse** cola do clipboard (convenção Linux clássica).
+
+### Adicionado
+- **Drag & drop pra reordenar abas de terminal**. Arrasta a aba pra esquerda/direita e solta. Indicador visual (linha colorida) mostra onde vai cair. A ordem fica só client-side (terminais não persistem entre sessões mesmo).
+
+---
+
 ## [0.6.0] — 2026-05-04
 
 Reescrita do módulo de voz com 3 engines TTS plugáveis. **Default agora é OpenAI TTS** (cloud, voz `nova`) em vez de OmniVoice local.

@@ -1922,6 +1922,9 @@
     .qcmd-pill.dragging { opacity: 0.35; cursor: grabbing; }
     .qcmd-pill.drag-over-left { box-shadow: -3px 0 0 var(--qcmd-color) !important; }
     .qcmd-pill.drag-over-right { box-shadow: 3px 0 0 var(--qcmd-color) !important; }
+    .tab.dragging { opacity: 0.4; cursor: grabbing; }
+    .tab.drag-over-left { box-shadow: inset 2px 0 0 var(--proj-color, #5b8def); }
+    .tab.drag-over-right { box-shadow: inset -2px 0 0 var(--proj-color, #5b8def); }
 
     /* SEARCH BAR NO TERMINAL */
     .term-search-bar {
@@ -2559,6 +2562,31 @@
 
       xt.attachCustomKeyEventHandler((e) => {
         const isMod = e.ctrlKey || e.metaKey;
+        // Ctrl+C com seleção = copiar (em vez de mandar SIGINT pra shell).
+        // Sem seleção, deixa passar pro pty pra interromper o processo.
+        if (isMod && !e.shiftKey && e.key.toLowerCase() === "c" && e.type === "keydown") {
+          const sel = xt.getSelection();
+          if (sel && sel.length > 0) {
+            try { navigator.clipboard.writeText(sel); } catch {}
+            return false;
+          }
+          // sem seleção: comportamento padrão (Ctrl+C → SIGINT)
+          return true;
+        }
+        // Ctrl+V = colar do clipboard. Lê async e injeta no pty.
+        if (isMod && !e.shiftKey && e.key.toLowerCase() === "v" && e.type === "keydown") {
+          (async () => {
+            try {
+              const text = await navigator.clipboard.readText();
+              if (text && ws?.readyState === 1) {
+                ws.send(JSON.stringify({
+                  type: "input", projectId: proj.id, terminalId: term.id, data: text,
+                }));
+              }
+            } catch {}
+          })();
+          return false;
+        }
         if (isMod && !e.shiftKey && e.key.toLowerCase() === "w" && e.type === "keydown") {
           requestCloseTerminal(proj.id, term.id);
           return false;
@@ -2582,6 +2610,29 @@
           return false;
         }
         return true;
+      });
+
+      // Botão direito no terminal: menu de contexto com Copiar/Colar/Limpar/Buscar.
+      // Antes não tinha — só seleção visual sem ação. Botão do meio também
+      // serve como atalho rápido pra colar (convenção Linux clássica).
+      container.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        showTerminalContextMenu(e, proj.id, term.id, xt);
+      });
+      container.addEventListener("auxclick", (e) => {
+        // botão do meio = paste rápido
+        if (e.button !== 1) return;
+        e.preventDefault();
+        (async () => {
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text && ws?.readyState === 1) {
+              ws.send(JSON.stringify({
+                type: "input", projectId: proj.id, terminalId: term.id, data: text,
+              }));
+            }
+          } catch {}
+        })();
       });
 
       xt.onData((data) => {
@@ -2953,6 +3004,65 @@
             case "export": exportTerminalOutput(activeProjId, tid); break;
             case "restart": requestRestartTerminal(activeProjId, tid); break;
             case "close": requestCloseTerminal(activeProjId, tid); break;
+          }
+        });
+      });
+      setTimeout(() => {
+        const close = (ev) => {
+          if (!menu.contains(ev.target)) { remove(); document.removeEventListener("mousedown", close); }
+        };
+        document.addEventListener("mousedown", close);
+      }, 0);
+    }
+
+    // Menu de contexto no terminal — botão direito. Operações de
+    // copy/paste/clear/buscar acessíveis sem precisar lembrar atalhos.
+    function showTerminalContextMenu(e, projId, tid, xt) {
+      document.querySelectorAll(".context-menu").forEach((m) => m.remove());
+      const sel = xt.getSelection() || "";
+      const hasSel = sel.length > 0;
+      const menu = document.createElement("div");
+      menu.className = "context-menu";
+      menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:300`;
+      menu.innerHTML = `
+        <div class="context-item ${hasSel ? "" : "disabled"}" data-action="copy">${ICONS.save} Copiar <span class="kbd" style="margin-left:auto;font-size:9.5px;opacity:.7">Ctrl+C</span></div>
+        <div class="context-item" data-action="paste">${ICONS.plus} Colar <span class="kbd" style="margin-left:auto;font-size:9.5px;opacity:.7">Ctrl+V</span></div>
+        <div class="context-divider"></div>
+        <div class="context-item" data-action="select-all">Selecionar tudo</div>
+        <div class="context-item" data-action="search">Buscar… <span class="kbd" style="margin-left:auto;font-size:9.5px;opacity:.7">Ctrl+F</span></div>
+        <div class="context-item" data-action="clear">${ICONS.trash} Limpar <span class="kbd" style="margin-left:auto;font-size:9.5px;opacity:.7">Ctrl+L</span></div>
+      `;
+      document.body.appendChild(menu);
+      const remove = () => menu.remove();
+      menu.querySelectorAll(".context-item").forEach((item) => {
+        item.addEventListener("click", async () => {
+          if (item.classList.contains("disabled")) return;
+          remove();
+          switch (item.dataset.action) {
+            case "copy":
+              if (hasSel) {
+                try { await navigator.clipboard.writeText(sel); } catch {}
+              }
+              break;
+            case "paste":
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text && ws?.readyState === 1) {
+                  ws.send(JSON.stringify({
+                    type: "input", projectId: projId, terminalId: tid, data: text,
+                  }));
+                }
+              } catch {}
+              break;
+            case "select-all":
+              try { xt.selectAll(); } catch {}
+              break;
+            case "search":
+              if (termSearchVisible) closeTermSearch(); else openTermSearch();
+              break;
+            case "clear":
+              clearActive();
+              break;
           }
         });
       });
@@ -3441,7 +3551,7 @@
         const active = view === "terminal" && t.id === tid;
         const unread = !active && termUnread.has(k(p.id, t.id));
         html += `
-          <button class="tab kind-terminal ${active ? "active" : ""}" data-kind="terminal" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" style="--proj-color: ${color}">
+          <button class="tab kind-terminal ${active ? "active" : ""}" data-kind="terminal" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" style="--proj-color: ${color}" draggable="true">
             <span class="status-dot ${t.status}"></span>
             <span class="tab-name">${escapeHtml(t.name)}</span>
             <span class="tab-close" data-close="${t.id}" data-kind="terminal" title="Fechar">${ICONS.x}</span>
@@ -3498,6 +3608,36 @@
           } else {
             closeFile(activeProjId, el.dataset.close);
           }
+        });
+      });
+
+      // Drag&drop pra reordenar abas de terminal. A ordem fica só client-side
+      // (terminais são criados sob demanda; não persiste entre sessões).
+      let dragSrcTid = null;
+      bar.querySelectorAll(".tab.kind-terminal").forEach((el) => {
+        el.addEventListener("dragstart", (e) => {
+          dragSrcTid = el.dataset.tid;
+          el.classList.add("dragging");
+          try { e.dataTransfer.effectAllowed = "move"; } catch {}
+        });
+        el.addEventListener("dragend", () => {
+          el.classList.remove("dragging");
+          bar.querySelectorAll(".tab").forEach((t) => t.classList.remove("drag-over-left", "drag-over-right"));
+          dragSrcTid = null;
+        });
+        el.addEventListener("dragover", (e) => {
+          if (!dragSrcTid || dragSrcTid === el.dataset.tid || el.dataset.kind !== "terminal") return;
+          e.preventDefault();
+          bar.querySelectorAll(".tab").forEach((t) => t.classList.remove("drag-over-left", "drag-over-right"));
+          const r = el.getBoundingClientRect();
+          el.classList.add(e.clientX < r.left + r.width / 2 ? "drag-over-left" : "drag-over-right");
+        });
+        el.addEventListener("drop", (e) => {
+          if (!dragSrcTid || dragSrcTid === el.dataset.tid || el.dataset.kind !== "terminal") return;
+          e.preventDefault();
+          const r = el.getBoundingClientRect();
+          const before = e.clientX < r.left + r.width / 2;
+          reorderTerminalTabs(activeProjId, dragSrcTid, el.dataset.tid, before);
         });
       });
       const addBtn = document.getElementById("tabAdd");
@@ -3619,6 +3759,27 @@
       const i = p.terminals.findIndex((t) => t.id === tid);
       const next = (i + delta + p.terminals.length) % p.terminals.length;
       selectTerminal(activeProjId, p.terminals[next].id);
+    }
+
+    // Reordena abas de terminal in-place. Recoloca o `srcTid` antes ou depois
+    // do `targetTid` no array `p.terminals`. Sem ida ao servidor — terminais
+    // não persistem ordem entre sessões.
+    function reorderTerminalTabs(projId, srcTid, targetTid, before) {
+      const p = getProj(projId);
+      if (!p) return;
+      const arr = p.terminals;
+      const srcIdx = arr.findIndex((t) => t.id === srcTid);
+      if (srcIdx < 0) return;
+      const [moved] = arr.splice(srcIdx, 1);
+      // após o splice, o índice do alvo pode ter mudado — recalcula
+      let tgtIdx = arr.findIndex((t) => t.id === targetTid);
+      if (tgtIdx < 0) {
+        // alvo desapareceu — devolve no fim
+        arr.push(moved);
+      } else {
+        arr.splice(before ? tgtIdx : tgtIdx + 1, 0, moved);
+      }
+      renderTabs();
     }
 
     // ============================================================
