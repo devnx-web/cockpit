@@ -1619,21 +1619,51 @@
 
     /* SIDEBAR — extras */
     .sidebar-section .section-actions {
-      display: flex; gap: 2px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .sidebar-section .count {
+      padding: 2px 7px;
+      font-family: var(--font-term);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      background: var(--bg-2);
+      border: 1px solid var(--border-default);
+      border-radius: 9px;
+      letter-spacing: 0.02em;
     }
     .section-action {
-      width: 18px; height: 18px;
+      width: 24px; height: 24px;
       display: flex; align-items: center; justify-content: center;
-      color: var(--text-tertiary);
+      color: var(--text-secondary);
       cursor: pointer;
-      border-radius: 3px;
-      transition: all 100ms;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid transparent;
+      transition: background 100ms, color 100ms, border-color 100ms, transform 80ms;
     }
     .section-action:hover {
       background: var(--bg-3);
       color: var(--text-primary);
+      border-color: var(--border-default);
     }
-    .section-action svg { width: 13px; height: 13px; stroke-width: 1.8; }
+    .section-action:active { transform: scale(0.94); }
+    .section-action.is-open {
+      background: var(--bg-3);
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+    }
+    .section-action svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    /* Botão "+" ganha destaque sutil — é a ação principal da seção */
+    #btnAddProject {
+      color: #93b5ff;
+      background: rgba(91,141,239,0.08);
+      border-color: rgba(91,141,239,0.22);
+    }
+    #btnAddProject:hover {
+      background: rgba(91,141,239,0.18);
+      border-color: rgba(91,141,239,0.45);
+      color: #b9d0ff;
+    }
 
     .group-header {
       padding: 10px 14px 4px;
@@ -2210,7 +2240,7 @@
       <div class="sidebar-section">
         <span>Projetos</span>
         <div class="section-actions">
-          <span class="count" id="projCount" style="margin-right:6px">—</span>
+          <span class="count" id="projCount">—</span>
           <button class="section-action" id="btnToggleProjectVisibility" title="Mostrar/ocultar projetos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>
@@ -2460,6 +2490,16 @@
     const ICON_OPTIONS = [
       "building", "cog", "mic", "truck", "dollar", "fuel",
       "megaphone", "clock", "edit", "claude", "folder", "file",
+    ];
+
+    // Atalhos padrão semeados em todo projeto novo. O usuário ainda pode
+    // editar/remover por projeto via popover ⚡, mas não precisa adicionar
+    // do zero toda vez.
+    const DEFAULT_PROJECT_COMMANDS = [
+      { label: "claude",  cmd: "claude --dangerously-skip-permissions",        color: "#FF79C6" },
+      { label: "codex",   cmd: "codex --dangerously-bypass-approvals-and-sandbox", color: "#8BE9FD" },
+      { label: "kimi",    cmd: "kimi --yolo",                                  color: "#BD93F9" },
+      { label: "npm dev", cmd: "npm run dev",                                  color: "#50FA7B" },
     ];
 
     // ============================================================
@@ -5500,6 +5540,7 @@
             group: np.group || null,
             env: np.env || {},
             commands: np.commands || [],
+            hidden: !!np.hidden,
             terminals: [],
           };
           projects.push(p);
@@ -5512,6 +5553,7 @@
             group: np.group || null,
             env: np.env || {},
             commands: np.commands || [],
+            hidden: !!np.hidden,
           });
         }
 
@@ -5592,6 +5634,7 @@
         group: p.group || null,
         env: p.env || {},
         commands: p.commands || [],
+        hidden: !!p.hidden,
         terminals: p.terminals.map((t) => ({
           id: t.id, name: t.name,
           status: t.status, statusText: t.statusText,
@@ -6046,7 +6089,11 @@
         let selectedColor = (existing && existing.color) || COLOR_SWATCHES[0];
         let selectedIcon = (existing && existing.icon) || "cog";
         let idAuto = !isEdit;
-        let localCmds = (existing && existing.commands) ? [...existing.commands] : [];
+        // Projetos novos saem com os comandos padrão pré-cadastrados.
+        // Edição mantém o que já tinha (mesmo array vazio se o user removeu tudo).
+        let localCmds = existing
+          ? [...(existing.commands || [])]
+          : DEFAULT_PROJECT_COMMANDS.map((c) => ({ ...c }));
 
         if (existing) {
           nameI.value = existing.name || "";
@@ -6504,6 +6551,12 @@
     // re-renderiza filtrando ocultos.
     function showProjectVisibilityPopover(anchor) {
       document.querySelectorAll(".visibility-popover").forEach((el) => el.remove());
+      // se o popover já estava aberto e clicou de novo, só fecha
+      if (anchor.classList.contains("is-open")) {
+        anchor.classList.remove("is-open");
+        return;
+      }
+      anchor.classList.add("is-open");
       const pop = document.createElement("div");
       pop.className = "visibility-popover";
       const r = anchor.getBoundingClientRect();
@@ -6587,15 +6640,17 @@
       document.body.appendChild(pop);
 
       // Fecha ao clicar fora
+      const closeAll = () => {
+        pop.remove();
+        anchor.classList.remove("is-open");
+        document.removeEventListener("mousedown", close);
+        document.removeEventListener("keydown", esc);
+      };
+      const close = (ev) => {
+        if (!pop.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) closeAll();
+      };
+      const esc = (ev) => { if (ev.key === "Escape") closeAll(); };
       setTimeout(() => {
-        const close = (ev) => {
-          if (!pop.contains(ev.target) && ev.target !== anchor) {
-            pop.remove();
-            document.removeEventListener("mousedown", close);
-            document.removeEventListener("keydown", esc);
-          }
-        };
-        const esc = (ev) => { if (ev.key === "Escape") { pop.remove(); document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); } };
         document.addEventListener("mousedown", close);
         document.addEventListener("keydown", esc);
       }, 0);

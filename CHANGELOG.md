@@ -10,6 +10,20 @@ _(nada ainda)_
 
 ---
 
+## [0.6.3] — 2026-05-05
+
+### Corrigido
+- **Projetos ocultos voltavam a aparecer** ao reabrir o cockpit ou em qualquer broadcast `projects_changed`. Causa: o cliente populava o array `projects` copiando campos um-a-um e o `hidden` não estava na lista — ficava sempre `undefined` depois de uma reconexão. Agora `handleHello` e `handleProjectsChanged` incluem `hidden: !!p.hidden` em ambos os branches (criar e atualizar).
+
+### Adicionado
+- **Comandos rápidos padrão em projeto novo** — todo projeto recém-criado já vem com `claude`, `codex`, `kimi` e `npm dev` pré-cadastrados. Antes era array vazio e o usuário tinha que adicionar do zero em cada projeto. Edição de projeto existente continua mostrando os comandos originais (não sobrescreve).
+
+### Alterado
+- **Visual da seção "Projetos" na sidebar**: contagem virou pílula com border discreto, botões 👁 e ➕ ficaram 24×24 (era 18×18) com border-radius 6px, hover mais legível. O **botão ➕ ganhou destaque azul claro** (cor primária do app) — sinaliza que é a ação principal da seção.
+- Botão 👁 marca estado **`.is-open`** enquanto o popover de visibilidade está aberto. Click novamente fecha.
+
+---
+
 ## [0.6.2] — 2026-05-05
 
 ### Adicionado
