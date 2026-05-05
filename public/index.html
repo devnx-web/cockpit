@@ -1926,6 +1926,79 @@
     .tab.drag-over-left { box-shadow: inset 2px 0 0 var(--proj-color, #5b8def); }
     .tab.drag-over-right { box-shadow: inset -2px 0 0 var(--proj-color, #5b8def); }
 
+    /* Popover de visibilidade de projetos (botão olho na sidebar) */
+    .visibility-popover {
+      position: fixed; z-index: 300;
+      background: var(--bg-2);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.55);
+      width: 280px;
+      max-height: 480px;
+      display: flex; flex-direction: column;
+      font-family: var(--font-ui);
+      animation: palette-enter 140ms cubic-bezier(0.16,1,0.3,1);
+    }
+    .visibility-popover .vp-head {
+      padding: 10px 12px 6px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border-default);
+    }
+    .visibility-popover .vp-head .vp-actions {
+      float: right;
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
+    .visibility-popover .vp-head .vp-actions a {
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .visibility-popover .vp-head .vp-actions a:hover { color: var(--text-primary); }
+    .visibility-popover .vp-head .vp-actions a + a { margin-left: 8px; }
+    .visibility-popover .vp-list {
+      overflow-y: auto;
+      padding: 4px 6px 8px;
+    }
+    .visibility-popover .vp-row {
+      display: flex; align-items: center; gap: 9px;
+      padding: 6px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      transition: background 80ms;
+    }
+    .visibility-popover .vp-row:hover { background: var(--bg-3); color: var(--text-primary); }
+    .visibility-popover .vp-row.is-hidden { opacity: 0.5; }
+    .visibility-popover .vp-row.is-hidden:hover { opacity: 0.85; }
+    .visibility-popover .vp-row .vp-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--proj-color); flex-shrink: 0;
+    }
+    .visibility-popover .vp-row .vp-name {
+      flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .visibility-popover .vp-row .vp-eye {
+      width: 18px; height: 18px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-tertiary);
+      flex-shrink: 0;
+    }
+    .visibility-popover .vp-row .vp-eye svg { width: 14px; height: 14px; stroke-width: 1.7; }
+    .visibility-popover .vp-row.is-visible .vp-eye { color: var(--text-primary); }
+    .visibility-popover .vp-empty {
+      padding: 14px 12px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: 11.5px;
+    }
+
     /* SEARCH BAR NO TERMINAL */
     .term-search-bar {
       position: absolute; top: 8px; right: 12px;
@@ -2138,6 +2211,11 @@
         <span>Projetos</span>
         <div class="section-actions">
           <span class="count" id="projCount" style="margin-right:6px">—</span>
+          <button class="section-action" id="btnToggleProjectVisibility" title="Mostrar/ocultar projetos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
           <button class="section-action" id="btnAddProject" title="Adicionar projeto">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -3404,7 +3482,11 @@
       list.innerHTML = "";
 
       const q = (projectSearchQuery || "").trim().toLowerCase();
-      const visible = q ? projects.filter((p) => projectMatchesQuery(p, q)) : projects;
+      // Filtra projetos ocultos (hidden=true) — eles continuam no array
+      // `projects` pra preservar id/ordem, mas não aparecem na sidebar.
+      // O popover do botão olho mostra todos pra reativar.
+      const notHidden = projects.filter((p) => !p.hidden);
+      const visible = q ? notHidden.filter((p) => projectMatchesQuery(p, q)) : notHidden;
 
       const groups = new Map();
       visible.forEach((p) => {
@@ -3489,9 +3571,12 @@
           <div class="summary-row"><span class="status-dot error"></span><span class="summary-count">${counts.error}</span><span class="summary-label">com erro</span></div>
         `;
       }
+      // Contagem reflete o que está visível agora; total inclui ocultos.
       document.getElementById("projCount").textContent = q
         ? `${visible.length}/${projects.length}`
-        : projects.length;
+        : (notHidden.length === projects.length
+            ? projects.length
+            : `${notHidden.length}/${projects.length}`);
       document.getElementById("footerRunning").textContent = counts.running;
       document.getElementById("footerWaiting").textContent = counts.waiting;
       document.getElementById("footerError").textContent = counts.error;
@@ -6414,6 +6499,108 @@
       if (result) sendAdmin({ type: "add_project", project: result });
     }
 
+    // Popover de visibilidade — lista todos os projetos com toggle olho/risco.
+    // Click numa linha alterna `hidden` e dispara update_project. Sidebar
+    // re-renderiza filtrando ocultos.
+    function showProjectVisibilityPopover(anchor) {
+      document.querySelectorAll(".visibility-popover").forEach((el) => el.remove());
+      const pop = document.createElement("div");
+      pop.className = "visibility-popover";
+      const r = anchor.getBoundingClientRect();
+      pop.style.left = `${Math.min(r.left, window.innerWidth - 296)}px`;
+      pop.style.top = `${r.bottom + 4}px`;
+
+      const visibleCount = projects.filter((p) => !p.hidden).length;
+      const totalCount = projects.length;
+
+      const eyeOpen = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      const eyeClosed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-3.17 4.27"/><path d="M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+      pop.innerHTML = `
+        <div class="vp-head">
+          ${visibleCount}/${totalCount} visíveis
+          <span class="vp-actions">
+            <a data-action="show-all">mostrar todos</a>
+            <a data-action="hide-all">ocultar todos</a>
+          </span>
+        </div>
+        <div class="vp-list" id="vpList"></div>
+      `;
+
+      const renderList = () => {
+        const list = pop.querySelector("#vpList");
+        if (projects.length === 0) {
+          list.innerHTML = `<div class="vp-empty">sem projetos cadastrados</div>`;
+          return;
+        }
+        list.innerHTML = projects.map((p) => `
+          <div class="vp-row ${p.hidden ? "is-hidden" : "is-visible"}" data-id="${escapeHtml(p.id)}" title="${p.hidden ? "clique pra mostrar" : "clique pra ocultar"}">
+            <span class="vp-dot" style="--proj-color:${p.color || "#5b8def"}"></span>
+            <span class="vp-name">${escapeHtml(p.name)}</span>
+            <span class="vp-eye">${p.hidden ? eyeClosed : eyeOpen}</span>
+          </div>
+        `).join("");
+        list.querySelectorAll(".vp-row").forEach((row) => {
+          row.addEventListener("click", () => {
+            const proj = getProj(row.dataset.id);
+            if (!proj) return;
+            sendAdmin({
+              type: "update_project",
+              id: proj.id,
+              changes: { hidden: !proj.hidden },
+            });
+            // otimista — atualiza local pra UI responder rápido
+            proj.hidden = !proj.hidden;
+            renderList();
+            renderSidebar();
+            // refresca o contador no header
+            const head = pop.querySelector(".vp-head");
+            if (head) {
+              const vc = projects.filter((p) => !p.hidden).length;
+              head.firstChild.textContent = `${vc}/${projects.length} visíveis `;
+            }
+          });
+        });
+      };
+      renderList();
+
+      // Ações em massa
+      pop.querySelector('[data-action="show-all"]').addEventListener("click", () => {
+        projects.forEach((p) => {
+          if (p.hidden) {
+            sendAdmin({ type: "update_project", id: p.id, changes: { hidden: false } });
+            p.hidden = false;
+          }
+        });
+        renderList(); renderSidebar();
+      });
+      pop.querySelector('[data-action="hide-all"]').addEventListener("click", () => {
+        projects.forEach((p) => {
+          if (!p.hidden) {
+            sendAdmin({ type: "update_project", id: p.id, changes: { hidden: true } });
+            p.hidden = true;
+          }
+        });
+        renderList(); renderSidebar();
+      });
+
+      document.body.appendChild(pop);
+
+      // Fecha ao clicar fora
+      setTimeout(() => {
+        const close = (ev) => {
+          if (!pop.contains(ev.target) && ev.target !== anchor) {
+            pop.remove();
+            document.removeEventListener("mousedown", close);
+            document.removeEventListener("keydown", esc);
+          }
+        };
+        const esc = (ev) => { if (ev.key === "Escape") { pop.remove(); document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); } };
+        document.addEventListener("mousedown", close);
+        document.addEventListener("keydown", esc);
+      }, 0);
+    }
+
     // ============================================================
     // CONFIGURAÇÕES
     // ============================================================
@@ -6763,6 +6950,10 @@
     // Project admin bindings
     document.getElementById("btnAddProject").addEventListener("click", startAddProject);
     document.getElementById("btnSettings").addEventListener("click", showSettingsModal);
+    document.getElementById("btnToggleProjectVisibility").addEventListener("click", (e) => {
+      e.stopPropagation();
+      showProjectVisibilityPopover(e.currentTarget);
+    });
 
     // Project search
     (() => {

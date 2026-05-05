@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.6.2] — 2026-05-05
+
+### Adicionado
+- **Botão olho na sidebar de projetos** — ao lado do "+", abre um popover com a lista completa de projetos. Cada linha alterna entre visível/oculto com um clique. Atalhos "mostrar todos" / "ocultar todos" no header. Útil pra deixar a sidebar limpa quando você só está trabalhando em 2-3 projetos sem precisar excluir os outros.
+- Campo `hidden: bool` em cada projeto. `false`/ausente é o default — projetos antigos aparecem normalmente.
+
+### Alterado
+- Contagem `N/M` no header da sidebar mostra `visíveis/total` quando há projetos ocultos.
+- `validateProjectShape` no servidor não muda — `hidden` flui via `update_project` como qualquer outro campo opcional.
+
+---
+
 ## [0.6.1] — 2026-05-05
 
 ### Corrigido
