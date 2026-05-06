@@ -1966,77 +1966,147 @@
     .tab.drag-over-left { box-shadow: inset 2px 0 0 var(--proj-color, #5b8def); }
     .tab.drag-over-right { box-shadow: inset -2px 0 0 var(--proj-color, #5b8def); }
 
-    /* Popover de visibilidade de projetos (botão olho na sidebar) */
+    /* Modal de visibilidade & grupos de projetos (botão olho na sidebar) */
+    .visibility-backdrop {
+      position: fixed; inset: 0; z-index: 290;
+      background: rgba(8,9,11,0.6);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      animation: palette-enter 160ms cubic-bezier(0.16,1,0.3,1);
+    }
     .visibility-popover {
       position: fixed; z-index: 300;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
       background: var(--bg-2);
       border: 1px solid var(--border-strong);
-      border-radius: 8px;
-      box-shadow: 0 16px 48px rgba(0,0,0,0.55);
-      width: 280px;
-      max-height: 480px;
+      border-radius: 12px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+      width: min(520px, 92vw);
+      max-height: min(680px, 86vh);
       display: flex; flex-direction: column;
       font-family: var(--font-ui);
-      animation: palette-enter 140ms cubic-bezier(0.16,1,0.3,1);
+      animation: palette-enter 180ms cubic-bezier(0.16,1,0.3,1);
+      overflow: hidden;
     }
     .visibility-popover .vp-head {
-      padding: 10px 12px 6px;
-      font-size: 11px;
-      color: var(--text-tertiary);
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      padding: 18px 22px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
       border-bottom: 1px solid var(--border-default);
+      background: linear-gradient(to bottom, var(--bg-3), var(--bg-2));
+    }
+    .visibility-popover .vp-head h2 {
+      font-size: 14px; font-weight: 600; color: var(--text-primary);
+      letter-spacing: 0.02em; margin: 0;
+    }
+    .visibility-popover .vp-head .vp-counter {
+      display: block;
+      font-size: 11px; font-weight: 400;
+      color: var(--text-tertiary);
+      letter-spacing: 0.06em; text-transform: uppercase;
+      margin-top: 4px;
     }
     .visibility-popover .vp-head .vp-actions {
-      float: right;
-      font-size: 10px;
-      color: var(--text-secondary);
+      display: flex; gap: 8px;
     }
     .visibility-popover .vp-head .vp-actions a {
+      font-size: 11px;
       color: var(--text-secondary);
       cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      padding: 5px 10px;
+      border: 1px solid var(--border-default);
+      border-radius: 5px;
+      transition: all 120ms ease;
+      white-space: nowrap;
     }
-    .visibility-popover .vp-head .vp-actions a:hover { color: var(--text-primary); }
-    .visibility-popover .vp-head .vp-actions a + a { margin-left: 8px; }
+    .visibility-popover .vp-head .vp-actions a:hover {
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+      background: var(--bg-3);
+    }
+    .visibility-popover .vp-close {
+      width: 26px; height: 26px;
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      transition: all 120ms ease;
+      flex-shrink: 0;
+    }
+    .visibility-popover .vp-close:hover {
+      color: var(--text-primary); background: var(--bg-3);
+    }
     .visibility-popover .vp-list {
       overflow-y: auto;
-      padding: 4px 6px 8px;
+      padding: 12px 14px 16px;
+      flex: 1;
+    }
+    .visibility-popover .vp-group {
+      margin-bottom: 14px;
+    }
+    .visibility-popover .vp-group:last-child { margin-bottom: 0; }
+    .visibility-popover .vp-group-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 8px 6px;
+      font-size: 10px; font-weight: 600;
+      color: var(--text-tertiary);
+      letter-spacing: 0.18em; text-transform: uppercase;
+    }
+    .visibility-popover .vp-group-head .vp-group-name { display: flex; align-items: center; gap: 8px; }
+    .visibility-popover .vp-group-head .vp-group-count {
+      color: var(--text-disabled); font-variant-numeric: tabular-nums;
+    }
+    .visibility-popover .vp-group-toggle {
+      font-size: 10px;
+      color: var(--text-secondary);
+      cursor: pointer; padding: 3px 8px;
+      border: 1px solid var(--border-default);
+      border-radius: 4px;
+      transition: all 120ms ease;
+    }
+    .visibility-popover .vp-group-toggle:hover {
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+      background: var(--bg-3);
     }
     .visibility-popover .vp-row {
-      display: flex; align-items: center; gap: 9px;
-      padding: 6px 8px;
-      border-radius: 5px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px;
+      border-radius: 6px;
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--text-secondary);
       transition: background 80ms;
     }
     .visibility-popover .vp-row:hover { background: var(--bg-3); color: var(--text-primary); }
     .visibility-popover .vp-row.is-hidden { opacity: 0.5; }
-    .visibility-popover .vp-row.is-hidden:hover { opacity: 0.85; }
+    .visibility-popover .vp-row.is-hidden:hover { opacity: 0.9; }
     .visibility-popover .vp-row .vp-dot {
-      width: 8px; height: 8px; border-radius: 50%;
+      width: 9px; height: 9px; border-radius: 50%;
       background: var(--proj-color); flex-shrink: 0;
     }
     .visibility-popover .vp-row .vp-name {
       flex: 1; min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+    .visibility-popover .vp-row .vp-meta {
+      font-size: 10.5px; color: var(--text-tertiary);
+      margin-left: 6px; flex-shrink: 0;
+    }
     .visibility-popover .vp-row .vp-eye {
-      width: 18px; height: 18px;
+      width: 22px; height: 22px;
       display: flex; align-items: center; justify-content: center;
       color: var(--text-tertiary);
       flex-shrink: 0;
     }
-    .visibility-popover .vp-row .vp-eye svg { width: 14px; height: 14px; stroke-width: 1.7; }
+    .visibility-popover .vp-row .vp-eye svg { width: 15px; height: 15px; stroke-width: 1.7; }
     .visibility-popover .vp-row.is-visible .vp-eye { color: var(--text-primary); }
     .visibility-popover .vp-empty {
-      padding: 14px 12px;
+      padding: 32px 12px;
       text-align: center;
       color: var(--text-tertiary);
-      font-size: 11.5px;
+      font-size: 12.5px;
     }
 
     /* SEARCH BAR NO TERMINAL */
@@ -6627,39 +6697,50 @@
       if (result) sendAdmin({ type: "add_project", project: result });
     }
 
-    // Popover de visibilidade — lista todos os projetos com toggle olho/risco.
-    // Click numa linha alterna `hidden` e dispara update_project. Sidebar
-    // re-renderiza filtrando ocultos.
+    // Modal centralizado de visibilidade & grupos — lista todos os projetos
+    // agrupados por grupo, com toggle de olho. Click numa linha alterna `hidden`.
     function showProjectVisibilityPopover(anchor) {
-      document.querySelectorAll(".visibility-popover").forEach((el) => el.remove());
-      // se o popover já estava aberto e clicou de novo, só fecha
-      if (anchor.classList.contains("is-open")) {
-        anchor.classList.remove("is-open");
+      // se já estiver aberto, só fecha
+      const existing = document.querySelector(".visibility-popover");
+      if (existing) {
+        document.querySelectorAll(".visibility-popover, .visibility-backdrop").forEach((el) => el.remove());
+        anchor?.classList.remove("is-open");
         return;
       }
-      anchor.classList.add("is-open");
+      anchor?.classList.add("is-open");
+
+      const backdrop = document.createElement("div");
+      backdrop.className = "visibility-backdrop";
+
       const pop = document.createElement("div");
       pop.className = "visibility-popover";
-      const r = anchor.getBoundingClientRect();
-      pop.style.left = `${Math.min(r.left, window.innerWidth - 296)}px`;
-      pop.style.top = `${r.bottom + 4}px`;
-
-      const visibleCount = projects.filter((p) => !p.hidden).length;
-      const totalCount = projects.length;
 
       const eyeOpen = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
       const eyeClosed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-3.17 4.27"/><path d="M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+      const closeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 
       pop.innerHTML = `
         <div class="vp-head">
-          ${visibleCount}/${totalCount} visíveis
-          <span class="vp-actions">
+          <div>
+            <h2>Visibilidade & grupos</h2>
+            <span class="vp-counter" id="vpCounter"></span>
+          </div>
+          <div class="vp-actions">
             <a data-action="show-all">mostrar todos</a>
             <a data-action="hide-all">ocultar todos</a>
-          </span>
+            <span class="vp-close" title="Fechar (Esc)">${closeIcon}</span>
+          </div>
         </div>
         <div class="vp-list" id="vpList"></div>
       `;
+
+      const updateCounter = () => {
+        const visibleCount = projects.filter((p) => !p.hidden).length;
+        const totalCount = projects.length;
+        const groupCount = new Set(projects.map((p) => p.group).filter(Boolean)).size;
+        const c = pop.querySelector("#vpCounter");
+        if (c) c.textContent = `${visibleCount}/${totalCount} visíveis · ${groupCount} grupo${groupCount === 1 ? "" : "s"}`;
+      };
 
       const renderList = () => {
         const list = pop.querySelector("#vpList");
@@ -6667,38 +6748,78 @@
           list.innerHTML = `<div class="vp-empty">sem projetos cadastrados</div>`;
           return;
         }
-        list.innerHTML = projects.map((p) => `
+
+        // agrupa preservando ordem do array `projects`
+        const groups = new Map();
+        const orderedNames = [];
+        projects.forEach((p) => {
+          const g = p.group || null;
+          if (!groups.has(g)) {
+            groups.set(g, []);
+            orderedNames.push(g);
+          }
+          groups.get(g).push(p);
+        });
+
+        const renderRow = (p) => `
           <div class="vp-row ${p.hidden ? "is-hidden" : "is-visible"}" data-id="${escapeHtml(p.id)}" title="${p.hidden ? "clique pra mostrar" : "clique pra ocultar"}">
             <span class="vp-dot" style="--proj-color:${p.color || "#5b8def"}"></span>
             <span class="vp-name">${escapeHtml(p.name)}</span>
             <span class="vp-eye">${p.hidden ? eyeClosed : eyeOpen}</span>
           </div>
-        `).join("");
+        `;
+
+        list.innerHTML = orderedNames.map((g) => {
+          const projs = groups.get(g);
+          const allHidden = projs.every((p) => p.hidden);
+          const groupLabel = g || "Sem grupo";
+          const toggleLabel = allHidden ? "mostrar grupo" : "ocultar grupo";
+          return `
+            <div class="vp-group" data-group="${g ? escapeHtml(g) : ""}">
+              <div class="vp-group-head">
+                <span class="vp-group-name">
+                  <span>${escapeHtml(groupLabel)}</span>
+                  <span class="vp-group-count">${projs.length}</span>
+                </span>
+                <span class="vp-group-toggle" data-toggle="${allHidden ? "show" : "hide"}">${toggleLabel}</span>
+              </div>
+              ${projs.map(renderRow).join("")}
+            </div>
+          `;
+        }).join("");
+
         list.querySelectorAll(".vp-row").forEach((row) => {
           row.addEventListener("click", () => {
             const proj = getProj(row.dataset.id);
             if (!proj) return;
-            sendAdmin({
-              type: "update_project",
-              id: proj.id,
-              changes: { hidden: !proj.hidden },
-            });
-            // otimista — atualiza local pra UI responder rápido
+            sendAdmin({ type: "update_project", id: proj.id, changes: { hidden: !proj.hidden } });
             proj.hidden = !proj.hidden;
-            renderList();
-            renderSidebar();
-            // refresca o contador no header
-            const head = pop.querySelector(".vp-head");
-            if (head) {
-              const vc = projects.filter((p) => !p.hidden).length;
-              head.firstChild.textContent = `${vc}/${projects.length} visíveis `;
-            }
+            renderList(); renderSidebar(); updateCounter();
+          });
+        });
+
+        list.querySelectorAll(".vp-group-toggle").forEach((tg) => {
+          tg.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const groupEl = tg.closest(".vp-group");
+            const groupName = groupEl.dataset.group || null;
+            const action = tg.dataset.toggle;
+            const targetHidden = action === "hide";
+            projects.forEach((p) => {
+              const pg = p.group || null;
+              if (pg === groupName && p.hidden !== targetHidden) {
+                sendAdmin({ type: "update_project", id: p.id, changes: { hidden: targetHidden } });
+                p.hidden = targetHidden;
+              }
+            });
+            renderList(); renderSidebar(); updateCounter();
           });
         });
       };
+
+      updateCounter();
       renderList();
 
-      // Ações em massa
       pop.querySelector('[data-action="show-all"]').addEventListener("click", () => {
         projects.forEach((p) => {
           if (p.hidden) {
@@ -6706,7 +6827,7 @@
             p.hidden = false;
           }
         });
-        renderList(); renderSidebar();
+        renderList(); renderSidebar(); updateCounter();
       });
       pop.querySelector('[data-action="hide-all"]').addEventListener("click", () => {
         projects.forEach((p) => {
@@ -6715,26 +6836,22 @@
             p.hidden = true;
           }
         });
-        renderList(); renderSidebar();
+        renderList(); renderSidebar(); updateCounter();
       });
 
+      document.body.appendChild(backdrop);
       document.body.appendChild(pop);
 
-      // Fecha ao clicar fora
       const closeAll = () => {
         pop.remove();
-        anchor.classList.remove("is-open");
-        document.removeEventListener("mousedown", close);
+        backdrop.remove();
+        anchor?.classList.remove("is-open");
         document.removeEventListener("keydown", esc);
       };
-      const close = (ev) => {
-        if (!pop.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) closeAll();
-      };
       const esc = (ev) => { if (ev.key === "Escape") closeAll(); };
-      setTimeout(() => {
-        document.addEventListener("mousedown", close);
-        document.addEventListener("keydown", esc);
-      }, 0);
+      backdrop.addEventListener("click", closeAll);
+      pop.querySelector(".vp-close").addEventListener("click", closeAll);
+      document.addEventListener("keydown", esc);
     }
 
     // ============================================================
