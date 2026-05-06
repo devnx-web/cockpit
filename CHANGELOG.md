@@ -10,6 +10,16 @@ _(nada ainda)_
 
 ---
 
+## [0.6.6] — 2026-05-06
+
+### Corrigido
+- **Sidebar invisível** — o `grid-row: 2` no handle de resize tirava o handle do auto-placement do grid; sidebar e main eram empurrados para colunas erradas e a aside ficava com 6 px de largura, escondendo projetos, busca e botões. Removido — flow natural coloca tudo nas colunas certas.
+
+### Adicionado
+- **Modal centralizado de visibilidade & grupos** — botão olho na sidebar agora abre um modal centralizado (520×680 max) com backdrop escuro e blur. Lista projetos agrupados por grupo, com header de seção, contador X/Y visíveis e N grupos, e botão "ocultar/mostrar grupo" inteiro em massa. Fecha com Esc, click no backdrop ou no X.
+
+---
+
 ## [0.6.5] — 2026-05-06
 
 ### Adicionado
