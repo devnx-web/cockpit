@@ -2,7 +2,9 @@
 
 Cabine de comando para múltiplos agentes de IA em vários projetos. App desktop em Linux (Electron + node-pty + xterm.js) com terminal multi-aba, painel de arquivos, editor Monaco e módulo de voz Járvis.
 
-**Versão atual:** 0.6.1 — [changelog](./CHANGELOG.md)
+**Versão atual:** 0.6.3 — [changelog](./CHANGELOG.md)
+
+> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/install.sh | sudo bash`
 
 ---
 
@@ -11,7 +13,7 @@ Cabine de comando para múltiplos agentes de IA em vários projetos. App desktop
 ### `.deb` (Debian/Ubuntu)
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.1/cockpit_0.6.1_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.3/cockpit_0.6.3_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb
 # Se faltar dependência:
 sudo apt -f install
@@ -22,7 +24,7 @@ Abre pelo menu do sistema ou `/opt/Cockpit/cockpit`.
 ### AppImage (qualquer distro Linux)
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.1/Cockpit-0.6.1.AppImage -o ~/Cockpit.AppImage
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.3/Cockpit-0.6.3.AppImage -o ~/Cockpit.AppImage
 chmod +x ~/Cockpit.AppImage
 ~/Cockpit.AppImage
 ```
