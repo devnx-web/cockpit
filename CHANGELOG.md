@@ -10,6 +10,16 @@ _(nada ainda)_
 
 ---
 
+## [0.6.5] — 2026-05-06
+
+### Adicionado
+- **Sidebar redimensionável** — arraste a borda direita da sidebar para ajustar a largura (160–480 px). Largura persiste no localStorage entre sessões. Terminais fazem fit automático ao soltar.
+- **Header invertido** — status de conexão, voz e relógio agora ficam à esquerda; "COCKPIT · cabine de comando" e botões de janela à direita (ordem: 🟢🟡🔴).
+- **Drag & drop de arquivo no terminal** — arraste um arquivo para a área do terminal para colar o caminho automaticamente.
+- **Paste de arquivo/imagem copiado** — Ctrl+V e botão do meio detectam `text/uri-list` no clipboard (arquivo ou imagem copiados do gerenciador) e colam o caminho do arquivo em vez de dados binários.
+
+---
+
 ## [0.6.3] — 2026-05-05
 
 ### Corrigido
