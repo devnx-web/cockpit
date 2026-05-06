@@ -59,7 +59,7 @@
     .app {
       display: grid;
       grid-template-rows: 38px 1fr 30px;
-      grid-template-columns: 248px 1fr;
+      grid-template-columns: 248px 6px 1fr;
       height: 100vh; position: relative; z-index: 2;
     }
     /* TITLE BAR */
@@ -76,7 +76,7 @@
     .title-bar .title-bar-text,
     .title-bar .title-spacer { -webkit-app-region: drag; }
     .window-buttons {
-      display: flex; gap: 8px; padding-right: 6px;
+      display: flex; gap: 8px; padding-left: 6px;
       -webkit-app-region: no-drag;
     }
     .window-button {
@@ -332,6 +332,17 @@
       overflow: hidden;
       display: flex; flex-direction: column;
       min-height: 0;
+    }
+    .sidebar-resize-handle {
+      grid-row: 2;
+      cursor: col-resize;
+      background: transparent;
+      z-index: 10;
+      transition: background 150ms ease;
+    }
+    .sidebar-resize-handle:hover,
+    .sidebar-resize-handle.dragging {
+      background: rgba(91,141,239,0.3);
     }
     .sidebar-section {
       padding: 18px 14px 8px;
@@ -2118,23 +2129,6 @@
 <body>
   <div class="app">
     <header class="title-bar">
-      <div class="window-buttons">
-        <span class="window-button close" title="Fechar">
-          <svg viewBox="0 0 12 12"><path d="M3.5 3.5 L8.5 8.5 M8.5 3.5 L3.5 8.5"/></svg>
-        </span>
-        <span class="window-button minimize" title="Minimizar">
-          <svg viewBox="0 0 12 12"><path d="M3 6 L9 6"/></svg>
-        </span>
-        <span class="window-button maximize" title="Maximizar">
-          <svg viewBox="0 0 12 12"><path d="M3 4 L3 8 L7 8 M9 8 L9 4 L5 4"/></svg>
-        </span>
-      </div>
-      <div class="title-bar-text">
-        <strong>COCKPIT</strong>
-        <span>· cabine de comando</span>
-        <span class="title-version" id="titleVersion">…</span>
-      </div>
-      <div class="title-spacer"></div>
       <div class="conn-indicator">
         <span class="conn-dot" id="connDot"></span>
         <span id="connText">conectando…</span>
@@ -2234,6 +2228,23 @@
         </div>
       </div>
       <div class="title-clock" id="clock"><strong>00:00:00</strong> · GMT-3</div>
+      <div class="title-spacer"></div>
+      <div class="title-bar-text">
+        <strong>COCKPIT</strong>
+        <span>· cabine de comando</span>
+        <span class="title-version" id="titleVersion">…</span>
+      </div>
+      <div class="window-buttons">
+        <span class="window-button close" title="Fechar">
+          <svg viewBox="0 0 12 12"><path d="M3.5 3.5 L8.5 8.5 M8.5 3.5 L3.5 8.5"/></svg>
+        </span>
+        <span class="window-button minimize" title="Minimizar">
+          <svg viewBox="0 0 12 12"><path d="M3 6 L9 6"/></svg>
+        </span>
+        <span class="window-button maximize" title="Maximizar">
+          <svg viewBox="0 0 12 12"><path d="M3 4 L3 8 L7 8 M9 8 L9 4 L5 4"/></svg>
+        </span>
+      </div>
     </header>
 
     <aside class="sidebar">
@@ -2269,6 +2280,7 @@
       </div>
       <div class="project-list" id="projectList"></div>
     </aside>
+    <div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
 
     <main class="main">
       <div class="header">
@@ -7333,6 +7345,40 @@
     updateClock();
     setInterval(updateClock, 1000);
     connectWS();
+
+    // Sidebar redimensionável
+    (function() {
+      const STORAGE_KEY = "cockpit-sidebar-width";
+      const MIN_W = 160, MAX_W = 480, HANDLE_W = 6;
+      const app = document.querySelector(".app");
+      const handle = document.getElementById("sidebarResizeHandle");
+      function applyWidth(w) {
+        app.style.gridTemplateColumns = w + "px " + HANDLE_W + "px 1fr";
+      }
+      let savedW = parseInt(localStorage.getItem(STORAGE_KEY) || "248", 10);
+      savedW = Math.min(MAX_W, Math.max(MIN_W, savedW));
+      applyWidth(savedW);
+      handle.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        handle.classList.add("dragging");
+        const startX = e.clientX;
+        const startW = parseInt(app.style.gridTemplateColumns, 10);
+        const onMove = (ev) => {
+          const newW = Math.min(MAX_W, Math.max(MIN_W, startW + ev.clientX - startX));
+          applyWidth(newW);
+        };
+        const onUp = () => {
+          handle.classList.remove("dragging");
+          const finalW = parseInt(app.style.gridTemplateColumns, 10);
+          localStorage.setItem(STORAGE_KEY, String(finalW));
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+          xtermInstances.forEach(inst => { try { inst.fitAddon.fit(); } catch {} });
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+    })();
 
     // === Electron: dots Mac funcionais ===
     if (window.cockpitDesktop?.isElectron) {
