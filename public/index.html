@@ -2703,14 +2703,37 @@
           // sem seleção: comportamento padrão (Ctrl+C → SIGINT)
           return true;
         }
-        // Ctrl+V = colar do clipboard. Lê async e injeta no pty.
+        // Ctrl+V = colar do clipboard. Tenta text/uri-list (arquivos/imagens copiados),
+        // depois texto puro.
         if (isMod && !e.shiftKey && e.key.toLowerCase() === "v" && e.type === "keydown") {
           (async () => {
             try {
-              const text = await navigator.clipboard.readText();
-              if (text && ws?.readyState === 1) {
+              let pasted = "";
+              if (navigator.clipboard.read) {
+                const items = await navigator.clipboard.read();
+                for (const item of items) {
+                  if (item.types.includes("text/uri-list")) {
+                    const blob = await item.getType("text/uri-list");
+                    const raw = await blob.text();
+                    const paths = raw.split(/\r?\n/)
+                      .filter(l => l && !l.startsWith("#"))
+                      .map(u => {
+                        try { return decodeURIComponent(new URL(u).pathname); } catch { return u; }
+                      });
+                    pasted = paths.join(" ");
+                    break;
+                  }
+                  if (item.types.includes("text/plain")) {
+                    const blob = await item.getType("text/plain");
+                    pasted = await blob.text();
+                    break;
+                  }
+                }
+              }
+              if (!pasted) pasted = await navigator.clipboard.readText();
+              if (pasted && ws?.readyState === 1) {
                 ws.send(JSON.stringify({
-                  type: "input", projectId: proj.id, terminalId: term.id, data: text,
+                  type: "input", projectId: proj.id, terminalId: term.id, data: pasted,
                 }));
               }
             } catch {}
@@ -2755,10 +2778,32 @@
         e.preventDefault();
         (async () => {
           try {
-            const text = await navigator.clipboard.readText();
-            if (text && ws?.readyState === 1) {
+            let pasted = "";
+            if (navigator.clipboard.read) {
+              const items = await navigator.clipboard.read();
+              for (const item of items) {
+                if (item.types.includes("text/uri-list")) {
+                  const blob = await item.getType("text/uri-list");
+                  const raw = await blob.text();
+                  const paths = raw.split(/\r?\n/)
+                    .filter(l => l && !l.startsWith("#"))
+                    .map(u => {
+                      try { return decodeURIComponent(new URL(u).pathname); } catch { return u; }
+                    });
+                  pasted = paths.join(" ");
+                  break;
+                }
+                if (item.types.includes("text/plain")) {
+                  const blob = await item.getType("text/plain");
+                  pasted = await blob.text();
+                  break;
+                }
+              }
+            }
+            if (!pasted) pasted = await navigator.clipboard.readText();
+            if (pasted && ws?.readyState === 1) {
               ws.send(JSON.stringify({
-                type: "input", projectId: proj.id, terminalId: term.id, data: text,
+                type: "input", projectId: proj.id, terminalId: term.id, data: pasted,
               }));
             }
           } catch {}
@@ -2785,6 +2830,31 @@
         } catch {}
       });
       ro.observe(container);
+
+      // Drag de arquivo/imagem no terminal → cola o caminho
+      container.addEventListener("dragover", (e) => {
+        if (e.dataTransfer?.types.some(t => t === "Files" || t === "text/uri-list")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }
+      });
+      container.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const paths = [];
+        if (e.dataTransfer.files?.length) {
+          for (const f of e.dataTransfer.files) paths.push(f.path || f.name);
+        } else {
+          const uriList = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+          uriList.split(/\r?\n/).filter(l => l && !l.startsWith("#")).forEach(u => {
+            try { paths.push(decodeURIComponent(new URL(u).pathname)); } catch { paths.push(u); }
+          });
+        }
+        const data = paths.join(" ");
+        if (data && ws?.readyState === 1) {
+          ws.send(JSON.stringify({ type: "input", projectId: proj.id, terminalId: term.id, data }));
+        }
+        xt.focus();
+      });
 
       xtermInstances.set(k(proj.id, term.id), { term: xt, fitAddon: fit, container, ro, search: searchAddon, webgl: webglAddon });
     }
