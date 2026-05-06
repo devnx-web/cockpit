@@ -4,7 +4,7 @@ Cabine de comando para múltiplos agentes de IA em vários projetos. App desktop
 
 **Versão atual:** 0.6.5 — [changelog](./CHANGELOG.md)
 
-> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/install.sh | sudo bash`
+> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.6.5/install.sh | sudo bash`
 
 ---
 
