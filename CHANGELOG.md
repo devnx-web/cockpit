@@ -10,6 +10,13 @@ _(nada ainda)_
 
 ---
 
+## [0.6.8] — 2026-05-07
+
+### Corrigido
+- **Scroll do mouse no terminal** — a barra de rolagem existia mas era só visual: rolar o mousewheel não fazia nada quando o WebGL renderer estava ativo (o canvas capturava o wheel antes do xterm-viewport). Agora o wheel é interceptado e chama `xt.scrollLines()` explicitamente, rolando o histórico via API. Suporta delta em pixel e em line. Ctrl+wheel continua ajustando o font-size.
+
+---
+
 ## [0.6.7] — 2026-05-07
 
 ### Adicionado
