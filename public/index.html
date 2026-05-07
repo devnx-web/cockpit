@@ -2802,23 +2802,23 @@
         }
       }
 
+      // capture: true → recebe o wheel ANTES do canvas WebGL, que pode chamar
+      // preventDefault internamente e impedir o scroll do xterm-viewport.
       container.addEventListener("wheel", (e) => {
         if (e.ctrlKey) {
           e.preventDefault();
           setTermFontSize(termFontSize + (e.deltaY < 0 ? 1 : -1));
           return;
         }
-        // Scroll do mouse rola o histórico do xterm. Quando o WebGL renderer
-        // está ativo, o canvas pode capturar o wheel antes do viewport;
-        // chamamos scrollLines explicitamente pra garantir que rola sempre.
         const lines = e.deltaMode === 1
           ? Math.sign(e.deltaY) * 3
           : Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 30));
         if (lines !== 0) {
           e.preventDefault();
+          e.stopPropagation();
           xt.scrollLines(lines);
         }
-      }, { passive: false });
+      }, { passive: false, capture: true });
 
       xt.attachCustomKeyEventHandler((e) => {
         const isMod = e.ctrlKey || e.metaKey;
@@ -2826,14 +2826,9 @@
         if (e.ctrlKey && !e.altKey && !e.metaKey && e.key === "Tab" && e.type === "keydown") {
           if (cycleEditorTab(e.shiftKey ? -1 : 1)) return false;
         }
-        // Shift+Enter = quebra de linha (LF) sem submeter. Útil em REPLs
-        // tipo Claude CLI/codex que interpretam \n como nova linha e \r como send.
-        if (e.shiftKey && !isMod && !e.altKey && e.key === "Enter" && e.type === "keydown") {
-          if (ws?.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: "input", projectId: proj.id, terminalId: term.id, data: "\n",
-            }));
-          }
+        // Shift+Enter — bloqueia o xterm de processar (o handler global em
+        // document keydown capture já enviou \n via WS).
+        if (e.shiftKey && !isMod && !e.altKey && e.key === "Enter") {
           return false;
         }
         // Ctrl+C com seleção = copiar (em vez de mandar SIGINT pra shell).
@@ -7083,6 +7078,42 @@
       }
       return true;
     }
+
+    // Shift+Enter no terminal — capture phase pra pegar antes do xterm.
+    // Manda \n (LF) em vez de \r (CR), permitindo quebra de linha em
+    // REPLs tipo Claude CLI/codex sem submeter o comando.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      const inXterm = e.target?.closest?.(".terminal-instance.active");
+      if (!inXterm) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const tid = activeTerminalByProj.get(activeProjId);
+      if (tid && ws?.readyState === 1) {
+        ws.send(JSON.stringify({
+          type: "input", projectId: activeProjId, terminalId: tid, data: "\n",
+        }));
+      }
+    }, { capture: true });
+
+    // Scroll no terminal — capture phase pra pegar antes do canvas WebGL,
+    // que pode chamar preventDefault internamente.
+    document.addEventListener("wheel", (e) => {
+      const inXterm = e.target?.closest?.(".terminal-instance.active");
+      if (!inXterm) return;
+      if (e.ctrlKey) return; // ctrl+wheel = font-size, tratado em outro lugar
+      const tid = activeTerminalByProj.get(activeProjId);
+      const inst = xtermInstances.get(k(activeProjId, tid));
+      if (!inst) return;
+      const lines = e.deltaMode === 1
+        ? Math.sign(e.deltaY) * 3
+        : Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 30));
+      if (lines !== 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        try { inst.term.scrollLines(lines); } catch {}
+      }
+    }, { capture: true, passive: false });
 
     document.addEventListener("keydown", (e) => {
       const isMod = e.metaKey || e.ctrlKey;
