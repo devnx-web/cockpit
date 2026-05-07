@@ -10,6 +10,13 @@ _(nada ainda)_
 
 ---
 
+## [0.6.10] — 2026-05-07
+
+### Corrigido
+- **Scroll do mouse no terminal (segunda tentativa)** — `term.scrollLines()` pode não atualizar o display quando o renderer WebGL não recalcula o viewportY. Adicionado fallback: quando detectado que `buffer.active.viewportY` não mudou após `scrollLines`, rola o `.xterm-viewport.scrollTop` diretamente calculando `line-height × fontSize`.
+
+---
+
 ## [0.6.9] — 2026-05-07
 
 ### Corrigido
