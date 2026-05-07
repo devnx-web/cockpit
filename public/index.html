@@ -2803,7 +2803,21 @@
       }
 
       container.addEventListener("wheel", (e) => {
-        if (e.ctrlKey) { e.preventDefault(); setTermFontSize(termFontSize + (e.deltaY < 0 ? 1 : -1)); }
+        if (e.ctrlKey) {
+          e.preventDefault();
+          setTermFontSize(termFontSize + (e.deltaY < 0 ? 1 : -1));
+          return;
+        }
+        // Scroll do mouse rola o histórico do xterm. Quando o WebGL renderer
+        // está ativo, o canvas pode capturar o wheel antes do viewport;
+        // chamamos scrollLines explicitamente pra garantir que rola sempre.
+        const lines = e.deltaMode === 1
+          ? Math.sign(e.deltaY) * 3
+          : Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 30));
+        if (lines !== 0) {
+          e.preventDefault();
+          xt.scrollLines(lines);
+        }
       }, { passive: false });
 
       xt.attachCustomKeyEventHandler((e) => {
