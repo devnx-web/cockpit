@@ -2761,6 +2761,16 @@
 
       xt.attachCustomKeyEventHandler((e) => {
         const isMod = e.ctrlKey || e.metaKey;
+        // Shift+Enter = quebra de linha (LF) sem submeter. Útil em REPLs
+        // tipo Claude CLI/codex que interpretam \n como nova linha e \r como send.
+        if (e.shiftKey && !isMod && !e.altKey && e.key === "Enter" && e.type === "keydown") {
+          if (ws?.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: "input", projectId: proj.id, terminalId: term.id, data: "\n",
+            }));
+          }
+          return false;
+        }
         // Ctrl+C com seleção = copiar (em vez de mandar SIGINT pra shell).
         // Sem seleção, deixa passar pro pty pra interromper o processo.
         if (isMod && !e.shiftKey && e.key.toLowerCase() === "c" && e.type === "keydown") {
