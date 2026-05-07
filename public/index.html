@@ -730,10 +730,38 @@
     }
     .terminal-instance.active { display: block; }
     .terminal-instance .xterm { height: 100%; width: 100%; }
-    .xterm-viewport::-webkit-scrollbar { width: 8px; }
-    .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+    /* Scrollbar do xterm fica encoberta pelo .xterm-screen (que vem depois
+       no DOM). Elevamos o viewport acima do screen com z-index, e
+       sobrescrevemos o background-color: #000 que o xterm.css aplica —
+       senão o viewport opaco cobriria o texto. */
+    .terminal-instance .xterm-viewport {
+      z-index: 6;
+      background-color: transparent !important;
+    }
+    .terminal-instance .xterm-screen {
+      z-index: 1;
+    }
+    .xterm-viewport::-webkit-scrollbar {
+      width: 12px;
+      background: rgba(255,255,255,0.02);
+    }
+    .xterm-viewport::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0.02);
+    }
     .xterm-viewport::-webkit-scrollbar-thumb {
-      background: var(--border-strong); border-radius: 4px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 6px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+      min-height: 32px;
+    }
+    .xterm-viewport::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,0.32);
+      background-clip: padding-box;
+    }
+    .xterm-viewport::-webkit-scrollbar-thumb:active {
+      background: rgba(255,255,255,0.48);
+      background-clip: padding-box;
     }
     .terminal-empty {
       position: absolute; inset: 0;
@@ -2802,23 +2830,9 @@
         }
       }
 
-      // capture: true → recebe o wheel ANTES do canvas WebGL, que pode chamar
-      // preventDefault internamente e impedir o scroll do xterm-viewport.
-      container.addEventListener("wheel", (e) => {
-        if (e.ctrlKey) {
-          e.preventDefault();
-          setTermFontSize(termFontSize + (e.deltaY < 0 ? 1 : -1));
-          return;
-        }
-        const lines = e.deltaMode === 1
-          ? Math.sign(e.deltaY) * 3
-          : Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 30));
-        if (lines !== 0) {
-          e.preventDefault();
-          e.stopPropagation();
-          xt.scrollLines(lines);
-        }
-      }, { passive: false, capture: true });
+      // Ctrl+wheel ajusta font-size é tratado no listener global em document
+      // (capture phase). Aqui não precisa mais de handler — o xterm-viewport
+      // rola nativamente sem que ninguém chame preventDefault.
 
       xt.attachCustomKeyEventHandler((e) => {
         const isMod = e.ctrlKey || e.metaKey;
@@ -7096,33 +7110,15 @@
       }
     }, { capture: true });
 
-    // Scroll no terminal — capture phase pra pegar antes do canvas WebGL.
-    // Tenta scrollLines() primeiro; se não rolar (renderer pode não ter
-    // atualizado), faz fallback rolando o xterm-viewport diretamente.
+    // Scroll no terminal — Ctrl+wheel ajusta font-size; sem ctrl deixa o
+    // xterm-viewport rolar nativamente. NÃO preventDefault pra não bloquear.
     document.addEventListener("wheel", (e) => {
       const inXterm = e.target?.closest?.(".terminal-instance.active");
       if (!inXterm) return;
-      if (e.ctrlKey) return; // ctrl+wheel = font-size
-      const tid = activeTerminalByProj.get(activeProjId);
-      const inst = xtermInstances.get(k(activeProjId, tid));
-      if (!inst) return;
-      const lines = e.deltaMode === 1
-        ? Math.sign(e.deltaY) * 3
-        : Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 30));
-      if (lines === 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const term = inst.term;
-      const beforeY = term.buffer?.active?.viewportY ?? -1;
-      try { term.scrollLines(lines); } catch {}
-      const afterY = term.buffer?.active?.viewportY ?? -1;
-      // Se scrollLines não mexeu, rola o viewport DOM direto
-      if (beforeY === afterY) {
-        const vp = inXterm.querySelector(".xterm-viewport");
-        if (vp) {
-          const lh = (term.options?.lineHeight || 1.35) * (term.options?.fontSize || 13);
-          vp.scrollTop += lines * lh;
-        }
+      if (e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        setTermFontSize(termFontSize + (e.deltaY < 0 ? 1 : -1));
       }
     }, { capture: true, passive: false });
 
