@@ -10,6 +10,14 @@ _(nada ainda)_
 
 ---
 
+## [0.6.11] — 2026-05-07
+
+### Corrigido
+- **Scrollbar do terminal arrastável** — a barra estava sendo coberta pelo `.xterm-screen` (que ultrapassa o viewport em 8 px e por estar depois no DOM era pintado por cima). Não dava pra clicar/arrastar o thumb. Fix: z-index 6 no viewport, 1 no screen, override do `background-color: #000` do `xterm.css` pra não cobrir o texto, e customização da barra (12 px, thumb 18 % opacity, 32 % no hover, 48 % no active).
+- **Scroll wheel do terminal** — meu próprio handler chamava `preventDefault()` mas `scrollLines()` não atualizava o display, fazendo o scroll ficar travado. Removido — agora o `xterm-viewport` rola nativamente. Ctrl+wheel continua ajustando font-size.
+
+---
+
 ## [0.6.10] — 2026-05-07
 
 ### Corrigido
