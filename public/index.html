@@ -2761,6 +2761,10 @@
 
       xt.attachCustomKeyEventHandler((e) => {
         const isMod = e.ctrlKey || e.metaKey;
+        // Ctrl+Tab — alterna abas do editor mesmo com foco no terminal
+        if (e.ctrlKey && !e.altKey && !e.metaKey && e.key === "Tab" && e.type === "keydown") {
+          if (cycleEditorTab(e.shiftKey ? -1 : 1)) return false;
+        }
         // Shift+Enter = quebra de linha (LF) sem submeter. Útil em REPLs
         // tipo Claude CLI/codex que interpretam \n como nova linha e \r como send.
         if (e.shiftKey && !isMod && !e.altKey && e.key === "Enter" && e.type === "keydown") {
@@ -7006,8 +7010,29 @@
     // ============================================================
     // TECLADO
     // ============================================================
+    function cycleEditorTab(delta) {
+      const list = openFiles.get(activeProjId) || [];
+      if (list.length < 2) return false;
+      const cur = activeFileByProj.get(activeProjId);
+      const idx = list.findIndex((f) => f.path === cur);
+      const next = list[((idx >= 0 ? idx : 0) + delta + list.length) % list.length];
+      if (next) {
+        viewModeByProj.set(activeProjId, "file");
+        selectFileTab(next.path);
+      }
+      return true;
+    }
+
     document.addEventListener("keydown", (e) => {
       const isMod = e.metaKey || e.ctrlKey;
+
+      // Ctrl+Tab / Ctrl+Shift+Tab — alterna abas do editor
+      if (e.ctrlKey && !e.altKey && !e.metaKey && e.key === "Tab") {
+        if (cycleEditorTab(e.shiftKey ? -1 : 1)) {
+          e.preventDefault();
+          return;
+        }
+      }
 
       // Paleta global
       if (isMod && e.key.toLowerCase() === "k") {
