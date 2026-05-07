@@ -7096,22 +7096,33 @@
       }
     }, { capture: true });
 
-    // Scroll no terminal — capture phase pra pegar antes do canvas WebGL,
-    // que pode chamar preventDefault internamente.
+    // Scroll no terminal — capture phase pra pegar antes do canvas WebGL.
+    // Tenta scrollLines() primeiro; se não rolar (renderer pode não ter
+    // atualizado), faz fallback rolando o xterm-viewport diretamente.
     document.addEventListener("wheel", (e) => {
       const inXterm = e.target?.closest?.(".terminal-instance.active");
       if (!inXterm) return;
-      if (e.ctrlKey) return; // ctrl+wheel = font-size, tratado em outro lugar
+      if (e.ctrlKey) return; // ctrl+wheel = font-size
       const tid = activeTerminalByProj.get(activeProjId);
       const inst = xtermInstances.get(k(activeProjId, tid));
       if (!inst) return;
       const lines = e.deltaMode === 1
         ? Math.sign(e.deltaY) * 3
         : Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 30));
-      if (lines !== 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        try { inst.term.scrollLines(lines); } catch {}
+      if (lines === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const term = inst.term;
+      const beforeY = term.buffer?.active?.viewportY ?? -1;
+      try { term.scrollLines(lines); } catch {}
+      const afterY = term.buffer?.active?.viewportY ?? -1;
+      // Se scrollLines não mexeu, rola o viewport DOM direto
+      if (beforeY === afterY) {
+        const vp = inXterm.querySelector(".xterm-viewport");
+        if (vp) {
+          const lh = (term.options?.lineHeight || 1.35) * (term.options?.fontSize || 13);
+          vp.scrollTop += lines * lh;
+        }
       }
     }, { capture: true, passive: false });
 
