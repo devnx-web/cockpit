@@ -10,6 +10,14 @@ _(nada ainda)_
 
 ---
 
+## [0.6.9] — 2026-05-07
+
+### Corrigido
+- **Scroll do mouse no terminal (de verdade)** — o fix da v0.6.8 ficava no container, mas o canvas WebGL ainda processava o evento antes em capture phase. Agora o handler global em `document wheel { capture: true }` pega o evento primeiro e chama `term.scrollLines()` diretamente, garantindo que o scroll funciona independente do renderer.
+- **Shift+Enter envia LF (de verdade)** — mesmo motivo: o handler do xterm `attachCustomKeyEventHandler` rodava depois de o evento já ter sido roteado. Agora o listener global em `document keydown { capture: true }` envia `\n` via WS antes do xterm processar como Enter normal.
+
+---
+
 ## [0.6.8] — 2026-05-07
 
 ### Corrigido
