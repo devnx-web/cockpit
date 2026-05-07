@@ -2,9 +2,9 @@
 
 Cabine de comando para múltiplos agentes de IA em vários projetos. Roda como app desktop em Linux (Electron + node-pty + xterm.js).
 
-Versão atual: **0.6.6** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.6.6/CHANGELOG.md))
+Versão atual: **0.6.7** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.6.7/CHANGELOG.md))
 
-> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.6.6/install.sh | sudo bash`
+> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.6.7/install.sh | sudo bash`
 
 ---
 
@@ -23,7 +23,7 @@ Versão atual: **0.6.6** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.6
 ### Opção 1 — `.deb` (recomendado pra Debian/Ubuntu)
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.6/cockpit-devnx_0.6.6_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.7/cockpit-devnx_0.6.7_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb
 ```
 
@@ -42,7 +42,7 @@ Após instalar, o **Cockpit** aparece no menu de aplicativos. Ou abra pelo termi
 Não exige `sudo` nem instala nada no sistema.
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.6/Cockpit-0.6.6.AppImage -o ~/Cockpit.AppImage
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.7/Cockpit-0.6.7.AppImage -o ~/Cockpit.AppImage
 chmod +x ~/Cockpit.AppImage
 ~/Cockpit.AppImage
 ```
@@ -131,7 +131,7 @@ Edite `voice-config.json` e troque `tts_engine` para:
 ### A partir do `.deb`
 ```bash
 pkill -f "/opt/Cockpit/cockpit" 2>/dev/null    # fecha o app
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.6/cockpit-devnx_0.6.6_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.7/cockpit-devnx_0.6.7_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb       # substitui a versão anterior
 ```
 
@@ -147,7 +147,7 @@ Baixe o novo arquivo e substitua o antigo.
 ```bash
 # .deb
 dpkg -l cockpit
-# espera: ii  cockpit-devnx  0.6.6  amd64
+# espera: ii  cockpit-devnx  0.6.7  amd64
 
 # AppImage (sem dpkg)
 ~/Cockpit.AppImage --version
@@ -255,7 +255,7 @@ sudo pacman -S fuse2
 
 ## Versões anteriores
 
-Disponíveis no mesmo bucket — basta trocar `v0.6.6` no path:
+Disponíveis no mesmo bucket — basta trocar `v0.6.7` no path:
 
 ```
 https://arquivos.devnx.com.br/cockpit/v<MAJOR.MINOR.PATCH>/cockpit_<versão>_amd64.deb

@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.6.7] — 2026-05-07
+
+### Adicionado
+- **Sidebar colapsável** — botão na seção "Projetos" (ícone de painel com seta) recolhe a sidebar para foco total no projeto ativo. Botão de expandir aparece no header. O ícone do projeto ativo ganha aro com a cor do projeto pra ficar claro qual está em uso. Estado persiste no localStorage. Terminais re-fitam automaticamente.
+- **Ctrl+Tab / Ctrl+Shift+Tab** — alterna entre abas do editor abertas (cíclico). Funciona com foco no terminal também.
+- **Shift+Enter no terminal** — envia LF (`\n`) ao invés de submeter o comando. Útil em REPLs como Claude CLI / codex que interpretam `\n` como nova linha e `\r` como envio.
+
+### Corrigido
+- **Ordem dos botões de janela** — agora 🟡 amarelo · 🟢 verde · 🔴 vermelho da esquerda pra direita.
+
+---
+
 ## [0.6.6] — 2026-05-06
 
 ### Corrigido
