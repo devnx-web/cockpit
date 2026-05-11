@@ -46,7 +46,15 @@ const sessions = new Map();
 
 function createTerminalIn(session, name = null) {
   const tid = `t${session.nextId++}`;
-  const cwd = fs.existsSync(session.proj.path) ? session.proj.path : process.env.HOME;
+  const projPath = session.proj.path;
+  const pathOk = projPath && fs.existsSync(projPath);
+  const cwd = pathOk ? projPath : process.env.HOME;
+
+  if (!pathOk) {
+    console.warn(
+      `[cockpit] projeto "${session.proj.id}" tem path inexistente: ${projPath} — usando ${cwd} como fallback`,
+    );
+  }
 
   const pty = spawn(session.proj.shell || defaultShell(), [], {
     name: "xterm-256color",
@@ -72,9 +80,17 @@ function createTerminalIn(session, name = null) {
     bufferSize: 0,
     maxBufferSize: 200 * 1024,
     lastOutputTime: Date.now(),
-    status: "idle",
-    statusText: "iniciando…",
+    status: pathOk ? "idle" : "error",
+    statusText: pathOk ? "iniciando…" : "path do projeto não existe",
   };
+
+  if (!pathOk) {
+    const warn =
+      `\x1b[33m[cockpit] Path do projeto não existe: ${projPath}\r\n` +
+      `[cockpit] Abrindo em ${cwd} (fallback)\x1b[0m\r\n`;
+    terminal.buffer.push(warn);
+    terminal.bufferSize += warn.length;
+  }
 
   pty.onData((data) => {
     terminal.lastOutputTime = Date.now();
@@ -369,6 +385,23 @@ async function listFiles(projectPath, relPath) {
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+// Abre um arquivo no app padrão do SO (xdg-open / open / explorer).
+// Usa execFile (sem shell) e safePath para evitar injection/path traversal.
+function openExternalFile(projectPath, relPath) {
+  return new Promise((resolve) => {
+    const abs = safePath(projectPath, relPath);
+    if (!abs) { resolve({ ok: false, error: "caminho inválido" }); return; }
+    if (!fs.existsSync(abs)) { resolve({ ok: false, error: "arquivo não existe" }); return; }
+    const plat = os.platform();
+    const cmd = plat === "darwin" ? "open" : plat === "win32" ? "explorer.exe" : "xdg-open";
+    execFile(cmd, [abs], { windowsHide: true }, (err) => {
+      // xdg-open/open retornam antes de a app abrir; basta o spawn ter sucesso
+      if (err && err.code !== undefined) resolve({ ok: false, error: err.message });
+      else resolve({ ok: true });
+    });
+  });
 }
 
 async function readFileContent(projectPath, relPath) {
@@ -924,7 +957,7 @@ wss.on("connection", (ws) => {
         broadcast({
           type: "terminal_added",
           projectId: session.proj.id,
-          terminal: { ...terminalSummary(fresh), buffer: "" },
+          terminal: { ...terminalSummary(fresh), buffer: fresh.buffer.join("") },
         });
         break;
       }
@@ -969,7 +1002,7 @@ wss.on("connection", (ws) => {
         broadcast({
           type: "terminal_added",
           projectId: session.proj.id,
-          terminal: { ...terminalSummary(fresh), buffer: "" },
+          terminal: { ...terminalSummary(fresh), buffer: fresh.buffer.join("") },
         });
         break;
       }
@@ -1036,6 +1069,14 @@ wss.on("connection", (ws) => {
         const result = await readFileContent(session.proj.path, msg.path);
         ws.send(JSON.stringify({
           type: "files_result", action: "read",
+          projectId: msg.projectId, path: msg.path, result,
+        }));
+        break;
+      }
+      case "open_external": {
+        const result = await openExternalFile(session.proj.path, msg.path);
+        ws.send(JSON.stringify({
+          type: "files_result", action: "open_external",
           projectId: msg.projectId, path: msg.path, result,
         }));
         break;
@@ -1157,7 +1198,14 @@ const MIME = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
   ".ico": "image/x-icon",
+  ".pdf": "application/pdf",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
   ".ttf": "font/ttf",
@@ -1170,6 +1218,30 @@ const server = http.createServer((req, res) => {
   if (u.pathname === "/projects.json") {
     res.writeHead(200, { "Content-Type": MIME[".json"] });
     res.end(JSON.stringify(PROJECTS));
+    return;
+  }
+  // /file/<projectId>/<relPath...> — serve conteúdo bruto de arquivos do
+  // projeto para preview de imagens/PDFs no editor. safePath impede escape.
+  if (u.pathname && u.pathname.startsWith("/file/")) {
+    const rest = decodeURIComponent(u.pathname.slice("/file/".length));
+    const slash = rest.indexOf("/");
+    const projectId = slash >= 0 ? rest.slice(0, slash) : rest;
+    const relPath = slash >= 0 ? rest.slice(slash + 1) : "";
+    const proj = PROJECTS.find((p) => p.id === projectId);
+    if (!proj) { res.writeHead(404); res.end("project not found"); return; }
+    const abs = safePath(proj.path, relPath);
+    if (!abs) { res.writeHead(403); res.end("forbidden"); return; }
+    fs.stat(abs, (err, stat) => {
+      if (err || !stat.isFile()) { res.writeHead(404); res.end("not found"); return; }
+      const ext = path.extname(abs).toLowerCase();
+      const mime = MIME[ext] || "application/octet-stream";
+      res.writeHead(200, {
+        "Content-Type": mime,
+        "Content-Length": stat.size,
+        "Cache-Control": "no-cache",
+      });
+      fs.createReadStream(abs).pipe(res);
+    });
     return;
   }
   let rel = u.pathname === "/" ? "/index.html" : u.pathname;

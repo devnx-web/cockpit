@@ -8,3 +8,9 @@ build/
 
 # Assets de terceiros copiados de node_modules pelo postinstall
 public/vendor/
+
+# Logs do Playwright MCP
+.playwright-mcp/
+
+# Config local do daemon de voz (paths absolutos do ambiente)
+config.json

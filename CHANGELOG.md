@@ -10,6 +10,19 @@ _(nada ainda)_
 
 ---
 
+## [0.6.12] — 2026-05-11
+
+### Adicionado
+- **Visualizador de imagens e PDFs no editor** — clicar em `.png`/`.jpg`/`.jpeg`/`.gif`/`.webp`/`.avif`/`.bmp`/`.ico`/`.svg` agora abre preview com fundo xadrez (mostra transparência); `.pdf` abre em iframe nativo do Chromium. Pra outros binários (`.zip`, `.exe` etc), em vez de tela preta, aparece um placeholder com botão **Abrir com app externo** (`xdg-open` no Linux, `open` no macOS, `explorer.exe` no Windows). Novo endpoint `GET /file/<projectId>/<relPath>` no servidor serve o conteúdo bruto com `safePath` (sem path traversal).
+- **"Copiar como texto"** no menu de contexto do terminal (botão direito) — limpa o padding visual do xterm (rtrim por linha + tabs viram espaço + nbsp normalizado) antes de copiar. O `Copiar` original (Ctrl+C) continua intacto.
+- **Aviso de path quebrado** dentro do terminal — quando o `path` do projeto não existe, o terminal nasce com `status: error` ("path do projeto não existe") e injeta linha amarela `[cockpit] Path do projeto não existe: … — Abrindo em … (fallback)` no buffer. Visível tanto em reload quanto em terminais criados ao vivo.
+
+### Corrigido
+- **Aba de arquivo voltando vazia ao alternar entre arquivos** — `applyVisibility` fazia `monacoEditor.setValue("// carregando…")` no model do arquivo anterior enquanto esperava o `read_file` do novo, com `suspendDirtyTracking` ligado. Resultado: o model do primeiro arquivo era sobrescrito sem atualizar `f.content`, e ao voltar pra aba o conteúdo aparecia como `"// carregando…"` ou vazio. Agora `applyVisibility` sempre chama `loadInMonaco(f)` (cria o model do arquivo certo) e `getOrCreateModel` ressincroniza o model em cache se ele estiver dessincronizado com `f.content`.
+- **Buffer histórico do terminal em criação ao vivo** — `terminal_added` enviava `buffer: ""`, então qualquer output inicial (ex.: o aviso amarelo de path quebrado) só aparecia depois de reload da página. Agora envia `fresh.buffer.join("")` e o cliente faz replay imediato.
+
+---
+
 ## [0.6.11] — 2026-05-07
 
 ### Corrigido

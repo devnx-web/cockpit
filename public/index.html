@@ -921,6 +921,63 @@
       flex: 1;
       overflow: hidden;
     }
+    #mediaContainer {
+      flex: 1;
+      overflow: auto;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-0);
+      padding: 16px;
+    }
+    #mediaContainer.visible { display: flex; }
+    #monacoContainer.hidden { display: none; }
+    #mediaContainer img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      background:
+        linear-gradient(45deg, #00000033 25%, transparent 25%, transparent 75%, #00000033 75%, #00000033) 0 0/16px 16px,
+        linear-gradient(45deg, #00000033 25%, transparent 25%, transparent 75%, #00000033 75%, #00000033) 8px 8px/16px 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      border-radius: 4px;
+    }
+    #mediaContainer iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 4px;
+      background: #fff;
+    }
+    .media-placeholder {
+      max-width: 480px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+    }
+    .media-placeholder .icon { font-size: 48px; opacity: 0.5; }
+    .media-placeholder .name {
+      font-family: ui-monospace, monospace;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+    .media-placeholder .meta { color: var(--text-tertiary); font-size: 12px; }
+    .media-placeholder button {
+      background: var(--accent, #5b8def);
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .media-placeholder button:hover { filter: brightness(1.1); }
     .editor-empty {
       flex: 1;
       display: flex;
@@ -2532,6 +2589,7 @@
               <span class="file-meta" id="editorMeta"></span>
             </div>
             <div id="monacoContainer"></div>
+            <div id="mediaContainer"></div>
           </div>
         </div>
         <aside class="git-panel" id="gitPanel">
@@ -3368,6 +3426,21 @@
       }, 0);
     }
 
+    // Limpa o texto selecionado no xterm para colar em outros apps sem o
+    // "estilo terminal": o xterm preenche cada linha com espaços até o fim
+    // da coluna visível, e ao colar isso vira pseudo-tabs/colunas tortas.
+    // Estratégia conservadora: rtrim por linha (preserva indentação à esquerda,
+    // segura pra código) e tabs literais viram 1 espaço.
+    function cleanTerminalSelection(text) {
+      return text
+        .replace(/\t/g, " ")
+        .replace(/ /g, " ")
+        .split("\n")
+        .map((line) => line.replace(/[  ]+$/, ""))
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n");
+    }
+
     // Menu de contexto no terminal — botão direito. Operações de
     // copy/paste/clear/buscar acessíveis sem precisar lembrar atalhos.
     function showTerminalContextMenu(e, projId, tid, xt) {
@@ -3379,6 +3452,7 @@
       menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:300`;
       menu.innerHTML = `
         <div class="context-item ${hasSel ? "" : "disabled"}" data-action="copy">${ICONS.save} Copiar <span class="kbd" style="margin-left:auto;font-size:9.5px;opacity:.7">Ctrl+C</span></div>
+        <div class="context-item ${hasSel ? "" : "disabled"}" data-action="copy-clean">${ICONS.file} Copiar como texto</div>
         <div class="context-item" data-action="paste">${ICONS.plus} Colar <span class="kbd" style="margin-left:auto;font-size:9.5px;opacity:.7">Ctrl+V</span></div>
         <div class="context-divider"></div>
         <div class="context-item" data-action="select-all">Selecionar tudo</div>
@@ -3395,6 +3469,11 @@
             case "copy":
               if (hasSel) {
                 try { await navigator.clipboard.writeText(sel); } catch {}
+              }
+              break;
+            case "copy-clean":
+              if (hasSel) {
+                try { await navigator.clipboard.writeText(cleanTerminalSelection(sel)); } catch {}
               }
               break;
             case "paste":
@@ -4040,14 +4119,11 @@
         const list = openFiles.get(activeProjId) || [];
         const f = list.find((x) => x.path === filePath);
         if (f) {
-          if (f.savedContent !== "" || f.content !== "" || f.mtime > 0) {
-            loadInMonaco(f);
+          if (f.media) {
+            showMediaViewer(activeProjId, f);
           } else {
-            ensureMonaco(() => {
-              suspendDirtyTracking = true;
-              monacoEditor.setValue("// carregando…");
-              suspendDirtyTracking = false;
-            });
+            hideMediaViewer();
+            loadInMonaco(f);
           }
         }
       } else {
@@ -4688,21 +4764,38 @@
             }
           }
         } else {
-          showSimpleToast("Abrir", `${msg.path}: ${msg.result?.error || "erro"}`);
-          if (f) {
-            const idx = list.indexOf(f);
-            list.splice(idx, 1);
-            if (activeFileByProj.get(msg.projectId) === msg.path) {
-              activeFileByProj.delete(msg.projectId);
-              viewModeByProj.set(msg.projectId, "terminal");
+          // Binário desconhecido: mantém a aba e mostra placeholder com "Abrir externo"
+          if (f && msg.result?.error === "arquivo binário") {
+            f.media = "binary";
+            f.size = msg.result.size;
+            if (msg.projectId === activeProjId && activeFileByProj.get(activeProjId) === msg.path) {
+              showMediaViewer(msg.projectId, f);
             }
-            renderTabs();
-            if (msg.projectId === activeProjId) applyVisibility();
+            if (pending) {
+              pendingFileLoads.delete(pendingKey);
+              pending.reject(new Error("arquivo binário"));
+            }
+          } else {
+            showSimpleToast("Abrir", `${msg.path}: ${msg.result?.error || "erro"}`);
+            if (f) {
+              const idx = list.indexOf(f);
+              list.splice(idx, 1);
+              if (activeFileByProj.get(msg.projectId) === msg.path) {
+                activeFileByProj.delete(msg.projectId);
+                viewModeByProj.set(msg.projectId, "terminal");
+              }
+              renderTabs();
+              if (msg.projectId === activeProjId) applyVisibility();
+            }
+            if (pending) {
+              pendingFileLoads.delete(pendingKey);
+              pending.reject(new Error(msg.result?.error || "erro"));
+            }
           }
-          if (pending) {
-            pendingFileLoads.delete(pendingKey);
-            pending.reject(new Error(msg.result?.error || "erro"));
-          }
+        }
+      } else if (msg.action === "open_external") {
+        if (!msg.result?.ok) {
+          showSimpleToast("Abrir externo", msg.result?.error || "falhou");
         }
       } else if (msg.action === "write") {
         const list = openFiles.get(msg.projectId) || [];
@@ -4861,6 +4954,7 @@
       const existing = list.find((f) => f.path === relPath);
       if (!existing) {
         const name = relPath.split("/").pop();
+        const media = mediaKindFor(name);
         list.push({
           path: relPath,
           name,
@@ -4869,9 +4963,11 @@
           dirty: false,
           mtime: 0,
           language: languageFor(name),
+          media, // "image" | "pdf" | null. Binários desconhecidos viram "binary" via read_file
         });
         openFiles.set(projId, list);
-        if (ws?.readyState === 1) {
+        // mídia conhecida (image/pdf) é servida via /file/...; não precisa read_file
+        if (!media && ws?.readyState === 1) {
           ws.send(JSON.stringify({ type: "read_file", projectId: projId, path: relPath }));
         }
       }
@@ -4925,6 +5021,61 @@
         applyVisibility();
         renderFileTree();
       }
+    }
+
+    // Detecta tipo de mídia para abrir em viewer dedicado em vez do Monaco.
+    // Retorna "image" | "pdf" | null. SVG vai como imagem (preview > edição).
+    function mediaKindFor(filename) {
+      const ext = (filename.split(".").pop() || "").toLowerCase();
+      if (["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico", "svg"].includes(ext)) return "image";
+      if (ext === "pdf") return "pdf";
+      return null;
+    }
+
+    function fileUrl(projId, relPath) {
+      return `/file/${encodeURIComponent(projId)}/${relPath.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    function showMediaViewer(projId, f) {
+      const monacoEl = document.getElementById("monacoContainer");
+      const mediaEl = document.getElementById("mediaContainer");
+      monacoEl.classList.add("hidden");
+      mediaEl.classList.add("visible");
+      const url = fileUrl(projId, f.path);
+      if (f.media === "image") {
+        mediaEl.innerHTML = `<img src="${escapeHtml(url)}" alt="${escapeHtml(f.name)}">`;
+      } else if (f.media === "pdf") {
+        mediaEl.innerHTML = `<iframe src="${escapeHtml(url)}" title="${escapeHtml(f.name)}"></iframe>`;
+      } else {
+        // placeholder binário
+        const sizeKb = f.size ? `${(f.size / 1024).toFixed(1)} KB` : "tamanho desconhecido";
+        mediaEl.innerHTML = `
+          <div class="media-placeholder">
+            <div class="icon">📦</div>
+            <div>Não dá pra visualizar esse arquivo no editor.</div>
+            <div class="name">${escapeHtml(f.name)}</div>
+            <div class="meta">arquivo binário · ${sizeKb}</div>
+            <button data-action="open-external">Abrir com app externo</button>
+          </div>
+        `;
+        mediaEl.querySelector("[data-action=open-external]").addEventListener("click", () => {
+          if (ws?.readyState === 1) {
+            ws.send(JSON.stringify({ type: "open_external", projectId: projId, path: f.path }));
+          }
+        });
+      }
+      // limpa status do editor monaco
+      document.getElementById("editorFilePath").textContent = f.path;
+      document.getElementById("editorDirty").textContent = "";
+      document.getElementById("editorMeta").textContent = f.media === "image" ? "imagem" : f.media === "pdf" ? "pdf" : "binário";
+    }
+
+    function hideMediaViewer() {
+      const monacoEl = document.getElementById("monacoContainer");
+      const mediaEl = document.getElementById("mediaContainer");
+      mediaEl.classList.remove("visible");
+      mediaEl.innerHTML = "";
+      monacoEl.classList.remove("hidden");
     }
 
     function languageFor(filename) {
@@ -4992,7 +5143,16 @@
     function getOrCreateModel(projId, file) {
       const key = `${projId}:${file.path}`;
       let m = monacoModels.get(key);
-      if (m && !m.isDisposed()) return m;
+      if (m && !m.isDisposed()) {
+        // ressincroniza se algo tiver alterado o model fora do tracking
+        // (ex.: setValue de placeholder enquanto outro arquivo estava ativo)
+        if (m.getValue() !== (file.content || "")) {
+          suspendDirtyTracking = true;
+          m.setValue(file.content || "");
+          suspendDirtyTracking = false;
+        }
+        return m;
+      }
       const uri = uriForFile(projId, file.path);
       m = monaco.editor.getModel(uri);
       if (!m) {
@@ -5677,6 +5837,11 @@
             status: msg.terminal.status, statusText: msg.terminal.statusText,
           });
           createXterm(p, msg.terminal);
+          // replay do buffer histórico (ex.: aviso de path inexistente)
+          if (msg.terminal.buffer) {
+            const inst = xtermInstances.get(k(msg.projectId, msg.terminal.id));
+            if (inst) inst.term.write(msg.terminal.buffer);
+          }
           // se for no projeto ativo, foca a nova
           if (msg.projectId === activeProjId) {
             activeTerminalByProj.set(activeProjId, msg.terminal.id);

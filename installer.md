@@ -2,9 +2,9 @@
 
 Cabine de comando para múltiplos agentes de IA em vários projetos. Roda como app desktop em Linux (Electron + node-pty + xterm.js).
 
-Versão atual: **0.6.11** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.6.11/CHANGELOG.md))
+Versão atual: **0.6.12** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.6.12/CHANGELOG.md))
 
-> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.6.11/install.sh | sudo bash`
+> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.6.12/install.sh | sudo bash`
 
 ---
 
@@ -23,7 +23,7 @@ Versão atual: **0.6.11** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.
 ### Opção 1 — `.deb` (recomendado pra Debian/Ubuntu)
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.11/cockpit-devnx_0.6.11_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.12/cockpit-devnx_0.6.12_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb
 ```
 
@@ -42,7 +42,7 @@ Após instalar, o **Cockpit** aparece no menu de aplicativos. Ou abra pelo termi
 Não exige `sudo` nem instala nada no sistema.
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.11/Cockpit-0.6.11.AppImage -o ~/Cockpit.AppImage
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.12/Cockpit-0.6.12.AppImage -o ~/Cockpit.AppImage
 chmod +x ~/Cockpit.AppImage
 ~/Cockpit.AppImage
 ```
@@ -131,7 +131,7 @@ Edite `voice-config.json` e troque `tts_engine` para:
 ### A partir do `.deb`
 ```bash
 pkill -f "/opt/Cockpit/cockpit" 2>/dev/null    # fecha o app
-curl -L https://arquivos.devnx.com.br/cockpit/v0.6.11/cockpit-devnx_0.6.11_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.6.12/cockpit-devnx_0.6.12_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb       # substitui a versão anterior
 ```
 
@@ -147,7 +147,7 @@ Baixe o novo arquivo e substitua o antigo.
 ```bash
 # .deb
 dpkg -l cockpit
-# espera: ii  cockpit-devnx  0.6.11  amd64
+# espera: ii  cockpit-devnx  0.6.12  amd64
 
 # AppImage (sem dpkg)
 ~/Cockpit.AppImage --version
@@ -255,7 +255,7 @@ sudo pacman -S fuse2
 
 ## Versões anteriores
 
-Disponíveis no mesmo bucket — basta trocar `v0.6.11` no path:
+Disponíveis no mesmo bucket — basta trocar `v0.6.12` no path:
 
 ```
 https://arquivos.devnx.com.br/cockpit/v<MAJOR.MINOR.PATCH>/cockpit_<versão>_amd64.deb
@@ -263,3 +263,55 @@ https://arquivos.devnx.com.br/cockpit/v<MAJOR.MINOR.PATCH>/Cockpit-<versão>.App
 ```
 
 Histórico completo: [CHANGELOG.md](./CHANGELOG.md)
+
+---
+
+## Como publicar uma nova versão (para mantenedores)
+
+Tudo num único comando:
+
+```bash
+npm run release -- 0.6.13
+```
+
+Isso roda `scripts/release.sh`, que faz nesta ordem:
+
+1. **Bump da versão** em `package.json`, `scripts/install.sh`, `README.md`, `installer.md`.
+2. **`npm run dist:linux`** — gera `dist/cockpit-devnx_<versão>_amd64.deb` e `dist/Cockpit-<versão>.AppImage`.
+3. **Sincroniza** `scripts/install.sh` em `dist/install.sh`.
+4. **Sobe 4 artefatos** para `s3://arquivos.devnx.com.br/cockpit/v<versão>/`:
+   - `cockpit-devnx_<versão>_amd64.deb`
+   - `Cockpit-<versão>.AppImage`
+   - `install.sh`
+   - `CHANGELOG.md`
+
+### Configuração de upload (Wasabi)
+
+- **Bucket:** `arquivos.devnx.com.br` (sem o "c" no fim — o outro bucket `arquivosc.*` não tem CDN apontado).
+- **Endpoint:** `https://s3.us-central-1.wasabisys.com` — precisa ser passado via `--endpoint-url` explícito; o aws-cli v2 **não** lê o `endpoint_url` aninhado de `~/.aws/config`.
+- **Profile aws:** `wasabi` no `~/.aws/credentials`. A chave precisa de `s3:PutObject` no bucket. Sem ACL (`--acl public-read` resulta em AccessDenied; o bucket usa Bucket Policy para leitura pública).
+
+### Overrides via env
+
+```bash
+COCKPIT_AWS_PROFILE=outro-profile  npm run release -- 0.6.13
+COCKPIT_SKIP_UPLOAD=1              npm run release -- 0.6.13    # só local
+COCKPIT_SKIP_BUILD=1               npm run release -- 0.6.13    # só upload
+```
+
+### Pós-release
+
+Depois que o release subiu, valide:
+
+```bash
+curl -sI https://arquivos.devnx.com.br/cockpit/v0.6.13/install.sh   # HTTP/2 200
+curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.6.13/install.sh | sudo bash
+```
+
+Commitar a v0.6.13 (tag opcional):
+
+```bash
+git add -A && git commit -m "release: v0.6.13 — <resumo>"
+git tag v0.6.13
+git push --tags
+```
