@@ -3631,7 +3631,9 @@
 
     function fileTreeCopyPath(projId, relPath) {
       const proj = getProj(projId);
-      const text = relPath;
+      // caminho absoluto: <project.path>/<relPath>, normalizando barra dupla
+      const root = (proj?.path || "").replace(/\/$/, "");
+      const text = relPath ? `${root}/${relPath}` : root;
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text);
@@ -3640,7 +3642,7 @@
           ta.value = text; document.body.appendChild(ta);
           ta.select(); document.execCommand("copy"); ta.remove();
         }
-        showSimpleToast("Copiado", relPath, proj?.color);
+        showSimpleToast("Copiado", text, proj?.color);
       } catch (e) {
         showSimpleToast("Copiar falhou", e.message);
       }
