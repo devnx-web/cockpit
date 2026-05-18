@@ -33,6 +33,7 @@
       --status-waiting: #fb923c;
       --status-idle: #6b7280;
       --status-error: #f87171;
+      --status-attention: #3b82f6;
       --font-ui: ui-monospace, "SF Mono", "DejaVu Sans Mono", "Consolas", "Liberation Mono", monospace;
       --font-term: ui-monospace, "SF Mono", "DejaVu Sans Mono", "Consolas", "Liberation Mono", monospace;
     }
@@ -515,9 +516,15 @@
     .status-dot.waiting { background: var(--status-waiting); animation: blink-waiting 1.1s ease-in-out infinite; box-shadow: 0 0 8px var(--status-waiting); }
     .status-dot.idle { background: var(--status-idle); opacity: 0.6; }
     .status-dot.error { background: var(--status-error); box-shadow: 0 0 6px var(--status-error); animation: blink-error 1.6s ease-in-out infinite; }
+    /* attention: demanda terminou e o projeto ainda não foi reaberto pra ver */
+    .status-dot.attention { background: var(--status-attention); box-shadow: 0 0 8px var(--status-attention); animation: pulse-attention 2s ease-in-out infinite; }
     @keyframes pulse-running {
       0%, 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.55); }
       70% { box-shadow: 0 0 0 5px rgba(74,222,128,0); }
+    }
+    @keyframes pulse-attention {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6); }
+      70% { box-shadow: 0 0 0 5px rgba(59,130,246,0); }
     }
     @keyframes blink-waiting {
       0%, 100% { opacity: 1; } 50% { opacity: 0.25; }
@@ -2768,6 +2775,10 @@
     // Terminal search
     let termSearchVisible = false;
 
+    // Projetos com demanda terminada que ainda não foi reaberta pra ver.
+    // A bolinha de status do projeto fica azul até o projeto ser selecionado.
+    const projAttention = new Set(); // projId
+
     // Atividade não lida em abas de terminal inativas
     const termUnread = new Set(); // "projId:tid"
     function updateTabUnread(projId, tid) {
@@ -2914,43 +2925,9 @@
           // sem seleção: comportamento padrão (Ctrl+C → SIGINT)
           return true;
         }
-        // Ctrl+V = colar do clipboard. Tenta text/uri-list (arquivos/imagens copiados),
-        // depois texto puro.
-        if (isMod && !e.shiftKey && e.key.toLowerCase() === "v" && e.type === "keydown") {
-          (async () => {
-            try {
-              let pasted = "";
-              if (navigator.clipboard.read) {
-                const items = await navigator.clipboard.read();
-                for (const item of items) {
-                  if (item.types.includes("text/uri-list")) {
-                    const blob = await item.getType("text/uri-list");
-                    const raw = await blob.text();
-                    const paths = raw.split(/\r?\n/)
-                      .filter(l => l && !l.startsWith("#"))
-                      .map(u => {
-                        try { return decodeURIComponent(new URL(u).pathname); } catch { return u; }
-                      });
-                    pasted = paths.join(" ");
-                    break;
-                  }
-                  if (item.types.includes("text/plain")) {
-                    const blob = await item.getType("text/plain");
-                    pasted = await blob.text();
-                    break;
-                  }
-                }
-              }
-              if (!pasted) pasted = await navigator.clipboard.readText();
-              if (pasted && ws?.readyState === 1) {
-                ws.send(JSON.stringify({
-                  type: "input", projectId: proj.id, terminalId: term.id, data: pasted,
-                }));
-              }
-            } catch {}
-          })();
-          return false;
-        }
+        // Ctrl+V não é tratado aqui — ver o listener de `paste` abaixo, que
+        // intercepta o evento nativo. Tratar no keydown colava 2x (handler
+        // custom enviava + o paste nativo do xterm também colava).
         if (isMod && !e.shiftKey && e.key.toLowerCase() === "w" && e.type === "keydown") {
           requestCloseTerminal(proj.id, term.id);
           return false;
@@ -2976,6 +2953,50 @@
         return true;
       });
 
+      // Colar no terminal: lê text/uri-list (arquivos/imagens copiados) e cai
+      // pra texto puro. Usado pelo evento `paste` e pelo botão do meio.
+      async function pasteIntoTerminal() {
+        try {
+          let pasted = "";
+          if (navigator.clipboard.read) {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+              if (item.types.includes("text/uri-list")) {
+                const blob = await item.getType("text/uri-list");
+                const raw = await blob.text();
+                pasted = raw.split(/\r?\n/)
+                  .filter(l => l && !l.startsWith("#"))
+                  .map(u => {
+                    try { return decodeURIComponent(new URL(u).pathname); } catch { return u; }
+                  })
+                  .join(" ");
+                break;
+              }
+              if (item.types.includes("text/plain")) {
+                const blob = await item.getType("text/plain");
+                pasted = await blob.text();
+                break;
+              }
+            }
+          }
+          if (!pasted) pasted = await navigator.clipboard.readText();
+          if (pasted && ws?.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: "input", projectId: proj.id, terminalId: term.id, data: pasted,
+            }));
+          }
+        } catch {}
+      }
+
+      // Ctrl+V / Ctrl+Shift+V: interceptamos o evento `paste` na fase de
+      // captura do container — antes de chegar ao textarea do xterm — e
+      // bloqueamos o paste nativo. Sem isso o Ctrl+V colava 2x.
+      container.addEventListener("paste", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        pasteIntoTerminal();
+      }, true);
+
       // Botão direito no terminal: menu de contexto com Copiar/Colar/Limpar/Buscar.
       // Antes não tinha — só seleção visual sem ação. Botão do meio também
       // serve como atalho rápido pra colar (convenção Linux clássica).
@@ -2987,38 +3008,7 @@
         // botão do meio = paste rápido
         if (e.button !== 1) return;
         e.preventDefault();
-        (async () => {
-          try {
-            let pasted = "";
-            if (navigator.clipboard.read) {
-              const items = await navigator.clipboard.read();
-              for (const item of items) {
-                if (item.types.includes("text/uri-list")) {
-                  const blob = await item.getType("text/uri-list");
-                  const raw = await blob.text();
-                  const paths = raw.split(/\r?\n/)
-                    .filter(l => l && !l.startsWith("#"))
-                    .map(u => {
-                      try { return decodeURIComponent(new URL(u).pathname); } catch { return u; }
-                    });
-                  pasted = paths.join(" ");
-                  break;
-                }
-                if (item.types.includes("text/plain")) {
-                  const blob = await item.getType("text/plain");
-                  pasted = await blob.text();
-                  break;
-                }
-              }
-            }
-            if (!pasted) pasted = await navigator.clipboard.readText();
-            if (pasted && ws?.readyState === 1) {
-              ws.send(JSON.stringify({
-                type: "input", projectId: proj.id, terminalId: term.id, data: pasted,
-              }));
-            }
-          } catch {}
-        })();
+        pasteIntoTerminal();
       });
 
       xt.onData((data) => {
@@ -3791,7 +3781,7 @@
     }
 
     function renderProjectItem(p, indexNum) {
-      const status = aggregateProjStatus(p);
+      const status = projAttention.has(p.id) ? "attention" : aggregateProjStatus(p);
       const statusText = aggregateProjStatusText(p);
       const item = document.createElement("div");
       item.className = "project-item" + (p.id === activeProjId ? " active" : "");
@@ -3872,7 +3862,8 @@
       orderedGroupNames.forEach((name) => {
         const projs = groups.get(name);
         const collapsed = collapsedGroups.has(name);
-        const groupStatus = aggregateGroupStatus(projs);
+        const groupStatus = projs.some((p) => projAttention.has(p.id))
+          ? "attention" : aggregateGroupStatus(projs);
 
         const header = document.createElement("div");
         header.className = "group-header";
@@ -4157,6 +4148,7 @@
     function selectProject(id) {
       if (!getProj(id)) return;
       activeProjId = id;
+      projAttention.delete(id); // abriu o projeto → demanda vista, apaga o azul
       localStorage.setItem("cockpit-last-proj", id);
       const p = getProj(id);
       if (!activeTerminalByProj.has(id) && p.terminals.length > 0) {
@@ -5824,6 +5816,8 @@
           if (!wasWaiting && msg.status === "waiting") {
             const isActiveView = msg.projectId === activeProjId && msg.terminalId === getActiveTid();
             if (!isActiveView) showWaitingToast(p, t);
+            // marca o projeto pra bolinha azul, a menos que já esteja aberto
+            if (msg.projectId !== activeProjId) projAttention.add(msg.projectId);
           }
           renderSidebar();
           renderTabs();

@@ -10,6 +10,16 @@ _(nada ainda)_
 
 ---
 
+## [0.6.13] — 2026-05-18
+
+### Adicionado
+- **Bolinha azul de demanda terminada** — quando uma demanda termina (terminal entra em `waiting`) num projeto que não está aberto, a bolinha de status daquele projeto na barra lateral fica azul pulsante, complementando o toast (que some sozinho). O azul é persistente: fica lá até você abrir o projeto. Cabeçalho de grupo também fica azul se algum projeto filho tiver demanda não vista. Limpa ao selecionar o projeto.
+
+### Corrigido
+- **Ctrl+V colava 2x no terminal** — o handler de teclado custom enviava o texto colado e retornava `false`, mas `return false` no `attachCustomKeyEventHandler` não chama `preventDefault()` no evento nativo, então o navegador ainda disparava o `paste` nativo do xterm, colando de novo (`Ctrl+Shift+V` escapava por causa da guarda `!e.shiftKey`). Agora o paste é interceptado no evento `paste` em si, na fase de captura do container — antes de chegar ao textarea do xterm — colando uma única vez. Lógica de paste centralizada em `pasteIntoTerminal()`, reusada pelo botão do meio.
+
+---
+
 ## [0.6.12] — 2026-05-11
 
 ### Adicionado
