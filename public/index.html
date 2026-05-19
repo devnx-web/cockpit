@@ -2244,6 +2244,77 @@
       color: var(--text-tertiary);
       font-size: 12.5px;
     }
+    /* busca + paginação do popover de visibilidade */
+    .visibility-popover .vp-search-bar {
+      padding: 10px 22px 0;
+      display: flex; gap: 8px; align-items: center;
+    }
+    .visibility-popover .vp-search-input {
+      flex: 1;
+      background: var(--bg-1);
+      border: 1px solid var(--border-default);
+      color: var(--text-primary);
+      font-family: var(--font-ui); font-size: 12.5px;
+      padding: 7px 10px;
+      border-radius: 6px; outline: none;
+      transition: border-color 120ms;
+    }
+    .visibility-popover .vp-search-input::placeholder { color: var(--text-tertiary); }
+    .visibility-popover .vp-search-input:focus { border-color: var(--border-strong); }
+    .visibility-popover .vp-search-clear {
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-tertiary); cursor: pointer;
+      border-radius: 4px;
+      transition: all 120ms ease;
+    }
+    .visibility-popover .vp-search-clear:hover { color: var(--text-primary); background: var(--bg-3); }
+    .visibility-popover .vp-search-clear svg { width: 13px; height: 13px; }
+    .visibility-popover .vp-pager {
+      padding: 8px 22px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--bg-2);
+    }
+    .visibility-popover .vp-pager-info {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+    }
+    .visibility-popover .vp-pager-controls { display: flex; gap: 4px; align-items: center; }
+    .visibility-popover .vp-pager-btn {
+      min-width: 26px; height: 26px;
+      padding: 0 6px;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+      transition: all 120ms ease;
+    }
+    .visibility-popover .vp-pager-btn:hover:not(:disabled):not(.is-active) {
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+      background: var(--bg-3);
+    }
+    .visibility-popover .vp-pager-btn.is-active {
+      background: var(--bg-3);
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+    .visibility-popover .vp-pager-btn:disabled {
+      opacity: 0.35; cursor: not-allowed;
+    }
+    .visibility-popover .vp-pager-btn svg { width: 12px; height: 12px; }
+    .visibility-popover .vp-pager-ellipsis {
+      padding: 0 4px;
+      color: var(--text-tertiary);
+      font-size: 11px;
+    }
 
     /* SEARCH BAR NO TERMINAL */
     .term-search-bar {
@@ -7093,9 +7164,11 @@
       const rect = anchorEl.getBoundingClientRect();
       const menu = document.createElement("div");
       menu.className = "context-menu";
+      const hideLabel = proj.hidden ? "Mostrar na sidebar" : "Ocultar da sidebar";
       menu.innerHTML = `
         <div class="context-item" data-action="edit">${ICONS.edit}<span>Editar projeto</span></div>
         <div class="context-item" data-action="duplicate">${ICONS.plus}<span>Duplicar como novo</span></div>
+        <div class="context-item" data-action="toggle-hidden">${ICONS.eye}<span>${hideLabel}</span></div>
         <div class="context-divider"></div>
         <div class="context-item danger" data-action="remove">${ICONS.trash}<span>Remover projeto</span></div>
       `;
@@ -7125,6 +7198,16 @@
             const dup = { ...proj, id: proj.id + "-copy", name: proj.name + " (cópia)" };
             const result = await showProjectModal({ mode: "add", project: dup });
             if (result) sendAdmin({ type: "add_project", project: result });
+          } else if (action === "toggle-hidden") {
+            const newHidden = !proj.hidden;
+            sendAdmin({ type: "update_project", id: proj.id, changes: { hidden: newHidden } });
+            proj.hidden = newHidden;
+            renderSidebar();
+            showSimpleToast(
+              newHidden ? "Projeto oculto" : "Projeto visível",
+              newHidden ? `${proj.name} — reabra pelo olho na sidebar` : proj.name,
+              proj.color
+            );
           } else if (action === "remove") {
             const ok = await showConfirm({
               title: "Remover projeto?",
@@ -7186,8 +7269,18 @@
             <span class="vp-close" title="Fechar (Esc)">${closeIcon}</span>
           </div>
         </div>
+        <div class="vp-search-bar">
+          <input type="text" class="vp-search-input" id="vpSearch" placeholder="Buscar por nome, grupo, id ou caminho…" autocomplete="off" spellcheck="false" />
+          <span class="vp-search-clear" id="vpSearchClear" title="Limpar (Esc)" style="visibility:hidden">${closeIcon}</span>
+        </div>
         <div class="vp-list" id="vpList"></div>
+        <div class="vp-pager" id="vpPager" style="display:none"></div>
       `;
+
+      // estado local do popover
+      const PAGE_SIZE = 10;
+      let vpQuery = "";
+      let vpPage = 1;
 
       const updateCounter = () => {
         const visibleCount = projects.filter((p) => !p.hidden).length;
@@ -7199,15 +7292,40 @@
 
       const renderList = () => {
         const list = pop.querySelector("#vpList");
+        const pager = pop.querySelector("#vpPager");
         if (projects.length === 0) {
           list.innerHTML = `<div class="vp-empty">sem projetos cadastrados</div>`;
+          pager.style.display = "none";
           return;
         }
 
-        // agrupa preservando ordem do array `projects`
+        // 1. filtra por query (nome, id, grupo, path)
+        const q = vpQuery.trim().toLowerCase();
+        const filtered = q
+          ? projects.filter((p) => {
+              const hay = [p.name, p.id, p.group, p.path].filter(Boolean).join(" ").toLowerCase();
+              return hay.includes(q);
+            })
+          : projects.slice();
+
+        if (filtered.length === 0) {
+          list.innerHTML = `<div class="vp-empty">nenhum projeto para "${escapeHtml(vpQuery)}"</div>`;
+          pager.style.display = "none";
+          return;
+        }
+
+        // 2. pagina (10 por página). Página é clampada ao total.
+        const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        if (vpPage > totalPages) vpPage = totalPages;
+        if (vpPage < 1) vpPage = 1;
+        const showPager = filtered.length > PAGE_SIZE;
+        const pageStart = (vpPage - 1) * PAGE_SIZE;
+        const pageItems = showPager ? filtered.slice(pageStart, pageStart + PAGE_SIZE) : filtered;
+
+        // 3. reagrupa só o slice atual preservando ordem dos projetos visíveis
         const groups = new Map();
         const orderedNames = [];
-        projects.forEach((p) => {
+        pageItems.forEach((p) => {
           const g = p.group || null;
           if (!groups.has(g)) {
             groups.set(g, []);
@@ -7226,7 +7344,10 @@
 
         list.innerHTML = orderedNames.map((g) => {
           const projs = groups.get(g);
-          const allHidden = projs.every((p) => p.hidden);
+          // contagem do toggle de grupo considera TODOS os projetos do grupo
+          // (não só os da página atual), pra "ocultar grupo" não bagunçar.
+          const groupAll = projects.filter((p) => (p.group || null) === g);
+          const allHidden = groupAll.every((p) => p.hidden);
           const groupLabel = g || "Sem grupo";
           const toggleLabel = allHidden ? "mostrar grupo" : "ocultar grupo";
           return `
@@ -7234,7 +7355,7 @@
               <div class="vp-group-head">
                 <span class="vp-group-name">
                   <span>${escapeHtml(groupLabel)}</span>
-                  <span class="vp-group-count">${projs.length}</span>
+                  <span class="vp-group-count">${projs.length}${projs.length !== groupAll.length ? "/" + groupAll.length : ""}</span>
                 </span>
                 <span class="vp-group-toggle" data-toggle="${allHidden ? "show" : "hide"}">${toggleLabel}</span>
               </div>
@@ -7243,6 +7364,26 @@
           `;
         }).join("");
 
+        // 4. paginação no footer (só quando passa de 10)
+        if (showPager) {
+          pager.style.display = "flex";
+          pager.innerHTML = renderPager(filtered.length, totalPages);
+          pager.querySelectorAll("[data-page]").forEach((b) => {
+            b.addEventListener("click", () => {
+              const p = parseInt(b.dataset.page, 10);
+              if (!Number.isFinite(p) || p === vpPage) return;
+              vpPage = p;
+              renderList();
+              const si = pop.querySelector("#vpSearch");
+              if (document.activeElement === si) si.focus();
+            });
+          });
+        } else {
+          pager.style.display = "none";
+          pager.innerHTML = "";
+        }
+
+        // 5. handlers das linhas e dos toggles de grupo
         list.querySelectorAll(".vp-row").forEach((row) => {
           row.addEventListener("click", () => {
             const proj = getProj(row.dataset.id);
@@ -7252,7 +7393,6 @@
             renderList(); renderSidebar(); updateCounter();
           });
         });
-
         list.querySelectorAll(".vp-group-toggle").forEach((tg) => {
           tg.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -7272,8 +7412,69 @@
         });
       };
 
+      // Constrói HTML da barra de paginação. Janela compacta tipo Google:
+      // [‹] 1 … 4 [5] 6 … 12 [›]
+      const renderPager = (totalItems, totalPages) => {
+        const pageStart = (vpPage - 1) * PAGE_SIZE + 1;
+        const pageEnd = Math.min(vpPage * PAGE_SIZE, totalItems);
+        const pages = [];
+        const push = (n) => pages.push(`<button class="vp-pager-btn${n === vpPage ? " is-active" : ""}" data-page="${n}">${n}</button>`);
+        const ell = () => pages.push(`<span class="vp-pager-ellipsis">…</span>`);
+        if (totalPages <= 7) {
+          for (let i = 1; i <= totalPages; i++) push(i);
+        } else {
+          push(1);
+          if (vpPage > 3) ell();
+          const start = Math.max(2, vpPage - 1);
+          const end = Math.min(totalPages - 1, vpPage + 1);
+          for (let i = start; i <= end; i++) push(i);
+          if (vpPage < totalPages - 2) ell();
+          push(totalPages);
+        }
+        const chev = (dir) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${dir === "left" ? "15 18 9 12 15 6" : "9 18 15 12 9 6"}"/></svg>`;
+        return `
+          <span class="vp-pager-info">${pageStart}–${pageEnd} de ${totalItems}</span>
+          <span class="vp-pager-controls">
+            <button class="vp-pager-btn" data-page="${vpPage - 1}" ${vpPage === 1 ? "disabled" : ""} title="Anterior">${chev("left")}</button>
+            ${pages.join("")}
+            <button class="vp-pager-btn" data-page="${vpPage + 1}" ${vpPage === totalPages ? "disabled" : ""} title="Próxima">${chev("right")}</button>
+          </span>
+        `;
+      };
+
       updateCounter();
       renderList();
+
+      // busca: digita → reseta página → re-renderiza. Esc limpa o filtro.
+      const searchInput = pop.querySelector("#vpSearch");
+      const searchClear = pop.querySelector("#vpSearchClear");
+      searchInput.addEventListener("input", () => {
+        vpQuery = searchInput.value;
+        vpPage = 1;
+        searchClear.style.visibility = vpQuery ? "visible" : "hidden";
+        renderList();
+      });
+      searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && vpQuery) {
+          e.preventDefault();
+          e.stopPropagation();
+          searchInput.value = "";
+          vpQuery = "";
+          vpPage = 1;
+          searchClear.style.visibility = "hidden";
+          renderList();
+        }
+      });
+      searchClear.addEventListener("click", () => {
+        searchInput.value = "";
+        vpQuery = "";
+        vpPage = 1;
+        searchClear.style.visibility = "hidden";
+        renderList();
+        searchInput.focus();
+      });
+      // foca automaticamente quando abre — se tem >10 projetos vale a pena
+      if (projects.length > 10) setTimeout(() => searchInput.focus(), 30);
 
       pop.querySelector('[data-action="show-all"]').addEventListener("click", () => {
         projects.forEach((p) => {

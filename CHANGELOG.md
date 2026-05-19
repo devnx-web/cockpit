@@ -6,6 +6,20 @@ Datas em GMT-3 (Horário de Brasília).
 
 ## [Unreleased]
 
+_(nada ainda)_
+
+---
+
+## [0.6.15] — 2026-05-19
+
+### Adicionado
+- **Ocultar projeto direto no menu** — o menu do botão `⋮` do projeto na sidebar agora tem o item `Ocultar da sidebar` (ou `Mostrar na sidebar` se já estiver oculto), entre `Duplicar` e `Remover`. Antes a única forma de ocultar era passar pelo popover do olho 👁 no rodapé. Toast confirma a ação.
+- **Busca e paginação no popover de visibilidade** — o popover do olho 👁 ganhou um campo de busca (filtra por nome, grupo, id ou caminho) e paginação automática quando há mais de 10 projetos (10 por página, com janela compacta `1 … 4 [5] 6 … 12`). Em projetos com 10+ a busca já vem focada ao abrir; `Esc` no campo limpa o filtro; `Esc` fora dele fecha o popover como antes.
+
+---
+
+## [0.6.14] — 2026-05-19
+
 ### Adicionado
 - **Arrastar arquivo da árvore pra fora do Cockpit** — agora você pode pegar um arquivo na sidebar e arrastar pro Files/Nautilus (ou pra um campo de upload, anexo de e-mail etc). No Electron usa `webContents.startDrag` pra um drag SO-nativo de verdade; em browser puro, populamos `text/uri-list` como fallback (funciona pro drop interno no terminal). Pastas só funcionam pro drop interno (Electron exige arquivo).
 - **Arrastar arquivo de fora pra dentro da árvore** — solte arquivos do Files/Nautilus em cima de uma pasta da árvore pra copiar pra lá; solte em cima de um arquivo pra cair na pasta-pai dele; solte na área vazia pra ir pra raiz do projeto. Pasta-alvo recebe um destaque colorido durante o drag. Múltiplos arquivos e pastas (recursivo) suportados. Se houver colisão de nome, pergunta sobrescrever ou pular. Novo endpoint WS `import_external` no servidor copia via `fs.cp`, com `safePath` no destino pra evitar escape do project root. Só funciona no Electron (browsers não expõem `file.path` por segurança).
