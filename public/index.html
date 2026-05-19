@@ -850,6 +850,17 @@
     }
     .tree-node:hover { background: var(--bg-2); color: var(--text-primary); }
     .tree-node.active { background: var(--bg-3); color: var(--text-primary); }
+    /* destaque enquanto o usuário arrasta arquivo externo sobre uma pasta-alvo */
+    .tree-node.drop-target {
+      background: color-mix(in srgb, var(--proj-color, #5b8def) 22%, transparent);
+      box-shadow: inset 0 0 0 1px var(--proj-color, #5b8def);
+      color: var(--text-primary);
+    }
+    /* destaque quando o drop alvo é a raiz do projeto (área vazia da árvore) */
+    .file-tree.drop-target {
+      box-shadow: inset 0 0 0 2px var(--proj-color, #5b8def);
+      border-radius: 4px;
+    }
     .tree-chevron {
       width: 12px; height: 12px;
       flex-shrink: 0;
@@ -3524,6 +3535,14 @@
       const ext = name.slice(dot);
       return `${stem} (cópia)${ext}`;
     }
+    // resolve <project.path>/<relPath> normalizando barra dupla. Retorna null
+    // se o projeto não tem path configurado.
+    function absPathForRel(projId, relPath) {
+      const proj = getProj(projId);
+      if (!proj?.path) return null;
+      const root = proj.path.replace(/\/$/, "");
+      return relPath ? `${root}/${relPath}` : root;
+    }
 
     function showFileTreeContextMenu(e, projId, relPath, isDir) {
       e.preventDefault();
@@ -3544,6 +3563,11 @@
       items.push({ action: "rename", icon: "edit", label: "Renomear", hint: "F2" });
       items.push({ action: "duplicate", icon: "save", label: "Duplicar" });
       items.push({ action: "copy-path", icon: "edit", label: "Copiar caminho" });
+      // Só faz sentido no Electron — em browser puro não há acesso ao
+      // gerenciador de arquivos do SO.
+      if (window.cockpitDesktop?.isElectron) {
+        items.push({ action: "reveal", icon: "folderOpen", label: "Abrir local do arquivo" });
+      }
       items.push({ divider: true });
       items.push({ action: "delete", icon: "trash", label: "Excluir", danger: true });
       menu.innerHTML = items.map((it) => {
@@ -3578,10 +3602,24 @@
         case "rename": await fileTreeRename(projId, relPath, isDir); break;
         case "duplicate": await fileTreeDuplicate(projId, relPath, isDir); break;
         case "copy-path": fileTreeCopyPath(projId, relPath); break;
+        case "reveal": fileTreeReveal(projId, relPath); break;
         case "delete": await fileTreeDelete(projId, relPath, isDir); break;
         case "new-file": await fileTreeNewFile(projId, relPath); break;
         case "new-folder": await fileTreeNewFolder(projId, relPath); break;
       }
+    }
+
+    function fileTreeReveal(projId, relPath) {
+      const abs = absPathForRel(projId, relPath);
+      if (!abs) {
+        showSimpleToast("Caminho inválido", "projeto sem path configurado");
+        return;
+      }
+      if (!window.cockpitDesktop?.showItemInFolder) {
+        showSimpleToast("Não disponível", "requer app desktop (Electron)");
+        return;
+      }
+      window.cockpitDesktop.showItemInFolder(abs);
     }
 
     async function fileTreeRename(projId, relPath, isDir) {
@@ -3621,9 +3659,7 @@
 
     function fileTreeCopyPath(projId, relPath) {
       const proj = getProj(projId);
-      // caminho absoluto: <project.path>/<relPath>, normalizando barra dupla
-      const root = (proj?.path || "").replace(/\/$/, "");
-      const text = relPath ? `${root}/${relPath}` : root;
+      const text = absPathForRel(projId, relPath) || "";
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text);
@@ -4866,6 +4902,8 @@
         } else {
           showSimpleToast("Duplicar falhou", msg.result?.error || "erro");
         }
+      } else if (msg.action === "import_external") {
+        handleImportExternalResult(msg);
       }
     }
 
@@ -4901,6 +4939,55 @@
           const isDir = el.dataset.type === "dir";
           showFileTreeContextMenu(e, activeProjId, fullPath, isDir);
         });
+        // Drag de arquivo da árvore — pra arrastar até o terminal interno
+        // (drop handler em terminal cola o caminho) ou pra fora da janela
+        // (Files/Nautilus): no Electron usamos webContents.startDrag pra um
+        // drag nativo de arquivo; no browser, populamos text/uri-list como
+        // fallback (funciona pro terminal interno; SO ignora pra outros apps).
+        el.addEventListener("dragstart", (ev) => {
+          const relPath = el.dataset.path;
+          const isDir = el.dataset.type === "dir";
+          const abs = absPathForRel(activeProjId, relPath);
+          if (!abs) return;
+          internalTreeDragActive = true;
+          try { ev.dataTransfer.effectAllowed = "copyMove"; } catch {}
+          try { ev.dataTransfer.setData("text/plain", abs); } catch {}
+          try { ev.dataTransfer.setData("text/uri-list", "file://" + encodeURI(abs)); } catch {}
+          // Pasta não é arrastável nativamente via startDrag (Electron exige
+          // arquivo). Pasta funciona só pro drop interno via text/plain.
+          if (!isDir && window.cockpitDesktop?.isElectron && window.cockpitDesktop.startDrag) {
+            try { window.cockpitDesktop.startDrag(abs); } catch {}
+          }
+        });
+        el.addEventListener("dragend", () => { internalTreeDragActive = false; });
+        // Drop de arquivo externo (do file manager do SO) sobre uma pasta
+        // ou arquivo da árvore — copia pro destino. Em arquivo, vai pra
+        // pasta-pai dele. dragenter/over precisam preventDefault pra browser
+        // aceitar o drop e pra deixar a gente customizar o dropEffect.
+        el.addEventListener("dragover", (ev) => {
+          if (!hasExternalFiles(ev) || internalTreeDragActive) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          ev.dataTransfer.dropEffect = "copy";
+          clearDropTargets();
+          // se a entry é arquivo, destacar a pasta-pai (subir um nível visual)
+          el.classList.add("drop-target");
+        });
+        el.addEventListener("dragleave", (ev) => {
+          if (!ev.relatedTarget || !el.contains(ev.relatedTarget)) {
+            el.classList.remove("drop-target");
+          }
+        });
+        el.addEventListener("drop", (ev) => {
+          if (!hasExternalFiles(ev) || internalTreeDragActive) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          clearDropTargets();
+          const relPath = el.dataset.path;
+          const isDir = el.dataset.type === "dir";
+          const destDir = isDir ? relPath : dirNameOf(relPath);
+          handleExternalFilesDrop(activeProjId, destDir, ev.dataTransfer);
+        });
       });
       // contextmenu na área vazia da árvore = menu da raiz
       tree.addEventListener("contextmenu", (e) => {
@@ -4908,6 +4995,128 @@
         e.preventDefault();
         showFileTreeContextMenu(e, activeProjId, "", true);
       });
+      // Drop em área vazia da árvore = raiz do projeto. Listener no
+      // container; ignoramos se já caiu em cima de um tree-node.
+      tree.addEventListener("dragover", (e) => {
+        if (!hasExternalFiles(e) || internalTreeDragActive) return;
+        if (e.target.closest(".tree-node")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        tree.classList.add("drop-target");
+      });
+      tree.addEventListener("dragleave", (e) => {
+        if (!e.relatedTarget || !tree.contains(e.relatedTarget)) {
+          tree.classList.remove("drop-target");
+        }
+      });
+      tree.addEventListener("drop", (e) => {
+        if (!hasExternalFiles(e) || internalTreeDragActive) return;
+        if (e.target.closest(".tree-node")) return;
+        e.preventDefault();
+        tree.classList.remove("drop-target");
+        handleExternalFilesDrop(activeProjId, "", e.dataTransfer);
+      });
+    }
+
+    // Estado e helpers do drop externo na árvore
+    let internalTreeDragActive = false;
+    function hasExternalFiles(ev) {
+      const types = ev.dataTransfer?.types;
+      if (!types) return false;
+      return Array.from(types).includes("Files");
+    }
+    function clearDropTargets() {
+      document.querySelectorAll(".tree-node.drop-target").forEach((n) => n.classList.remove("drop-target"));
+    }
+
+    // Aceita um DataTransfer com arquivos do SO e dispara import_external pra
+    // cada um. Se houver colisão de nome, o servidor responde exists=true e
+    // a gente pergunta sobrescrever (uma confirmação por arquivo).
+    async function handleExternalFilesDrop(projId, destDirRel, dataTransfer) {
+      const files = dataTransfer?.files;
+      if (!files || !files.length) return;
+      const proj = getProj(projId);
+      // navegador puro não dá acesso ao path absoluto do arquivo dropado por
+      // segurança — só Electron preenche f.path. Sem path, não dá pra copiar
+      // server-side.
+      const items = [];
+      for (const f of files) {
+        if (!f.path) {
+          showSimpleToast("Arrastar de fora", "requer app desktop pra resolver o caminho do arquivo");
+          return;
+        }
+        items.push({ src: f.path, name: f.name });
+      }
+      const colorHint = proj?.color;
+      const okCount = { v: 0 };
+      const skipCount = { v: 0 };
+      for (const it of items) {
+        await new Promise((resolve) => {
+          const dstRel = joinPath(destDirRel, it.name);
+          pendingImports.set(`${projId}::${it.src}::${dstRel}`, { resolve, projId, src: it.src, dstRel, okCount, skipCount, name: it.name });
+          ws.send(JSON.stringify({
+            type: "import_external", projectId: projId,
+            src: it.src, to: dstRel, overwrite: false,
+          }));
+        });
+      }
+      const total = okCount.v + skipCount.v;
+      if (okCount.v > 0) {
+        const label = okCount.v === 1 ? items.find((i) => i)?.name || "" : `${okCount.v} item(ns)`;
+        showSimpleToast("Importado", `${label}${destDirRel ? " → " + destDirRel : ""}`, colorHint);
+      } else if (total > 0) {
+        showSimpleToast("Importação cancelada", `${skipCount.v} pulado(s)`, colorHint);
+      }
+    }
+
+    // Mapa de imports em andamento — chave única por (projId, src, dstRel).
+    // O handler files_result/import_external consulta o mapa pra resolver a
+    // promise e perguntar sobrescrever quando exists=true.
+    const pendingImports = new Map();
+
+    async function handleImportExternalResult(msg) {
+      const key = `${msg.projectId}::${msg.src}::${msg.to}`;
+      const pending = pendingImports.get(key);
+      if (!pending) {
+        // sem promise pendente (raro) — só mostra erro se houver
+        if (!msg.result?.ok) showSimpleToast("Importar falhou", msg.result?.error || "erro");
+        else refreshTreeAfterChange(msg.projectId, [msg.to]);
+        return;
+      }
+      // colisão de nome → pergunta antes de sobrescrever
+      if (!msg.result?.ok && msg.result?.exists) {
+        const ok = await showConfirm({
+          title: "Já existe",
+          message: `<strong>${escapeHtml(msg.to)}</strong><br/>Sobrescrever?`,
+          confirmLabel: "Sobrescrever",
+          cancelLabel: "Pular",
+          danger: true,
+        });
+        if (ok) {
+          // re-envia com overwrite=true; reaproveita a mesma promise
+          pendingImports.set(key, pending);
+          ws.send(JSON.stringify({
+            type: "import_external", projectId: msg.projectId,
+            src: msg.src, to: msg.to, overwrite: true,
+          }));
+          return;
+        }
+        pending.skipCount.v++;
+        pendingImports.delete(key);
+        pending.resolve();
+        return;
+      }
+      pendingImports.delete(key);
+      if (msg.result?.ok) {
+        pending.okCount.v++;
+        refreshTreeAfterChange(msg.projectId, [msg.to]);
+        if (msg.projectId === activeProjId) renderFileTree();
+        if (gitPanelVisible) refreshGit();
+      } else {
+        pending.skipCount.v++;
+        showSimpleToast("Importar falhou", `${msg.to}: ${msg.result?.error || "erro"}`);
+      }
+      pending.resolve();
     }
 
     function renderTreeLevel(entries, parentPath, state, depth) {
@@ -4922,6 +5131,7 @@
         const pad = 4 + depth * 14;
         html += `<div class="tree-node${isActive ? " active" : ""}${dotted}"
           data-path="${escapeHtml(fullPath)}" data-type="${e.type}"
+          draggable="true"
           style="padding-left: ${pad}px">
           <span class="tree-chevron${isExpanded ? " expanded" : ""}${isDir ? "" : " hidden"}">${ICONS.chevron}</span>
           <span class="tree-icon ${isDir ? "dir" : "file"}">${window.MaterialIcons ? window.MaterialIcons.iconHTML(e.name, isDir, isExpanded) : (isDir ? (isExpanded ? ICONS.folderOpen : ICONS.folder) : ICONS.file)}</span>
@@ -7826,6 +8036,21 @@
     updateClock();
     setInterval(updateClock, 1000);
     connectWS();
+
+    // Sem isto, soltar arquivo fora da árvore faz o Chromium navegar pra
+    // file:// — perdendo o estado do app. Prevenimos no nível window e
+    // deixamos os handlers da árvore tratarem o drop quando aplicável.
+    window.addEventListener("dragover", (e) => {
+      if (e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes("Files")) {
+        e.preventDefault();
+      }
+    });
+    window.addEventListener("drop", (e) => {
+      if (e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes("Files")) {
+        // se nenhum handler interno tratou, só impede o default; não importa.
+        e.preventDefault();
+      }
+    });
 
     // Sidebar redimensionável + colapsável
     (function() {

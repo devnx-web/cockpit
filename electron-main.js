@@ -1,7 +1,7 @@
 // Cockpit — Electron main process
 // Sobe o server.js in-process e abre uma janela frameless apontando pra ele.
 
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell, nativeImage } from "electron";
 import path from "path";
 import fs from "fs";
 import url from "url";
@@ -149,6 +149,60 @@ ipcMain.handle("window:toggle-maximize", () => {
 ipcMain.handle("window:close", () => mainWindow?.close());
 ipcMain.handle("window:is-maximized", () => !!mainWindow?.isMaximized());
 ipcMain.handle("app:platform", () => process.platform);
+
+// shell.showItemInFolder revela o arquivo no gerenciador de arquivos do SO
+// (Nautilus/Files no Linux, Finder no macOS, Explorer no Windows). Se for
+// pasta, abre a pasta-pai com a pasta destacada.
+ipcMain.handle("shell:show-item-in-folder", (_e, fullPath) => {
+  if (typeof fullPath !== "string" || !fullPath) return false;
+  try {
+    shell.showItemInFolder(fullPath);
+    return true;
+  } catch (err) {
+    console.warn("showItemInFolder falhou:", err.message);
+    return false;
+  }
+});
+
+// Drag nativo de arquivo pra fora da janela (pra Files/Nautilus, anexar em
+// e-mail, etc). Sem isto, o dragstart do navegador só carrega texto/uri-list,
+// que outros apps não reconhecem como arquivo. webContents.startDrag faz o
+// SO tratar como um drag de arquivo de verdade.
+const DRAG_ICON_CACHE = new Map();
+function getDragIcon() {
+  if (DRAG_ICON_CACHE.has("default")) return DRAG_ICON_CACHE.get("default");
+  // Tenta usar o ícone do app; cai pra empty se não existir.
+  const candidates = [
+    path.join(__dirname, "public", "icon.svg"),
+  ];
+  for (const c of candidates) {
+    try {
+      const img = nativeImage.createFromPath(c);
+      if (!img.isEmpty()) {
+        const sized = img.resize({ width: 32, height: 32 });
+        DRAG_ICON_CACHE.set("default", sized);
+        return sized;
+      }
+    } catch {}
+  }
+  // nativeImage.createEmpty() não funciona como ícone em startDrag — gera erro.
+  // Criamos 1x1 PNG transparente como mínimo.
+  const onePx = nativeImage.createFromBuffer(Buffer.from(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489" +
+    "0000000a49444154789c6300010000000500010d0a2db40000000049454e44ae426082",
+    "hex"
+  ));
+  DRAG_ICON_CACHE.set("default", onePx);
+  return onePx;
+}
+ipcMain.on("shell:start-drag", (event, filePath) => {
+  if (typeof filePath !== "string" || !filePath) return;
+  try {
+    event.sender.startDrag({ file: filePath, icon: getDragIcon() });
+  } catch (err) {
+    console.warn("startDrag falhou:", err.message);
+  }
+});
 
 app.whenReady().then(async () => {
   try {

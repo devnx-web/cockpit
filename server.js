@@ -505,6 +505,49 @@ async function createDir(projectPath, rel) {
   }
 }
 
+// Importa um arquivo/pasta externo (path absoluto do SO) pra dentro do projeto.
+// srcAbs vem do client (drag&drop do file manager); só validamos que existe.
+// dstRel passa por safePath pra evitar escape pra fora do project root.
+// overwrite=true: substitui o destino existente. Sem isso, retorna exists=true
+// pra o renderer perguntar ao usuário antes de chamar de novo.
+async function importExternal(projectPath, srcAbs, dstRel, overwrite) {
+  if (typeof srcAbs !== "string" || !path.isAbsolute(srcAbs)) {
+    return { ok: false, error: "origem inválida" };
+  }
+  const dstAbs = safePath(projectPath, dstRel);
+  if (!dstAbs || dstAbs === projectPath) return { ok: false, error: "destino inválido" };
+  try {
+    // não deixa importar de dentro do próprio projeto pra ele mesmo
+    // (vira duplicate_path com lógica diferente)
+    const srcReal = await fs.promises.realpath(srcAbs).catch(() => srcAbs);
+    const dstReal = path.resolve(dstAbs);
+    if (srcReal === dstReal) return { ok: false, error: "origem e destino iguais" };
+    // sanity check: origem existe
+    const srcStat = await fs.promises.lstat(srcAbs).catch(() => null);
+    if (!srcStat) return { ok: false, error: "origem não existe" };
+    // colisão de nome
+    let exists = false;
+    try { await fs.promises.access(dstAbs); exists = true; } catch {}
+    if (exists && !overwrite) {
+      return { ok: false, exists: true, error: "destino já existe" };
+    }
+    await fs.promises.mkdir(path.dirname(dstAbs), { recursive: true });
+    if (exists && overwrite) {
+      // remove o destino antes de copiar (fs.cp com force ainda pode falhar
+      // em troca de tipo arquivo↔pasta)
+      await fs.promises.rm(dstAbs, { recursive: true, force: true });
+    }
+    if (srcStat.isDirectory()) {
+      await fs.promises.cp(srcAbs, dstAbs, { recursive: true, force: true, errorOnExist: false });
+    } else {
+      await fs.promises.copyFile(srcAbs, dstAbs);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 async function duplicatePath(projectPath, fromRel, toRel) {
   const fromAbs = safePath(projectPath, fromRel);
   const toAbs = safePath(projectPath, toRel);
@@ -1126,6 +1169,14 @@ wss.on("connection", (ws) => {
         ws.send(JSON.stringify({
           type: "files_result", action: "duplicate",
           projectId: msg.projectId, from: msg.from, to: msg.to, result,
+        }));
+        break;
+      }
+      case "import_external": {
+        const result = await importExternal(session.proj.path, msg.src, msg.to, !!msg.overwrite);
+        ws.send(JSON.stringify({
+          type: "files_result", action: "import_external",
+          projectId: msg.projectId, src: msg.src, to: msg.to, result,
         }));
         break;
       }

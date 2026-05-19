@@ -6,7 +6,10 @@ Datas em GMT-3 (Horário de Brasília).
 
 ## [Unreleased]
 
-_(nada ainda)_
+### Adicionado
+- **Arrastar arquivo da árvore pra fora do Cockpit** — agora você pode pegar um arquivo na sidebar e arrastar pro Files/Nautilus (ou pra um campo de upload, anexo de e-mail etc). No Electron usa `webContents.startDrag` pra um drag SO-nativo de verdade; em browser puro, populamos `text/uri-list` como fallback (funciona pro drop interno no terminal). Pastas só funcionam pro drop interno (Electron exige arquivo).
+- **Arrastar arquivo de fora pra dentro da árvore** — solte arquivos do Files/Nautilus em cima de uma pasta da árvore pra copiar pra lá; solte em cima de um arquivo pra cair na pasta-pai dele; solte na área vazia pra ir pra raiz do projeto. Pasta-alvo recebe um destaque colorido durante o drag. Múltiplos arquivos e pastas (recursivo) suportados. Se houver colisão de nome, pergunta sobrescrever ou pular. Novo endpoint WS `import_external` no servidor copia via `fs.cp`, com `safePath` no destino pra evitar escape do project root. Só funciona no Electron (browsers não expõem `file.path` por segurança).
+- **"Abrir local do arquivo"** no menu de contexto da árvore (botão direito) — revela o arquivo no gerenciador de arquivos do SO via `shell.showItemInFolder`. Disponível só na versão desktop (Electron); no browser puro aparece toast "requer app desktop".
 
 ---
 
