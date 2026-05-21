@@ -587,6 +587,39 @@
     }
     .icon-btn:hover { color: var(--text-primary); background: var(--bg-2); border-color: var(--border-default); }
     .icon-btn svg { width: 14px; height: 14px; stroke-width: 1.5; }
+    .icon-btn:disabled { opacity: .35; cursor: default; }
+    .icon-btn:disabled:hover { background: transparent; border-color: transparent; color: var(--text-tertiary); }
+    /* Mic: estados visuais (idle / recording / transcribing / offline) */
+    #btnMic.recording { color: #fff; background: #cc0033; border-color: #cc0033; animation: micPulse 1s ease-in-out infinite; }
+    #btnMic.transcribing { color: #fff; background: #cc8800; border-color: #cc8800; }
+    #btnMic.offline { color: #6272a4; }
+    @keyframes micPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(204, 0, 51, 0.55); }
+      50%      { box-shadow: 0 0 0 6px rgba(204, 0, 51, 0.05); }
+    }
+    /* Pílula flutuante sobre o terminal enquanto grava/transcreve */
+    .mic-pill {
+      position: absolute;
+      right: 16px; bottom: 16px;
+      z-index: 30;
+      display: none;
+      align-items: center; gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: #cc0033; color: #fff;
+      font-size: 12px; font-weight: 600;
+      box-shadow: 0 4px 14px rgba(0,0,0,.4);
+      pointer-events: none;
+      font-variant-numeric: tabular-nums;
+    }
+    .mic-pill.visible { display: inline-flex; }
+    .mic-pill.transcribing { background: #cc8800; }
+    .mic-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; opacity: .85; }
+    .mic-pill.recording .dot { animation: micDot 1s ease-in-out infinite; }
+    @keyframes micDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: .4; transform: scale(.7); }
+    }
 
     /* TAB BAR */
     .tab-bar {
@@ -2400,6 +2433,277 @@
       transition: opacity 200ms;
     }
     .font-size-badge.visible { opacity: 1; }
+
+    /* ============================================================
+       SETTINGS VIEW (fullscreen, estilo VSCode)
+       Overlay 100vh com sidebar de categorias + search + scroll
+       ============================================================ */
+    .sv-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0;
+      transition: opacity 160ms ease;
+    }
+    .sv-overlay.visible { opacity: 1; }
+    .sv-window {
+      width: min(1200px, 92vw);
+      height: min(820px, 90vh);
+      background: var(--bg-0);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .sv-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-default);
+      background: var(--bg-1);
+    }
+    .sv-title {
+      font-size: 13px; font-weight: 600;
+      color: var(--text-primary);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sv-title svg { width: 16px; height: 16px; }
+    .sv-search-wrap { flex: 1; position: relative; max-width: 480px; margin: 0 auto; }
+    .sv-search {
+      width: 100%;
+      background: var(--bg-2);
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      padding: 7px 12px 7px 32px;
+      font-size: 12px;
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 140ms;
+    }
+    .sv-search:focus { border-color: var(--accent, #4a9eff); }
+    .sv-search-wrap::before {
+      content: "";
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      width: 14px; height: 14px;
+      background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>") center/contain no-repeat;
+      opacity: 0.7; pointer-events: none;
+    }
+    .sv-close {
+      background: transparent; border: 1px solid transparent;
+      color: var(--text-tertiary); cursor: pointer;
+      width: 32px; height: 32px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 140ms;
+    }
+    .sv-close:hover { background: var(--bg-2); color: var(--text-primary); border-color: var(--border-default); }
+    .sv-close svg { width: 18px; height: 18px; }
+    .sv-body { display: flex; flex: 1; min-height: 0; }
+    .sv-sidebar {
+      width: 220px; flex-shrink: 0;
+      background: var(--bg-1);
+      border-right: 1px solid var(--border-default);
+      padding: 12px 6px; overflow-y: auto;
+    }
+    .sv-cat {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      transition: all 120ms;
+      border: 1px solid transparent;
+    }
+    .sv-cat:hover { background: var(--bg-2); color: var(--text-primary); }
+    .sv-cat.active { background: var(--bg-3); color: var(--text-primary); border-color: var(--border-default); }
+    .sv-cat svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.85; }
+    .sv-cat-count {
+      margin-left: auto;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      background: var(--bg-3);
+      padding: 1px 6px; border-radius: 8px;
+      min-width: 16px; text-align: center;
+    }
+    .sv-cat.active .sv-cat-count { background: var(--accent, #4a9eff); color: #fff; }
+    .sv-main {
+      flex: 1; overflow-y: auto;
+      padding: 22px 32px 60px;
+    }
+    .sv-section { margin-bottom: 28px; }
+    .sv-section-title {
+      font-size: 11px; font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-default);
+    }
+    .sv-field { margin-bottom: 22px; }
+    .sv-field.hidden { display: none; }
+    .sv-field-label {
+      font-size: 13px; font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .sv-field-hint {
+      font-size: 11.5px; color: var(--text-tertiary);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .sv-field-hint code {
+      background: var(--bg-2); padding: 1px 5px; border-radius: 3px;
+      font-family: var(--font-term); font-size: 10.5px;
+    }
+    .sv-field-control { display: flex; align-items: center; gap: 10px; }
+    .sv-input, .sv-select, .sv-textarea {
+      background: var(--bg-2);
+      border: 1px solid var(--border-default);
+      border-radius: 5px;
+      padding: 6px 10px;
+      font-size: 12.5px;
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 140ms;
+    }
+    .sv-input:focus, .sv-select:focus, .sv-textarea:focus { border-color: var(--accent, #4a9eff); }
+    .sv-input { min-width: 240px; }
+    .sv-input.narrow { min-width: 120px; max-width: 160px; }
+    .sv-select { min-width: 240px; }
+    .sv-textarea { width: 100%; min-height: 90px; resize: vertical; font-family: var(--font-term); font-size: 11.5px; line-height: 1.55; }
+    .sv-textarea.large { min-height: 180px; }
+    .sv-range { flex: 1; max-width: 320px; accent-color: var(--accent, #4a9eff); }
+    .sv-range-val {
+      font-variant-numeric: tabular-nums;
+      font-family: var(--font-term);
+      font-size: 11px;
+      color: var(--text-secondary);
+      min-width: 50px;
+    }
+    .sv-toggle {
+      width: 36px; height: 20px;
+      background: var(--bg-3);
+      border: 1px solid var(--border-default);
+      border-radius: 99px;
+      position: relative;
+      cursor: pointer;
+      transition: background 160ms;
+      flex-shrink: 0;
+    }
+    .sv-toggle::after {
+      content: "";
+      position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px;
+      background: var(--text-tertiary);
+      border-radius: 50%;
+      transition: transform 160ms cubic-bezier(0.16,1,0.3,1), background 160ms;
+    }
+    .sv-toggle.on { background: var(--accent, #4a9eff); }
+    .sv-toggle.on::after { transform: translateX(16px); background: #fff; }
+    .sv-btn {
+      background: var(--bg-2);
+      border: 1px solid var(--border-default);
+      border-radius: 5px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 140ms;
+    }
+    .sv-btn:hover { background: var(--bg-3); border-color: var(--border-strong); }
+    .sv-btn.primary {
+      background: var(--accent, #4a9eff);
+      border-color: var(--accent, #4a9eff);
+      color: #fff;
+    }
+    .sv-btn.primary:hover { filter: brightness(1.1); }
+    .sv-btn.danger { color: #ff7a8a; border-color: #883344; }
+    .sv-btn.danger:hover { background: #2a1418; border-color: #aa4055; }
+    .sv-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sv-status {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      padding: 6px 10px;
+      background: var(--bg-2);
+      border: 1px solid var(--border-default);
+      border-radius: 4px;
+      font-family: var(--font-term);
+    }
+    .sv-status.alive { color: #50fa7b; border-color: #2d4f37; background: rgba(80,250,123,0.08); }
+    .sv-status.offline { color: #888; }
+    /* Abas dentro de uma categoria (ex: Áudio → Áudio/Roteirizador/Pronúncia) */
+    .sv-tabs {
+      display: flex; gap: 2px;
+      border-bottom: 1px solid var(--border-default);
+      margin: -6px 0 22px;
+      position: sticky; top: 0;
+      background: var(--bg-0);
+      z-index: 5;
+      padding-top: 4px;
+    }
+    .sv-tab {
+      padding: 9px 16px;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      transition: all 140ms;
+      margin-bottom: -1px;
+      display: flex; align-items: center; gap: 6px;
+      background: transparent;
+      border-top: 1px solid transparent;
+      border-left: 1px solid transparent;
+      border-right: 1px solid transparent;
+    }
+    .sv-tab:hover { color: var(--text-primary); }
+    .sv-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--accent, #4a9eff);
+    }
+    .sv-tab-count {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      background: var(--bg-3);
+      padding: 1px 6px; border-radius: 8px;
+      min-width: 16px; text-align: center;
+    }
+    .sv-tab.active .sv-tab-count { background: var(--accent, #4a9eff); color: #fff; }
+
+    /* Pronunciation editor */
+    .sv-kv-list { display: flex; flex-direction: column; gap: 6px; }
+    .sv-kv-row { display: flex; gap: 8px; align-items: center; }
+    .sv-kv-row input { flex: 1; }
+    .sv-kv-row .sv-kv-key { max-width: 200px; font-family: var(--font-term); font-size: 11.5px; }
+    .sv-kv-row .sv-kv-val { font-family: inherit; font-size: 11.5px; }
+    .sv-kv-row .sv-kv-del {
+      background: transparent; border: 1px solid transparent;
+      color: var(--text-tertiary); cursor: pointer;
+      width: 26px; height: 26px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sv-kv-row .sv-kv-del:hover { background: rgba(255,80,100,0.1); color: #ff7a8a; }
+    .sv-kv-row .sv-kv-del svg { width: 14px; height: 14px; }
+    .sv-empty {
+      padding: 12px;
+      color: var(--text-tertiary);
+      font-size: 12px;
+      text-align: center;
+      background: var(--bg-2);
+      border-radius: 5px;
+    }
+    /* highlight da busca */
+    .sv-field mark {
+      background: rgba(255, 220, 80, 0.25);
+      color: inherit;
+      padding: 0 1px;
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
@@ -2485,11 +2789,11 @@
 
         <div class="vp-section">
           <div class="vp-section-title">
-            Ditado (fala → texto)
+            Ditado global (legado)
             <span class="vp-pill" id="dicStatusPill" style="margin-left:8px">parado</span>
           </div>
           <div class="vp-meta-line" style="padding:0; background:transparent; border:none; margin-bottom:8px">
-            hold left ctrl 0.5s · solta pra digitar
+            substituído pelo botão 🎙 do terminal (Ctrl+Espaço). hold left ctrl 0.5s + xdotool — use só se precisar digitar fora do cockpit.
           </div>
           <div class="vp-row">
             <button class="vp-btn primary" id="dicBtnStart">Ativar ditado</button>
@@ -2618,6 +2922,14 @@
                 <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><polyline points="3 21 3 16 8 16"/>
               </svg>
             </button>
+            <button class="icon-btn" title="Ditar no terminal (Ctrl+Espaço)" id="btnMic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="2" width="6" height="12" rx="3"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="17" x2="12" y2="22"/>
+                <line x1="8" y1="22" x2="16" y2="22"/>
+              </svg>
+            </button>
             <button class="icon-btn" title="Configurações" id="btnSettings">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
             </button>
@@ -2671,6 +2983,7 @@
             </button>
           </div>
           <div class="font-size-badge" id="fontSizeBadge">13px</div>
+          <div class="mic-pill" id="micPill"><span class="dot"></span><span id="micPillText">🎙 Ouvindo 0.0s</span></div>
           <div class="editor-pane" id="editorPane">
             <div class="editor-status">
               <span class="file-path" id="editorFilePath">—</span>
@@ -6188,6 +6501,12 @@
         case "dictation_status":
           updateDictationUI(msg);
           break;
+        case "stt_status":
+          updateMicAvailability(msg);
+          break;
+        case "stt_result":
+          handleSttResult(msg);
+          break;
       }
     }
 
@@ -7511,71 +7830,643 @@
     }
 
     // ============================================================
-    // CONFIGURAÇÕES
+    // CONFIGURAÇÕES — view fullscreen estilo VSCode
+    // Sidebar de categorias + search no topo + main com seções rolantes.
+    // Schema declarativo (SETTINGS_SCHEMA) renderiza dinamicamente.
+    // Persistência: source="local" → localStorage; source="voice" → WS.
     // ============================================================
+    const SV_ICONS = {
+      general: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+      editor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+      terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+      audio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M19 11v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>',
+      script: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>',
+      pron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>',
+      keys: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="7" y1="14" x2="17" y2="14"/></svg>',
+      close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+      trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+    };
+
+    // === Schema declarativo ===
+    function buildSettingsSchema() {
+      return [
+        {
+          id: "general", label: "Geral", icon: "general",
+          sections: [
+            {
+              title: "Editor",
+              fields: [
+                { key: "autoSave", label: "Auto-save no editor", hint: "Salva automaticamente após 2s de inatividade.", type: "toggle", source: "local", default: false },
+                { key: "webglFast", label: "Renderer WebGL no terminal", hint: "Acelera scroll em logs gigantes. Rasteriza com uma fonte só, então símbolos fallback (⎿, ⏺) viram retângulos pretos. Ligaduras desativadas. Recarrega ao alternar.", type: "toggle", source: "local", default: false, reloadOnChange: true },
+              ],
+            },
+            {
+              title: "Integrações",
+              fields: [
+                { key: "api_key", label: "OpenAI API key", hint: "Chave usada pelo TTS (gpt-4o-mini-tts) e pelo Roteirizador (gpt-4o-mini). Permanece no servidor — o front nunca recebe a chave inteira, só os 4 primeiros e 4 últimos caracteres.", type: "password", source: "voice.summarize" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "audio", label: "Áudio", icon: "audio",
+          tabs: [
+            {
+              id: "tts", label: "Áudio",
+              sections: [
+                {
+                  title: "Geral",
+                  fields: [
+                    { key: "enabled", label: "Voz ativada", hint: "Liga/desliga o módulo de voz. Quando ativada, o daemon Python sobe (carrega modelo ou abre socket).", type: "toggle", source: "voice", default: true },
+                    { key: "tts_engine", label: "Engine TTS", hint: "openai = cloud (rápido, voz idêntica, paga por uso); xtts = local com clonagem (GPU); omnivoice = legado.", type: "select", source: "voice", default: "openai", options: [
+                      { value: "openai", label: "openai — gpt-4o-mini-tts (recomendado)" },
+                      { value: "xtts", label: "xtts — local com clonagem (GPU)" },
+                      { value: "omnivoice", label: "omnivoice — legado" },
+                    ] },
+                  ],
+                },
+                {
+                  title: "OpenAI TTS",
+                  fields: [
+                    { key: "openai_voice", label: "Voz", hint: "Vozes disponíveis na API OpenAI.", type: "select", source: "voice", default: "nova", options: [
+                      { value: "alloy", label: "alloy — neutra" },
+                      { value: "echo", label: "echo — masculina média" },
+                      { value: "fable", label: "fable — britânica" },
+                      { value: "onyx", label: "onyx — grave" },
+                      { value: "nova", label: "nova — feminina (recomendada)" },
+                      { value: "shimmer", label: "shimmer — feminina suave" },
+                      { value: "ash", label: "ash — versátil" },
+                      { value: "coral", label: "coral — calorosa" },
+                    ] },
+                    { key: "openai_model", label: "Modelo TTS", hint: "gpt-4o-mini-tts é o mais novo e barato, aceita personalidade via instructions. tts-1 é o mais rápido. tts-1-hd tem áudio levemente melhor mas mais lento e caro.", type: "select", source: "voice", default: "gpt-4o-mini-tts", options: [
+                      { value: "gpt-4o-mini-tts", label: "gpt-4o-mini-tts (recomendado)" },
+                      { value: "tts-1", label: "tts-1" },
+                      { value: "tts-1-hd", label: "tts-1-hd" },
+                    ] },
+                    { key: "tts_instructions", label: "Personalidade (instructions)", hint: "Controla TOM e PERSONALIDADE da voz (não o conteúdo). Funciona só com gpt-4o-mini-tts. Exemplo: \"Tom calmo, elegante, britânico discreto.\"", type: "textarea", source: "voice", default: "" },
+                  ],
+                },
+                {
+                  title: "Reprodução",
+                  fields: [
+                    { key: "volume", label: "Volume", hint: "Multiplicador de volume aplicado ao PCM antes de tocar.", type: "range", source: "voice", default: 1.0, min: 0, max: 4, step: 0.1, fmt: (v) => `${(+v).toFixed(1)}×` },
+                    { key: "speed", label: "Velocidade", hint: "Velocidade da fala (0.5 = lento, 2.0 = rápido).", type: "range", source: "voice", default: 1.0, min: 0.5, max: 2.0, step: 0.05, fmt: (v) => `${(+v).toFixed(2)}×` },
+                  ],
+                },
+                {
+                  title: "Comportamento",
+                  fields: [
+                    { key: "speech_mode", label: "Modo de fala", hint: "verbatim = lê o texto cru. summary = passa pelo roteirizador antes — fala mais natural, custa 1 chamada extra e ~1s.", type: "select", source: "voice", default: "summary", options: [
+                      { value: "verbatim", label: "Literal (lê cru)" },
+                      { value: "summary", label: "Resumo via LLM (recomendado)" },
+                    ] },
+                    { key: "summary_min_chars", label: "Threshold pra pular o roteirizador", hint: "Textos abaixo desse tamanho vão direto pro TTS, mesmo no modo summary. Reduz latência em confirmações curtas. 0 desativa o atalho.", type: "range", source: "voice", default: 60, min: 0, max: 200, step: 5, fmt: (v) => `${v} chars` },
+                    { key: "pcm_cache_size", label: "Cache de áudio (LRU)", hint: "Quantas frases manter em memória pra hit instantâneo em repetições. Cada entrada usa até ~240KB.", type: "range", source: "voice", default: 100, min: 0, max: 500, step: 10, fmt: (v) => `${v} entradas` },
+                  ],
+                },
+                {
+                  title: "Testar",
+                  fields: [
+                    { key: "_test", label: "Testar fala", hint: "Escreva uma frase e clique pra ouvir.", type: "test-tts" },
+                    { key: "_clear_cache", label: "Limpar cache de áudio", hint: "Força o próximo request a passar pela API. Útil pra ouvir mudanças de voz/instructions.", type: "action", action: "clearAudioCache", buttonLabel: "Limpar cache" },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "summarize", label: "Roteirizador",
+              sections: [{
+                title: "GPT-4o-mini",
+                fields: [
+                  { key: "enabled", label: "Roteirizador ativo", hint: "Quando desligado, fala SEMPRE verbatim mesmo com speech_mode=summary.", type: "toggle", source: "voice.summarize", default: true },
+                  { key: "model", label: "Modelo LLM", hint: "Modelo OpenAI usado pra roteirizar. gpt-4o-mini é barato e rápido.", type: "select", source: "voice.summarize", default: "gpt-4o-mini", options: [
+                    { value: "gpt-4o-mini", label: "gpt-4o-mini (recomendado)" },
+                    { value: "gpt-4.1-mini", label: "gpt-4.1-mini" },
+                    { value: "gpt-4o", label: "gpt-4o (mais caro)" },
+                  ] },
+                  { key: "system_prompt", label: "System prompt do roteirizador", hint: "Define como o mini reescreve o texto bruto pra fala. Aqui mora a personalidade da voz.", type: "textarea-large", source: "voice.summarize", default: "" },
+                  { key: "max_tokens", label: "Max tokens", hint: "Teto da resposta do roteirizador. ~350 cobre 3-5 frases.", type: "range", source: "voice.summarize", default: 350, min: 80, max: 1000, step: 10, fmt: (v) => `${v} tokens` },
+                  { key: "timeout", label: "Timeout (segundos)", hint: "Tempo máximo de espera pela resposta do mini. Se passar, cai pra verbatim.", type: "range", source: "voice.summarize", default: 12, min: 3, max: 30, step: 1, fmt: (v) => `${v}s` },
+                ],
+              }],
+            },
+            {
+              id: "pron", label: "Pronúncia",
+              sections: [{
+                title: "Substituições antes do TTS",
+                fields: [
+                  { key: "pronunciation", label: "Dicionário de pronúncia", hint: "Substituições aplicadas no texto antes de mandar pro TTS. Siglas em CAIXA usam word boundary (\"PR\" → \"Pê Erre\"). Outros são substring literal (\".py\" → \" ponto pi\"). Longest-match first.", type: "kv", source: "voice", default: {} },
+                ],
+              }],
+            },
+          ],
+        },
+        {
+          id: "atalhos", label: "Atalhos", icon: "keys",
+          sections: [{
+            title: "Ditado e voz",
+            fields: [
+              { key: "_kbd_ctrl_space", label: "Ctrl + Espaço", hint: "Toggle ditado por voz (gravar → transcrever → injetar no terminal ativo).", type: "info" },
+              { key: "_kbd_voice_icon", label: "Clique no botão 🎙 do header do terminal", hint: "Mesmo que Ctrl+Espaço.", type: "info" },
+            ],
+          }, {
+            title: "Geral",
+            fields: [
+              { key: "_kbd_cmd_k", label: "⌘ + K", hint: "Paleta de comandos.", type: "info" },
+              { key: "_kbd_cmd_b", label: "⌘ + B", hint: "Novo terminal.", type: "info" },
+              { key: "_kbd_cmd_e", label: "⌘ + E", hint: "Painel de arquivos.", type: "info" },
+              { key: "_kbd_cmd_g", label: "⌘ + G", hint: "Painel Git.", type: "info" },
+              { key: "_kbd_cmd_l", label: "⌘ + L", hint: "Limpar terminal.", type: "info" },
+            ],
+          }],
+        },
+      ];
+    }
+
+    // get/set por origem (local vs voice nested)
+    function svGetVal(field) {
+      if (field.source === "local") return getSetting(field.key);
+      if (field.source === "voice") return (voiceConfigCache || {})[field.key];
+      if (field.source === "voice.summarize") return ((voiceConfigCache || {}).summarize || {})[field.key];
+      return undefined;
+    }
+    function svSetVal(field, val) {
+      if (field.source === "local") {
+        setSetting(field.key, val);
+        return;
+      }
+      if (field.source === "voice") {
+        sendVoicePatch({ [field.key]: val });
+        if (voiceConfigCache) voiceConfigCache[field.key] = val;
+        return;
+      }
+      if (field.source === "voice.summarize") {
+        sendVoicePatch({ summarize: { [field.key]: val } });
+        if (voiceConfigCache) {
+          voiceConfigCache.summarize = voiceConfigCache.summarize || {};
+          voiceConfigCache.summarize[field.key] = val;
+        }
+        return;
+      }
+    }
+
     function showSettingsModal() {
+      // garante que temos o voice config no client antes de abrir (UI sem dados fica vazia)
+      if (!voiceConfigCache) requestVoiceConfig();
+
+      const schema = buildSettingsSchema();
       const overlay = document.createElement("div");
-      overlay.className = "modal-overlay visible";
+      overlay.className = "sv-overlay";
       overlay.innerHTML = `
-        <div class="modal modal-form" role="dialog" aria-modal="true" aria-label="Configurações" style="min-width:380px">
-          <div class="modal-content">
-            <div class="modal-icon info">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <div class="sv-window" role="dialog" aria-modal="true" aria-label="Configurações">
+          <div class="sv-header">
+            <div class="sv-title">${SV_ICONS.general} Configurações</div>
+            <div class="sv-search-wrap">
+              <input class="sv-search" id="svSearch" placeholder="Pesquisar configurações…" autocomplete="off" spellcheck="false" />
             </div>
-            <div class="modal-title">Configurações</div>
-            <div style="display:flex;flex-direction:column;gap:0;margin-top:12px">
-              <div class="settings-row" id="sRowAutoSave">
-                <div class="settings-row-text">
-                  <div class="settings-row-label">Auto-save no editor</div>
-                  <div class="settings-row-hint">Salva automaticamente após 2s de inatividade</div>
-                </div>
-                <button class="settings-toggle ${getSetting("autoSave") ? "on" : ""}" data-key="autoSave" aria-label="Auto-save" role="switch" aria-checked="${getSetting("autoSave")}">
-                  <span class="toggle-knob"></span>
-                </button>
-              </div>
-              <div class="settings-row" id="sRowWebgl">
-                <div class="settings-row-text">
-                  <div class="settings-row-label">Renderer WebGL (rápido, mas com limitações)</div>
-                  <div class="settings-row-hint">Acelera scroll em logs gigantes. Trade-off: rasteriza com uma fonte só, então símbolos que caem em fonte fallback do sistema (⎿, ⏺, etc.) viram retângulos pretos. Ligaduras tipográficas também são desativadas. Recarrega ao alternar.</div>
-                </div>
-                <button class="settings-toggle ${getSetting("webglFast") ? "on" : ""}" data-key="webglFast" data-reload="1" aria-label="WebGL" role="switch" aria-checked="${getSetting("webglFast")}">
-                  <span class="toggle-knob"></span>
-                </button>
-              </div>
-            </div>
+            <button class="sv-close" id="svClose" title="Fechar (Esc)">${SV_ICONS.close}</button>
           </div>
-          <div class="modal-buttons" style="justify-content:flex-end">
-            <button class="modal-btn primary close-btn" type="button">Fechar</button>
+          <div class="sv-body">
+            <aside class="sv-sidebar" id="svSidebar"></aside>
+            <main class="sv-main" id="svMain"></main>
           </div>
         </div>
       `;
       document.body.appendChild(overlay);
-      let resolved = false;
+      requestAnimationFrame(() => overlay.classList.add("visible"));
+
+      let activeCat = schema[0].id;
+      // activeTab por categoria — guarda qual aba está aberta em cada uma
+      const activeTabByCat = {};
+      let needsReload = false;
+
+      function getCat() { return schema.find((c) => c.id === activeCat) || schema[0]; }
+      function getActiveTab(cat) {
+        if (!cat.tabs) return null;
+        const tabId = activeTabByCat[cat.id] || cat.tabs[0].id;
+        return cat.tabs.find((t) => t.id === tabId) || cat.tabs[0];
+      }
+      function getActiveSections(cat) {
+        const tab = getActiveTab(cat);
+        return tab ? tab.sections : (cat.sections || []);
+      }
+
+      // conta matches por categoria + por aba (pra badges no search)
+      function computeMatchCounts(term) {
+        const t = term.toLowerCase();
+        const byCat = {};
+        const byTab = {}; // `${catId}::${tabId}` -> count
+        for (const cat of schema) {
+          let totalCat = 0;
+          const tabsOrSections = cat.tabs || [{ id: "_", sections: cat.sections }];
+          for (const tab of tabsOrSections) {
+            let c = 0;
+            for (const sec of tab.sections) {
+              for (const f of sec.fields) {
+                const txt = `${f.label} ${f.hint || ""}`.toLowerCase();
+                if (txt.includes(t)) c++;
+              }
+            }
+            byTab[`${cat.id}::${tab.id}`] = c;
+            totalCat += c;
+          }
+          byCat[cat.id] = totalCat;
+        }
+        return { byCat, byTab };
+      }
+
+      function renderSidebar(matchCounts = null) {
+        const side = overlay.querySelector("#svSidebar");
+        side.innerHTML = "";
+        for (const cat of schema) {
+          const div = document.createElement("div");
+          div.className = "sv-cat" + (cat.id === activeCat ? " active" : "");
+          div.dataset.cat = cat.id;
+          const count = matchCounts ? (matchCounts.byCat[cat.id] || 0) : null;
+          div.innerHTML = `
+            ${SV_ICONS[cat.icon] || ""}
+            <span>${cat.label}</span>
+            ${count !== null && count > 0 ? `<span class="sv-cat-count">${count}</span>` : ""}
+          `;
+          div.addEventListener("click", () => {
+            activeCat = cat.id;
+            const term = overlay.querySelector("#svSearch").value.trim();
+            const counts = term ? computeMatchCounts(term) : null;
+            renderSidebar(counts);
+            renderMain(counts);
+            applySearchFilter(term);
+          });
+          side.appendChild(div);
+        }
+      }
+
+      function renderMain(matchCounts = null) {
+        const main = overlay.querySelector("#svMain");
+        const cat = getCat();
+        main.innerHTML = "";
+
+        // se a categoria tem abas, renderiza a tab bar
+        if (cat.tabs && cat.tabs.length > 1) {
+          const bar = document.createElement("div");
+          bar.className = "sv-tabs";
+          const activeTab = getActiveTab(cat);
+          for (const tab of cat.tabs) {
+            const tabEl = document.createElement("button");
+            tabEl.className = "sv-tab" + (tab.id === activeTab.id ? " active" : "");
+            tabEl.type = "button";
+            const cnt = matchCounts ? (matchCounts.byTab[`${cat.id}::${tab.id}`] || 0) : null;
+            tabEl.innerHTML = `<span>${tab.label}</span>${cnt && cnt > 0 ? `<span class="sv-tab-count">${cnt}</span>` : ""}`;
+            tabEl.addEventListener("click", () => {
+              activeTabByCat[cat.id] = tab.id;
+              const term = overlay.querySelector("#svSearch").value.trim();
+              const counts = term ? computeMatchCounts(term) : null;
+              renderMain(counts);
+              applySearchFilter(term);
+            });
+            bar.appendChild(tabEl);
+          }
+          main.appendChild(bar);
+        }
+
+        const sections = getActiveSections(cat);
+        for (const sec of sections) {
+          const secEl = document.createElement("div");
+          secEl.className = "sv-section";
+          secEl.innerHTML = `<div class="sv-section-title">${sec.title}</div>`;
+          for (const field of sec.fields) {
+            const f = renderField(field);
+            secEl.appendChild(f);
+          }
+          main.appendChild(secEl);
+        }
+      }
+
+      function renderField(field) {
+        const wrap = document.createElement("div");
+        wrap.className = "sv-field";
+        wrap.dataset.fieldKey = field.key;
+        wrap.dataset.searchText = `${field.label} ${field.hint || ""}`.toLowerCase();
+        const labelEl = document.createElement("div");
+        labelEl.className = "sv-field-label";
+        labelEl.textContent = field.label;
+        wrap.appendChild(labelEl);
+        if (field.hint) {
+          const hintEl = document.createElement("div");
+          hintEl.className = "sv-field-hint";
+          hintEl.innerHTML = field.hint;
+          wrap.appendChild(hintEl);
+        }
+        const ctrl = document.createElement("div");
+        ctrl.className = "sv-field-control";
+        const current = svGetVal(field);
+
+        switch (field.type) {
+          case "toggle": {
+            const t = document.createElement("button");
+            t.className = "sv-toggle" + (current ? " on" : "");
+            t.type = "button";
+            t.addEventListener("click", () => {
+              const next = !t.classList.contains("on");
+              t.classList.toggle("on", next);
+              svSetVal(field, next);
+              if (field.reloadOnChange) needsReload = true;
+            });
+            ctrl.appendChild(t);
+            break;
+          }
+          case "select": {
+            const sel = document.createElement("select");
+            sel.className = "sv-select";
+            for (const opt of field.options) {
+              const o = document.createElement("option");
+              o.value = opt.value; o.textContent = opt.label;
+              if (current === opt.value) o.selected = true;
+              sel.appendChild(o);
+            }
+            sel.addEventListener("change", () => svSetVal(field, sel.value));
+            ctrl.appendChild(sel);
+            break;
+          }
+          case "range": {
+            const r = document.createElement("input");
+            r.type = "range"; r.className = "sv-range";
+            r.min = field.min; r.max = field.max; r.step = field.step;
+            r.value = current ?? field.default;
+            const v = document.createElement("span");
+            v.className = "sv-range-val";
+            v.textContent = field.fmt ? field.fmt(r.value) : r.value;
+            r.addEventListener("input", () => {
+              v.textContent = field.fmt ? field.fmt(r.value) : r.value;
+            });
+            // commit no change (released) — evita spam de WS
+            r.addEventListener("change", () => {
+              const num = field.step && field.step >= 1 ? parseInt(r.value, 10) : parseFloat(r.value);
+              svSetVal(field, num);
+            });
+            ctrl.appendChild(r);
+            ctrl.appendChild(v);
+            break;
+          }
+          case "text": {
+            const i = document.createElement("input");
+            i.type = "text"; i.className = "sv-input";
+            i.value = current ?? "";
+            let dt;
+            i.addEventListener("input", () => {
+              clearTimeout(dt);
+              dt = setTimeout(() => svSetVal(field, i.value), 400);
+            });
+            ctrl.appendChild(i);
+            break;
+          }
+          case "password": {
+            // Pra api_key etc: server manda api_key_set + api_key_hint, nunca a chave.
+            // UI mostra hint atual e permite substituir/remover sem expor o valor existente.
+            ctrl.style.display = "block";
+            const summ = (voiceConfigCache || {}).summarize || {};
+            const hasKey = summ.api_key_set === true;
+            const hint = summ.api_key_hint || "";
+            const statusEl = document.createElement("div");
+            statusEl.style.cssText = "margin-bottom:8px; font-size:11.5px; font-family:var(--font-term);";
+            statusEl.innerHTML = hasKey
+              ? `<span class="sv-status alive">configurada · <code style="font-family:inherit">${hint}</code></span>`
+              : `<span class="sv-status offline">não configurada</span>`;
+            const row = document.createElement("div");
+            row.className = "sv-row"; row.style.alignItems = "center";
+            const i = document.createElement("input");
+            i.type = "password";
+            i.className = "sv-input";
+            i.placeholder = hasKey ? "digite pra substituir…" : "sk-proj-…";
+            i.autocomplete = "off"; i.spellcheck = false;
+            i.style.minWidth = "320px";
+            i.style.fontFamily = "var(--font-term)";
+            const saveBtn = document.createElement("button");
+            saveBtn.className = "sv-btn primary"; saveBtn.textContent = "Salvar";
+            saveBtn.disabled = true;
+            i.addEventListener("input", () => {
+              saveBtn.disabled = i.value.trim().length < 8;
+            });
+            saveBtn.addEventListener("click", () => {
+              const v = i.value.trim();
+              if (v.length < 8) return;
+              svSetVal(field, v);
+              i.value = "";
+              saveBtn.disabled = true;
+              // refresh status: server faz reload do daemon e responde com
+              // novo voice_config (mascarado). Re-render do main pra refletir.
+              setTimeout(() => {
+                requestVoiceConfig();
+                setTimeout(() => { if (overlay.isConnected) renderMain(); }, 500);
+              }, 200);
+            });
+            row.appendChild(i);
+            row.appendChild(saveBtn);
+            if (hasKey) {
+              const rmBtn = document.createElement("button");
+              rmBtn.className = "sv-btn danger"; rmBtn.textContent = "Remover";
+              rmBtn.addEventListener("click", () => {
+                if (!confirm("Remover a chave OpenAI? TTS e Roteirizador vão parar de funcionar até você adicionar outra.")) return;
+                svSetVal(field, "");
+                setTimeout(() => {
+                  requestVoiceConfig();
+                  setTimeout(() => { if (overlay.isConnected) renderMain(); }, 500);
+                }, 200);
+              });
+              row.appendChild(rmBtn);
+            }
+            ctrl.appendChild(statusEl);
+            ctrl.appendChild(row);
+            break;
+          }
+          case "textarea":
+          case "textarea-large": {
+            const ta = document.createElement("textarea");
+            ta.className = "sv-textarea" + (field.type === "textarea-large" ? " large" : "");
+            ta.value = current ?? "";
+            ta.placeholder = field.placeholder || "";
+            let dt;
+            ta.addEventListener("input", () => {
+              clearTimeout(dt);
+              dt = setTimeout(() => svSetVal(field, ta.value), 500);
+            });
+            ctrl.style.display = "block";
+            ctrl.appendChild(ta);
+            break;
+          }
+          case "test-tts": {
+            const ta = document.createElement("textarea");
+            ta.className = "sv-textarea";
+            ta.value = "Senhor, configuração aplicada. Posso ajudar em mais alguma coisa?";
+            ta.placeholder = "texto pra Járvis ler…";
+            const row = document.createElement("div");
+            row.className = "sv-row"; row.style.marginTop = "8px";
+            const btnPlay = document.createElement("button");
+            btnPlay.className = "sv-btn primary"; btnPlay.textContent = "▶ Falar";
+            btnPlay.addEventListener("click", () => {
+              if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "voice_speak", text: ta.value, preempt: true }));
+            });
+            const btnStop = document.createElement("button");
+            btnStop.className = "sv-btn danger"; btnStop.textContent = "■ Parar";
+            btnStop.addEventListener("click", () => {
+              if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "voice_stop" }));
+            });
+            row.appendChild(btnPlay); row.appendChild(btnStop);
+            ctrl.style.display = "block";
+            ctrl.appendChild(ta);
+            ctrl.appendChild(row);
+            break;
+          }
+          case "action": {
+            const btn = document.createElement("button");
+            btn.className = "sv-btn"; btn.textContent = field.buttonLabel || "Executar";
+            btn.addEventListener("click", () => {
+              if (field.action === "clearAudioCache") {
+                // pcm_cache_size=0 limpa, depois restaura — usa o patch como effect
+                const prev = (voiceConfigCache || {}).pcm_cache_size || 100;
+                sendVoicePatch({ pcm_cache_size: 0 });
+                setTimeout(() => sendVoicePatch({ pcm_cache_size: prev }), 300);
+                showSimpleToast("Voice", "cache de áudio limpo");
+              }
+            });
+            ctrl.appendChild(btn);
+            break;
+          }
+          case "kv": {
+            ctrl.style.display = "block";
+            const list = document.createElement("div");
+            list.className = "sv-kv-list";
+            const dict = current || {};
+            const refresh = () => {
+              list.innerHTML = "";
+              const entries = Object.entries(dict);
+              if (entries.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "sv-empty";
+                empty.textContent = "Nenhuma substituição definida.";
+                list.appendChild(empty);
+              }
+              for (const [k, v] of entries) {
+                const row = document.createElement("div");
+                row.className = "sv-kv-row";
+                const ki = document.createElement("input");
+                ki.className = "sv-input sv-kv-key"; ki.value = k; ki.placeholder = "termo (ex: PR)";
+                const vi = document.createElement("input");
+                vi.className = "sv-input sv-kv-val"; vi.value = v; vi.placeholder = "pronúncia (ex: Pê Erre)";
+                const del = document.createElement("button");
+                del.className = "sv-kv-del"; del.innerHTML = SV_ICONS.trash;
+                del.title = "Remover";
+                del.addEventListener("click", () => {
+                  delete dict[k];
+                  svSetVal(field, { ...dict });
+                  refresh();
+                });
+                const commit = () => {
+                  const newK = ki.value.trim();
+                  const newV = vi.value;
+                  if (!newK) return;
+                  if (newK !== k) delete dict[k];
+                  dict[newK] = newV;
+                  svSetVal(field, { ...dict });
+                };
+                ki.addEventListener("change", commit);
+                vi.addEventListener("change", commit);
+                row.appendChild(ki); row.appendChild(vi); row.appendChild(del);
+                list.appendChild(row);
+              }
+            };
+            refresh();
+            const add = document.createElement("button");
+            add.className = "sv-btn"; add.textContent = "+ Adicionar";
+            add.style.marginTop = "10px";
+            add.addEventListener("click", () => {
+              let k = "novo";
+              let n = 1;
+              while (k in dict) { k = `novo${++n}`; }
+              dict[k] = "";
+              svSetVal(field, { ...dict });
+              refresh();
+            });
+            ctrl.appendChild(list);
+            ctrl.appendChild(add);
+            break;
+          }
+          case "info": {
+            const s = document.createElement("span");
+            s.className = "sv-status";
+            s.textContent = "—";
+            ctrl.appendChild(s);
+            break;
+          }
+        }
+        wrap.appendChild(ctrl);
+        return wrap;
+      }
+
+      function applySearchFilter(q) {
+        const main = overlay.querySelector("#svMain");
+        const fields = main.querySelectorAll(".sv-field");
+        const term = q.toLowerCase();
+        if (!term) {
+          fields.forEach((f) => f.classList.remove("hidden"));
+          renderSidebar(null);
+          return;
+        }
+        fields.forEach((f) => {
+          const match = f.dataset.searchText.includes(term);
+          f.classList.toggle("hidden", !match);
+        });
+        // recalcula contagem cross-cat e cross-tab pra atualizar badges
+        const counts = computeMatchCounts(term);
+        renderSidebar(counts);
+        // re-renderiza só a tab bar (sem mexer no main scroll) pra refletir badges
+        const cat = getCat();
+        if (cat.tabs) {
+          const oldBar = main.querySelector(".sv-tabs");
+          if (oldBar) {
+            const newBar = document.createElement("div");
+            newBar.className = "sv-tabs";
+            const activeTab = getActiveTab(cat);
+            for (const tab of cat.tabs) {
+              const tabEl = document.createElement("button");
+              tabEl.className = "sv-tab" + (tab.id === activeTab.id ? " active" : "");
+              tabEl.type = "button";
+              const cnt = counts.byTab[`${cat.id}::${tab.id}`] || 0;
+              tabEl.innerHTML = `<span>${tab.label}</span>${cnt > 0 ? `<span class="sv-tab-count">${cnt}</span>` : ""}`;
+              tabEl.addEventListener("click", () => {
+                activeTabByCat[cat.id] = tab.id;
+                renderMain(counts);
+                applySearchFilter(term);
+              });
+              newBar.appendChild(tabEl);
+            }
+            oldBar.replaceWith(newBar);
+          }
+        }
+      }
+
       const close = () => {
-        if (resolved) return; resolved = true;
         document.removeEventListener("keydown", kb, true);
-        overlay.style.transition = "opacity 140ms ease"; overlay.style.opacity = "0";
-        setTimeout(() => overlay.remove(), 150);
+        overlay.classList.remove("visible");
+        setTimeout(() => {
+          overlay.remove();
+          if (needsReload) location.reload();
+        }, 160);
       };
       const kb = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
-      overlay.querySelector(".close-btn").addEventListener("click", close);
+      overlay.querySelector("#svClose").addEventListener("click", close);
       overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
       document.addEventListener("keydown", kb, true);
-      overlay.querySelectorAll(".settings-toggle").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const key = btn.dataset.key;
-          const val = !getSetting(key);
-          setSetting(key, val);
-          btn.classList.toggle("on", val);
-          btn.setAttribute("aria-checked", String(val));
-          if (btn.dataset.reload) {
-            // Settings que afetam a montagem do xterm precisam de reload pra
-            // recriar todas as instâncias com o renderer correto.
-            close();
-            setTimeout(() => location.reload(), 180);
-          }
-        });
+
+      const search = overlay.querySelector("#svSearch");
+      let st;
+      search.addEventListener("input", () => {
+        clearTimeout(st);
+        st = setTimeout(() => applySearchFilter(search.value.trim()), 100);
       });
+      search.focus();
+
+      renderSidebar();
+      renderMain();
     }
 
     // === Drag and drop pra reordenar ===
@@ -8212,6 +9103,206 @@
       setTimeout(requestDictationStatus, 400);
     });
     setTimeout(requestDictationStatus, 1700);
+
+    // ============================================================
+    // MIC integrado (substitui o dictation global)
+    // Captura áudio no Electron via MediaRecorder, manda como binary
+    // pelo WS junto de {type:"stt_meta", projectId, terminalId}; o
+    // server transcreve via daemon STT e injeta o texto direto no PTY.
+    // Atalho: Ctrl+Espaço toggle quando o foco está no terminal.
+    // ============================================================
+    const mic = {
+      recorder: null,
+      stream: null,
+      chunks: [],
+      startedAt: 0,
+      timerId: null,
+      state: "idle", // idle | recording | transcribing | offline
+      sttReady: false,
+      lastTarget: null, // {projectId, terminalId}
+    };
+
+    function micBtnEl() { return document.getElementById("btnMic"); }
+    function micPillEl() { return document.getElementById("micPill"); }
+    function micPillTextEl() { return document.getElementById("micPillText"); }
+
+    function showMicError(msg) {
+      const pill = micPillEl();
+      pill.classList.remove("recording");
+      pill.classList.add("visible", "transcribing");
+      micPillTextEl().textContent = "✖ " + msg;
+      setTimeout(() => {
+        pill.classList.remove("visible", "transcribing");
+      }, 3500);
+    }
+
+    function setMicState(state) {
+      mic.state = state;
+      const btn = micBtnEl();
+      const pill = micPillEl();
+      btn.classList.remove("recording", "transcribing", "offline");
+      pill.classList.remove("visible", "recording", "transcribing");
+      if (state === "recording") {
+        btn.classList.add("recording");
+        btn.title = "Parar ditado (Ctrl+Espaço ou clique)";
+        pill.classList.add("visible", "recording");
+      } else if (state === "transcribing") {
+        btn.classList.add("transcribing");
+        btn.title = "Transcrevendo…";
+        micPillTextEl().textContent = "✍ Transcrevendo…";
+        pill.classList.add("visible", "transcribing");
+      } else if (state === "offline") {
+        btn.classList.add("offline");
+        btn.title = "STT offline — daemon não respondeu (ver logs)";
+        btn.disabled = true;
+      } else {
+        btn.title = mic.sttReady
+          ? "Ditar no terminal (Ctrl+Espaço)"
+          : "STT carregando…";
+        btn.disabled = !mic.sttReady;
+      }
+    }
+
+    function updateMicAvailability(msg) {
+      mic.sttReady = !!(msg.alive && msg.ready);
+      if (!msg.alive) {
+        setMicState("offline");
+      } else if (mic.state === "idle" || mic.state === "offline") {
+        setMicState("idle");
+      }
+    }
+
+    function requestSttStatus() {
+      if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "stt_status" }));
+    }
+    setTimeout(requestSttStatus, 1800);
+    setInterval(requestSttStatus, 10000);
+
+    function activeTerminalTarget() {
+      const projId = activeProjId;
+      if (!projId) return null;
+      const tid = activeTerminalByProj.get(projId);
+      if (!tid) return null;
+      return { projectId: projId, terminalId: tid };
+    }
+
+    async function startMicRecording() {
+      if (mic.state !== "idle") return;
+      if (!mic.sttReady) {
+        showMicError("aguarde — STT ainda carregando");
+        return;
+      }
+      const target = activeTerminalTarget();
+      if (!target) {
+        showMicError("nenhum terminal ativo");
+        return;
+      }
+      mic.lastTarget = target;
+      try {
+        mic.stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            sampleRate: 16000,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch (e) {
+        showMicError("mic negado: " + (e.name || e.message || "?"));
+        return;
+      }
+      // MediaRecorder com webm/opus — ffmpeg do sistema decodifica via
+      // faster-whisper sem precisar de conversão no front
+      let mimeType = "audio/webm;codecs=opus";
+      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "audio/webm";
+      mic.chunks = [];
+      mic.recorder = new MediaRecorder(mic.stream, { mimeType });
+      mic.recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) mic.chunks.push(e.data);
+      };
+      mic.recorder.onstop = () => {
+        try { mic.stream.getTracks().forEach((t) => t.stop()); } catch {}
+        mic.stream = null;
+        finalizeMicRecording();
+      };
+      mic.recorder.start();
+      mic.startedAt = Date.now();
+      setMicState("recording");
+      mic.timerId = setInterval(() => {
+        const elapsed = (Date.now() - mic.startedAt) / 1000;
+        micPillTextEl().textContent = `🎙 Ouvindo ${elapsed.toFixed(1)}s`;
+      }, 100);
+    }
+
+    function stopMicRecording() {
+      if (mic.state !== "recording") return;
+      if (mic.timerId) { clearInterval(mic.timerId); mic.timerId = null; }
+      try { mic.recorder?.stop(); } catch {}
+    }
+
+    async function finalizeMicRecording() {
+      setMicState("transcribing");
+      const blob = new Blob(mic.chunks, { type: mic.recorder?.mimeType || "audio/webm" });
+      mic.chunks = [];
+      mic.recorder = null;
+      const target = mic.lastTarget;
+      mic.lastTarget = null;
+      if (!target || !blob.size || !ws || ws.readyState !== 1) {
+        setMicState("idle");
+        return;
+      }
+      const duration = (Date.now() - mic.startedAt) / 1000;
+      if (duration < 0.4) {
+        // áudio curto, descarta — mesma regra do dictation.py original
+        setMicState("idle");
+        return;
+      }
+      try {
+        ws.send(JSON.stringify({
+          type: "stt_meta",
+          projectId: target.projectId,
+          terminalId: target.terminalId,
+          ext: "webm",
+        }));
+        const buf = await blob.arrayBuffer();
+        ws.send(buf);
+      } catch (e) {
+        setMicState("idle");
+      }
+      // o setMicState("idle") final vem em handleSttResult
+    }
+
+    function handleSttResult(msg) {
+      setMicState(mic.sttReady ? "idle" : "offline");
+      if (!msg.ok) {
+        showMicError(msg.error || "erro");
+      } else if (!msg.text) {
+        showMicError("silêncio / alucinação descartada");
+      }
+    }
+
+    function toggleMic() {
+      if (mic.state === "recording") stopMicRecording();
+      else if (mic.state === "transcribing") return;
+      else startMicRecording(); // chamada vai validar sttReady e mostrar erro
+    }
+
+    micBtnEl().addEventListener("click", toggleMic);
+
+    // Atalho global Ctrl+Espaço — toggle ditado. Só dispara quando o
+    // cockpit está em foco (que é sempre quando esse JS roda no Electron).
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.code === "Space") {
+        // não conflita com Ctrl+Espaço de outras coisas — interceptamos
+        e.preventDefault();
+        e.stopPropagation();
+        toggleMic();
+      }
+    }, true);
+
+    // estado inicial: aguardando daemon
+    setMicState("idle");
 
     // RELÓGIO
     function updateClock() {

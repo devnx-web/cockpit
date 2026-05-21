@@ -205,6 +205,24 @@ ipcMain.on("shell:start-drag", (event, filePath) => {
 });
 
 app.whenReady().then(async () => {
+  // Libera permissão de mic/áudio sem prompt — o cockpit é local e o usuário
+  // explicitamente clicou no botão 🎙 / Ctrl+Espaço. Sem isso, alguns builds
+  // do Chromium negam getUserMedia silenciosamente.
+  try {
+    const { session } = require("electron");
+    session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
+      if (permission === "media" || permission === "microphone" || permission === "audioCapture") {
+        return cb(true);
+      }
+      cb(false);
+    });
+    session.defaultSession.setPermissionCheckHandler((wc, permission) => {
+      return permission === "media" || permission === "microphone" || permission === "audioCapture";
+    });
+  } catch (e) {
+    console.warn("setPermissionHandler falhou:", e?.message);
+  }
+
   try {
     const inst = await bootServer();
     createWindow(inst.url);

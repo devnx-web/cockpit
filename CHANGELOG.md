@@ -10,6 +10,31 @@ _(nada ainda)_
 
 ---
 
+## [0.7.0] — 2026-05-21
+
+### Adicionado
+- **Ditado integrado no terminal (STT)** — botão 🎙 no header do terminal e atalho `Ctrl+Espaço` (toggle). Captura mic via `MediaRecorder` no Electron, manda áudio webm/opus via WebSocket binary frame; novo daemon Python residente `modules/voice/stt-daemon.py` (faster-whisper `small` em CUDA com fallback CPU int8) transcreve e o servidor injeta o texto direto no PTY do terminal ativo — mesmo caminho do paste. **Sem `pynput`, sem `xdotool`, sem listener global de teclado.** Funciona em Wayland. `electron-main.js` libera permissão de microfone via `setPermissionRequestHandler`. Substitui o `dictation.py` global (que continua disponível como "ditado legado" pra digitar fora do cockpit).
+- **Personalidade da voz via `instructions`** — campo novo no `gpt-4o-mini-tts` que controla **tom e personalidade da voz** (não o conteúdo). Default: tom calmo, elegante, britânico discreto. Configurável pela UI.
+- **Settings view fullscreen estilo VSCode** — substitui o modal de 2 toggles. Sidebar de categorias (Geral · Áudio · Atalhos), tab bar dentro de Áudio (Áudio · Roteirizador · Pronúncia), search cross-categoria com badges de contagem por categoria e por aba. Schema declarativo + renderer genérico por tipo: `toggle`, `range`, `select`, `text`, `textarea`, `textarea-large`, `password`, `kv` (editor key/value), `test-tts`, `action`, `info`. Persistência transparente: settings locais → `localStorage`; settings de voz → WS `voice_patch_config` com merge nested.
+- **Configurar OpenAI API key pela UI** (Geral → Integrações) — input tipo password, badge "configurada · `sk-pr…0xQT`" quando há chave, botões "Salvar" (mínimo 8 chars) e "Remover" (com confirm). Server **nunca devolve** a chave inteira pro front — só `api_key_set` + `api_key_hint` mascarado.
+- **Cache LRU de áudio** — frases repetidas (saudações, confirmações típicas) retornam PCM instantâneo em vez de chamar a API. Key normalizada (lower+strip) + voz/modelo/speed/instructions. Tamanho configurável (0-500 entradas).
+
+### Mudado
+- **TTS em cascata streaming `gpt-4o-mini` → `gpt-4o-mini-tts`** — modo `summary` agora gera o roteiro frase a frase via `stream:true` no chat completions e dispara TTS em paralelo (producer/consumer com `queue.Queue`). Tempo até a primeira fala em respostas longas cai de ~9.4s pra ~2.7s; pausa entre frases vai a zero. Skip automático do mini pra textos curtos (<60 chars, threshold configurável) elimina overhead em confirmações tipo "feito senhor".
+- **Pool de conexões HTTPS persistente** com keep-alive nas chamadas pra OpenAI (separado por slot: `chat` e `tts`). Primeira chamada paga TLS handshake; subsequentes reutilizam. TTS warm cai de ~4.7s pra ~1.3-1.8s.
+- **Modelo TTS default**: `tts-1-hd` → `gpt-4o-mini-tts` (mais novo, mais barato, aceita `instructions`). Modo de fala default: `verbatim` → `summary`.
+- **Painel "Ditado" virou "Ditado global (legado)"** no popover de voz — comportamento intacto, só sinaliza que a forma recomendada agora é o botão 🎙 do terminal.
+
+### Custos & performance
+- Custo total por resposta longa: ~$0.0001 (mini) + ~$0.0001 (TTS) ≈ **$0.20 por mil falas**. Cache hit → custo **zero**.
+- Cenários medidos (output bruto longo, ~325 chars in):
+  - **TTFB-mini**: 2.01s → **0.89s** (-55%)
+  - **TTFB-play**: ~9.4s → **3.3s warm / 2.7s cache-friendly** (-65%)
+  - **Pausa entre frases**: ~2.5s → **0s**
+  - **Frase curta repetida** ("Pronto, senhor."): **1.7s total** (essencialmente o tempo do áudio em si).
+
+---
+
 ## [0.6.15] — 2026-05-19
 
 ### Adicionado

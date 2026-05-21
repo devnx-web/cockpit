@@ -8,6 +8,7 @@ import { WebSocketServer } from "ws";
 import pkg from "node-pty";
 import * as voice from "./lib/voice.js";
 import * as dictation from "./lib/dictation.js";
+import * as stt from "./lib/stt.js";
 import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
 const { spawn } = pkg;
 
@@ -739,7 +740,40 @@ wss.on("connection", (ws) => {
   clients.add(ws);
   ws.send(JSON.stringify(helloPayload()));
 
-  ws.on("message", async (raw) => {
+  ws.on("message", async (raw, isBinary) => {
+    // STT: o cliente manda primeiro um JSON {type:"stt_meta", projectId, terminalId, ext}
+    // e logo em seguida o frame binário com o áudio (webm/opus do MediaRecorder).
+    // Aqui pegamos o binário, transcrevemos via daemon Python e injetamos o texto
+    // direto no PTY do terminal alvo — mesmo caminho que `case "input"` usa.
+    if (isBinary) {
+      const meta = ws.__sttMeta;
+      ws.__sttMeta = null;
+      if (!meta) {
+        ws.send(JSON.stringify({ type: "stt_result", ok: false, error: "sem stt_meta antes do áudio" }));
+        return;
+      }
+      const audioBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+      try {
+        const r = await stt.transcribe(audioBuffer, meta.ext || "webm");
+        if (r.ok && r.text) {
+          const sess = sessions.get(meta.projectId);
+          const t = sess?.terminals.get(meta.terminalId);
+          if (t) {
+            try { t.pty.write(r.text); } catch {}
+          }
+        }
+        ws.send(JSON.stringify({
+          type: "stt_result",
+          projectId: meta.projectId,
+          terminalId: meta.terminalId,
+          ...r,
+        }));
+      } catch (e) {
+        ws.send(JSON.stringify({ type: "stt_result", ok: false, error: e.message }));
+      }
+      return;
+    }
+
     let msg;
     try {
       msg = JSON.parse(raw.toString());
@@ -802,6 +836,22 @@ wss.on("connection", (ws) => {
         result: { ...r, enabled: next } }));
       return;
     }
+    // ---- STT (ditado integrado ao cockpit) ----
+    if (msg.type === "stt_status") {
+      const st = await stt.status();
+      ws.send(JSON.stringify({ type: "stt_status", ...st }));
+      return;
+    }
+    if (msg.type === "stt_meta") {
+      // marca esse ws como aguardando o próximo frame binário pra transcrever
+      ws.__sttMeta = {
+        projectId: msg.projectId,
+        terminalId: msg.terminalId,
+        ext: msg.ext || "webm",
+      };
+      return;
+    }
+
     if (msg.type === "dictation_status") {
       ws.send(JSON.stringify({ type: "dictation_status", ...dictation.status() }));
       return;
@@ -823,11 +873,46 @@ wss.on("connection", (ws) => {
         "enabled", "volume", "speed", "speech_mode",
         "max_chars", "seed", "voice_ref_text",
         "tts_engine", "openai_voice", "openai_model",
+        "tts_instructions", "summary_min_chars", "pcm_cache_size",
       ]);
+      // sub-objetos com merge raso (front manda só os campos que mudaram)
+      const ALLOWED_OBJ = {
+        summarize: new Set([
+          "enabled", "provider", "model", "max_tokens", "timeout", "system_prompt",
+          // api_key: entra no patch mas NUNCA é devolvida no voice_get_config
+          // (mascarada como api_key_hint). Front nunca vê a chave inteira.
+          "api_key",
+        ]),
+        // pronunciation é dict livre key→value; substituição completa
+        pronunciation: null,
+      };
       const patch = {};
       const incoming = msg.patch || {};
       for (const [k, v] of Object.entries(incoming)) {
-        if (ALLOWED.has(k)) patch[k] = v;
+        if (ALLOWED.has(k)) {
+          patch[k] = v;
+        } else if (k in ALLOWED_OBJ) {
+          const allowedSub = ALLOWED_OBJ[k];
+          if (allowedSub === null) {
+            // dict livre (pronunciation) — aceita objeto inteiro
+            if (v && typeof v === "object" && !Array.isArray(v)) {
+              patch[k] = v;
+            }
+          } else {
+            // merge raso com filtro de chaves. Spread inicial preserva tudo
+            // que não está no patch (incluindo api_key se o front não mandou).
+            // Quando o front MANDA explicitamente uma chave (mesmo vazia),
+            // respeitamos a intenção — string vazia em api_key = remover.
+            const current = (voice.getConfig() || {})[k] || {};
+            const merged = { ...current };
+            for (const [sk, sv] of Object.entries(v || {})) {
+              if (allowedSub.has(sk)) merged[sk] = sv;
+            }
+            // limpar entrada vazia em api_key (mantém objeto enxuto)
+            if (merged.api_key === "") delete merged.api_key;
+            patch[k] = merged;
+          }
+        }
       }
       if (Object.keys(patch).length === 0) {
         ws.send(JSON.stringify({ type: "voice_result", action: "patch",
@@ -1351,6 +1436,7 @@ async function shutdown(opts = {}) {
   try { dictation.stop(); } catch {}
   shutdownAllLsp();
   await voice.stop().catch(() => {});
+  await stt.stop().catch(() => {});
   if (opts.exit !== false) process.exit(0);
 }
 
@@ -1374,6 +1460,10 @@ export async function startServer({
   // userData, fora do asar (que é read-only). O electron-main injeta os caminhos.
   if (voiceConfigPath || voiceLogsDir) {
     voice.init({ configPath: voiceConfigPath, logsDir: voiceLogsDir });
+  }
+  // STT reusa o mesmo diretório de logs do voice
+  if (voiceLogsDir) {
+    stt.init({ logsDir: voiceLogsDir });
   }
 
   // carrega projetos do path configurado
@@ -1418,6 +1508,13 @@ export async function startServer({
     );
   } else if (voiceEnabled) {
     log.log(`\x1b[33m▸ voice\x1b[0m disponível só em Linux por enquanto`);
+  }
+  // STT: também só em Linux por enquanto (depende do venv com faster-whisper).
+  // Falha silenciosa — o UI mostra o estado e o usuário decide.
+  if (process.platform === "linux") {
+    stt.start().catch((e) =>
+      log.log(`\x1b[33m▸ stt\x1b[0m offline: ${e.message}`)
+    );
   }
 
   return {
