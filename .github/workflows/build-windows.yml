@@ -56,10 +56,15 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # dist:win = vendor + icons (gera build/icon.png a partir do SVG; o electron-builder
-      # converte pra .ico sozinho) + electron-builder --win (NSIS).
+      # vendor + icons (gera build/icon.png a partir do SVG; o electron-builder converte
+      # pra .ico sozinho) + electron-builder --win (NSIS). --publish never impede o
+      # electron-builder de tentar publicar no GitHub sozinho — a publicação fica a cargo
+      # dos passos "GitHub Release" e "Upload pro Wasabi" abaixo.
       - name: Build instalador Windows
-        run: npm run dist:win
+        run: |
+          npm run vendor
+          npm run icons
+          npx electron-builder --win --publish never
 
       - name: Publicar artifact
         uses: actions/upload-artifact@v4
