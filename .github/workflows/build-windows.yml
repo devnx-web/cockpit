@@ -1,0 +1,95 @@
+name: Build Windows
+
+# Gera o instalador .exe (NSIS) do Cockpit num runner Windows — é onde o
+# node-pty (módulo nativo) consegue compilar pra win32. Não dá pra cross-compilar
+# isso de forma confiável a partir do Linux.
+#
+# Dispara em:
+#   - push de tag v* (ex.: v0.7.0)  -> builda + publica GitHub Release + sobe pro Wasabi
+#   - manualmente (workflow_dispatch) -> só builda e deixa o .exe como artifact
+#
+# Voz (STT/TTS) NÃO entra no build Windows — está amarrada a Linux (Unix sockets,
+# venv Python, paths fixos) e já vem desligada por plataforma no código.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    # Secrets do Wasabi (opcionais). Se não existirem, o upload pro S3 é pulado
+    # e o instalador fica só no artifact/Release do GitHub.
+    env:
+      WASABI_KEY: ${{ secrets.WASABI_ACCESS_KEY_ID }}
+      WASABI_SECRET: ${{ secrets.WASABI_SECRET_ACCESS_KEY }}
+      COCKPIT_S3_BUCKET: arquivos.devnx.com.br
+      WASABI_ENDPOINT: https://s3.us-central-1.wasabisys.com
+      WASABI_REGION: us-central-1
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Versão do package.json
+        id: ver
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # npm ci roda o postinstall: copia vendor assets + electron-rebuild do node-pty
+      # (compila nativo pra Windows usando o MSVC Build Tools já presente no runner).
+      - name: Instalar dependências
+        run: npm ci
+
+      # dist:win = vendor + icons (gera build/icon.png a partir do SVG; o electron-builder
+      # converte pra .ico sozinho) + electron-builder --win (NSIS).
+      - name: Build instalador Windows
+        run: npm run dist:win
+
+      - name: Publicar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cockpit-Setup-${{ steps.ver.outputs.version }}
+          path: dist/Cockpit-Setup-*.exe
+          if-no-files-found: error
+
+      # Só em tag: cria/atualiza o GitHub Release com o .exe anexado.
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Cockpit-Setup-*.exe
+          fail_on_unmatched_files: true
+
+      # Só em tag E se os secrets do Wasabi existirem: sobe pro mesmo bucket/pasta
+      # do release Linux -> https://arquivos.devnx.com.br/cockpit/v<versao>/Cockpit-Setup-<versao>.exe
+      - name: Upload pro Wasabi
+        if: startsWith(github.ref, 'refs/tags/') && env.WASABI_KEY != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.WASABI_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.WASABI_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.WASABI_REGION }}
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          EXE="dist/Cockpit-Setup-${VERSION}.exe"
+          aws s3 cp "$EXE" \
+            "s3://${COCKPIT_S3_BUCKET}/cockpit/v${VERSION}/Cockpit-Setup-${VERSION}.exe" \
+            --endpoint-url "$WASABI_ENDPOINT" \
+            --acl public-read \
+            --content-type "application/x-msdownload"
+          echo "Publicado: https://${COCKPIT_S3_BUCKET}/cockpit/v${VERSION}/Cockpit-Setup-${VERSION}.exe"
