@@ -838,6 +838,22 @@
       overflow: hidden;
     }
     .files-panel.visible { display: flex; }
+    /* Alça pra redimensionar os painéis laterais (arquivos / git) — só aparece
+       quando o painel adjacente está visível (classe .visible togglada no JS). */
+    .panel-resize-handle {
+      width: 5px;
+      flex-shrink: 0;
+      cursor: col-resize;
+      background: transparent;
+      z-index: 10;
+      display: none;
+      transition: background 150ms ease;
+    }
+    .panel-resize-handle.visible { display: block; }
+    .panel-resize-handle:hover,
+    .panel-resize-handle.dragging {
+      background: rgba(91,141,239,0.3);
+    }
     .files-panel-header {
       padding: 10px 12px;
       border-bottom: 1px solid var(--border-default);
@@ -1551,11 +1567,14 @@
     .modal-form .modal-title { text-align: left; font-size: 13.5px; }
     .form-grid {
       display: grid;
-      grid-template-columns: 92px 1fr;
+      grid-template-columns: 92px minmax(0, 1fr);
       gap: 10px 12px;
       align-items: start;
       margin-top: 14px;
     }
+    /* impede que itens com conteúdo longo (comandos, inputs) estiquem a
+       coluna 1fr além da largura do modal e joguem tudo pra esquerda */
+    .form-grid > * { min-width: 0; }
     .form-label {
       font-size: 11px;
       letter-spacing: 0.06em;
@@ -2948,7 +2967,6 @@
           <div class="files-panel-header">
             <div class="files-panel-title">
               Arquivos
-              <span class="root-path" id="filesRoot">—</span>
             </div>
             <button class="icon-btn" id="filesRefresh" title="Atualizar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2967,6 +2985,7 @@
             <div class="git-empty">carregando…</div>
           </div>
         </aside>
+        <div class="panel-resize-handle" id="filesResizeHandle"></div>
         <div class="terminal-area" id="terminalArea" style="position:relative">
           <div class="term-search-bar" id="termSearchBar">
             <input type="text" class="term-search-input" id="termSearchInput" placeholder="Buscar no terminal…" autocomplete="off" spellcheck="false" />
@@ -2994,6 +3013,7 @@
             <div id="mediaContainer"></div>
           </div>
         </div>
+        <div class="panel-resize-handle" id="gitResizeHandle"></div>
         <aside class="git-panel" id="gitPanel">
           <div class="git-panel-header">
             <div class="git-branch" id="gitBranch">
@@ -3221,6 +3241,18 @@
       return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
+    // Caminho absoluto de um File arrastado pra dentro da janela. No Electron 32+
+    // o File.path foi removido — webUtils.getPathForFile (exposto no preload) é o
+    // jeito suportado de pegar o caminho completo. Fallback: f.path (Electron antigo)
+    // e por fim f.name (navegador puro, sem caminho).
+    function filePath(f) {
+      if (window.cockpitDesktop?.getPathForFile) {
+        const p = window.cockpitDesktop.getPathForFile(f);
+        if (p) return p;
+      }
+      return f.path || f.name || "";
+    }
+
     // ============================================================
     // XTERM
     // ============================================================
@@ -3438,7 +3470,7 @@
         e.preventDefault();
         const paths = [];
         if (e.dataTransfer.files?.length) {
-          for (const f of e.dataTransfer.files) paths.push(f.path || f.name);
+          for (const f of e.dataTransfer.files) paths.push(filePath(f));
         } else {
           const uriList = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
           uriList.split(/\r?\n/).filter(l => l && !l.startsWith("#")).forEach(u => {
@@ -4765,6 +4797,7 @@
     function toggleGitPanel() {
       gitPanelVisible = !gitPanelVisible;
       document.getElementById("gitPanel").classList.toggle("visible", gitPanelVisible);
+      document.getElementById("gitResizeHandle").classList.toggle("visible", gitPanelVisible);
       if (gitPanelVisible) {
         refreshGit();
       }
@@ -5100,6 +5133,7 @@
     function toggleFilesPanel() {
       filesPanelVisible = !filesPanelVisible;
       document.getElementById("filesPanel").classList.toggle("visible", filesPanelVisible);
+      document.getElementById("filesResizeHandle").classList.toggle("visible", filesPanelVisible);
       if (filesPanelVisible) {
         renderFilesRoot();
         const state = getTreeState(activeProjId);
@@ -5120,13 +5154,8 @@
     }
 
     function renderFilesRoot() {
-      const p = getActiveProj();
-      const sep = systemInfo.sep || "/";
-      const home = (systemInfo.home || "") + sep;
-      const txt = p
-        ? (home.length > 1 && p.path.startsWith(home) ? "~" + sep + p.path.slice(home.length) : p.path)
-        : "—";
-      document.getElementById("filesRoot").textContent = txt;
+      // o caminho da pasta já aparece no breadcrumb do topo (hdrPath), ao lado
+      // do nome do projeto — não precisa duplicar no header do painel de arquivos.
     }
 
     function fetchFiles(projId, relPath) {
@@ -5425,11 +5454,12 @@
       // server-side.
       const items = [];
       for (const f of files) {
-        if (!f.path) {
+        const src = filePath(f);
+        if (!src) {
           showSimpleToast("Arrastar de fora", "requer app desktop pra resolver o caminho do arquivo");
           return;
         }
-        items.push({ src: f.path, name: f.name });
+        items.push({ src, name: f.name });
       }
       const colorHint = proj?.color;
       const okCount = { v: 0 };
@@ -9397,6 +9427,46 @@
         document.addEventListener("mousemove", onMove);
         document.addEventListener("mouseup", onUp);
       });
+    })();
+
+    // Painéis laterais (arquivos / git) redimensionáveis — mesma ideia da sidebar.
+    (function() {
+      function refit() {
+        xtermInstances.forEach(inst => { try { inst.fitAddon.fit(); } catch {} });
+      }
+      // panel: o <aside> a redimensionar; side: "left" = painel à esquerda da alça
+      // (arquivos, arrastar pra direita aumenta); "right" = painel à direita (git,
+      // arrastar pra esquerda aumenta).
+      function wire(handleId, panelId, side, key, min, max, def) {
+        const handle = document.getElementById(handleId);
+        const panel = document.getElementById(panelId);
+        if (!handle || !panel) return;
+        let w = parseInt(localStorage.getItem(key) || String(def), 10);
+        w = Math.min(max, Math.max(min, w));
+        panel.style.width = w + "px";
+        handle.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          handle.classList.add("dragging");
+          const startX = e.clientX;
+          const startW = w;
+          const onMove = (ev) => {
+            const delta = side === "left" ? (ev.clientX - startX) : (startX - ev.clientX);
+            w = Math.min(max, Math.max(min, startW + delta));
+            panel.style.width = w + "px";
+          };
+          const onUp = () => {
+            handle.classList.remove("dragging");
+            localStorage.setItem(key, String(w));
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            refit();
+          };
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+      }
+      wire("filesResizeHandle", "filesPanel", "left",  "cockpit-files-width", 180, 560, 280);
+      wire("gitResizeHandle",   "gitPanel",   "right", "cockpit-git-width",   220, 640, 360);
     })();
 
     // === Electron: dots Mac funcionais ===

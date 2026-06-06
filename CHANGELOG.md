@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.7.1] — 2026-06-06
+
+### Corrigido
+- **Modal de adicionar/editar projeto desalinhado** — a grade do formulário usava `grid-template-columns: 92px 1fr`, e o `1fr` (que é `minmax(auto,1fr)`) não encolhia abaixo do `min-content` dos itens longos (comandos, inputs), estourando as colunas e jogando labels e título pra fora do modal, à esquerda. Trocado por `minmax(0, 1fr)` + `min-width: 0` nos filhos da grade.
+- **Drag de arquivo pra dentro do app pegava só o nome, não o caminho** — o Electron 32+ removeu `File.path`. Agora o caminho absoluto é resolvido via `webUtils.getPathForFile` (exposto no preload), com fallback pro comportamento antigo. Vale pro drop no terminal e na importação pelo gerenciador de arquivos.
+
+### Mudado
+- **Painel de arquivos sem caminho duplicado** — o header do painel "Arquivos" não repete mais o caminho da pasta, que já aparece no breadcrumb do topo ao lado do nome do projeto.
+- **Painéis laterais redimensionáveis** — os painéis de Arquivos e Git agora têm alça de arraste (igual à sidebar de projetos), com largura persistida em `localStorage`.
+
+---
+
 ## [0.7.0] — 2026-05-21
 
 ### Adicionado

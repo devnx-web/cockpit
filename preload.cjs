@@ -1,6 +1,6 @@
 // Bridge entre renderer e main — expõe controles da janela e info do SO
 // via contextBridge (não dá acesso direto ao node/ipcRenderer pro renderer).
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("cockpitDesktop", {
   isElectron: true,
@@ -17,4 +17,10 @@ contextBridge.exposeInMainWorld("cockpitDesktop", {
   // Inicia um drag nativo do SO para arrastar o arquivo pra fora da janela.
   // Deve ser chamado dentro do handler dragstart.
   startDrag: (fullPath) => ipcRenderer.send("shell:start-drag", fullPath),
+  // Resolve o caminho absoluto de um File arrastado pra dentro da janela.
+  // A partir do Electron 32 o antigo File.path foi removido — webUtils.getPathForFile
+  // é a forma suportada de obter o caminho completo (não só o nome).
+  getPathForFile: (file) => {
+    try { return webUtils.getPathForFile(file); } catch { return ""; }
+  },
 });
