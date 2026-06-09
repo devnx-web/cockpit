@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.8.0] — 2026-06-09
+
+### Adicionado
+- **Gestão de contas Claude + Codex** — nova seção em Configurações → Contas para trocar, adicionar e remover contas das duas plataformas (Anthropic/Claude e ChatGPT/Codex), com a conta ativa destacada. A troca é global (vale pra todos os projetos).
+- **Barra de uso na sidebar** — abaixo da lista de projetos, mostra o consumo da conta ativa do Claude (janela de 5h e semanal), com atualização automática a cada 20 min e botão ⟳ pra forçar agora.
+- **Tabela de uso por conta** — cada conta mostra duas barras (5h e semanal) com a porcentagem usada, o plano (Max 20x/Max 5x no Claude; Pro 20x/Pro Lite 5x no Codex) e o horário de reset em Brasília (GMT-3), pra decidir qual conta usar.
+
+### Técnico
+- Uso obtido via HTTP direto e instantâneo por conta: Claude por `api/oauth/usage` e Codex por `backend-api/wham/usage` — sem `codex exec`, sem leitura de rollouts, sem dados cruzados entre contas. Cache de 20 min com refresh de token automático e distinção entre sessão expirada (401) e limite de consultas (429).
+
+---
+
 ## [0.7.1] — 2026-06-06
 
 ### Corrigido

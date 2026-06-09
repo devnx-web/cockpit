@@ -10,6 +10,7 @@ import * as voice from "./lib/voice.js";
 import * as dictation from "./lib/dictation.js";
 import * as stt from "./lib/stt.js";
 import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
+import * as accounts from "./lib/accounts.js";
 const { spawn } = pkg;
 
 // === config dinâmica — populada por startServer() ===
@@ -1349,11 +1350,79 @@ const MIME = {
   ".ttc": "font/collection",
 };
 
+// Lê o corpo de uma requisição como JSON (limite simples de tamanho).
+function readJsonBody(req, cb) {
+  let data = "";
+  req.on("data", (chunk) => {
+    data += chunk;
+    if (data.length > 1e6) req.destroy(); // ~1MB de guarda
+  });
+  req.on("end", () => {
+    try { cb(data ? JSON.parse(data) : {}); }
+    catch { cb({}); }
+  });
+}
+
 const server = http.createServer((req, res) => {
   const u = url.parse(req.url);
   if (u.pathname === "/projects.json") {
     res.writeHead(200, { "Content-Type": MIME[".json"] });
     res.end(JSON.stringify(PROJECTS));
+    return;
+  }
+  // /accounts/usage — consumo das contas Claude + Codex (barra/sidebar e settings)
+  // ?force=1 ignora o cache do Claude (usado pelo botão ⟳ manual)
+  if (u.pathname === "/accounts/usage") {
+    const force = /(?:^|&)force=1(?:&|$)/.test(u.query || "");
+    accounts.getUsageTable(force)
+      .then((table) => {
+        res.writeHead(200, { "Content-Type": MIME[".json"], "Cache-Control": "no-cache" });
+        res.end(JSON.stringify(table));
+      })
+      .catch((err) => {
+        res.writeHead(500, { "Content-Type": MIME[".json"] });
+        res.end(JSON.stringify({ error: String(err) }));
+      });
+    return;
+  }
+  // /accounts/switch — troca a conta ativa (POST {platform, id})
+  if (u.pathname === "/accounts/switch" && req.method === "POST") {
+    readJsonBody(req, (body) => {
+      const sendJson = (code, obj) => {
+        res.writeHead(code, { "Content-Type": MIME[".json"] });
+        res.end(JSON.stringify(obj));
+      };
+      try {
+        const result = accounts.switchAccount(body.platform, body.id);
+        sendJson(200, result);
+      } catch (err) {
+        sendJson(400, { error: String(err.message || err) });
+      }
+    });
+    return;
+  }
+  // /accounts/add — captura a conta logada agora (POST {platform})
+  if (u.pathname === "/accounts/add" && req.method === "POST") {
+    readJsonBody(req, (body) => {
+      const sendJson = (code, obj) => {
+        res.writeHead(code, { "Content-Type": MIME[".json"] });
+        res.end(JSON.stringify(obj));
+      };
+      try { sendJson(200, accounts.addAccount(body.platform)); }
+      catch (err) { sendJson(400, { error: String(err.message || err) }); }
+    });
+    return;
+  }
+  // /accounts/remove — remove conta do gerenciamento (POST {platform, id})
+  if (u.pathname === "/accounts/remove" && req.method === "POST") {
+    readJsonBody(req, (body) => {
+      const sendJson = (code, obj) => {
+        res.writeHead(code, { "Content-Type": MIME[".json"] });
+        res.end(JSON.stringify(obj));
+      };
+      try { sendJson(200, accounts.removeAccount(body.platform, body.id)); }
+      catch (err) { sendJson(400, { error: String(err.message || err) }); }
+    });
     return;
   }
   // /file/<projectId>/<relPath...> — serve conteúdo bruto de arquivos do

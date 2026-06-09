@@ -396,6 +396,101 @@
       padding-bottom: 12px;
     }
     .sidebar-footer .sidebar-section { padding-top: 12px; }
+    /* Barra de uso das contas (rodapé da sidebar) */
+    .usage-foot { padding-bottom: 8px; }
+    .usage-head { cursor: default; }
+    .usage-head .section-action {
+      background: none; border: none; color: var(--text-tertiary);
+      cursor: pointer; padding: 2px; display: flex; border-radius: 4px;
+    }
+    .usage-head .section-action svg { width: 13px; height: 13px; }
+    .usage-head .section-action:hover { color: var(--text-secondary); background: var(--bg-3); }
+    .usage-head .section-action.spinning svg { animation: usage-spin 0.8s linear infinite; }
+    @keyframes usage-spin { to { transform: rotate(360deg); } }
+    .usage-rows { padding: 0 14px 4px; display: flex; flex-direction: column; gap: 9px; }
+    .usage-empty { font-size: 10.5px; color: var(--text-tertiary); padding: 2px 0 6px; }
+    .usage-acc-head {
+      display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px;
+    }
+    .usage-acc-plat {
+      font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .usage-acc-plat.claude { background: rgba(217,119,87,.18); color: #e0a07f; }
+    .usage-acc-plat.codex  { background: rgba(74,222,128,.14); color: #74d39a; }
+    .usage-acc-name {
+      font-size: 11px; color: var(--text-secondary); font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+    }
+    .usage-acc-plan { font-size: 9.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .usage-line { display: flex; align-items: center; gap: 7px; margin: 2px 0; }
+    .usage-line .lbl { font-size: 9.5px; color: var(--text-tertiary); width: 16px; flex-shrink: 0; }
+    .usage-track {
+      flex: 1; display: block; height: 6px; border-radius: 3px;
+      background: var(--bg-4); overflow: hidden; min-width: 0;
+    }
+    .usage-fill { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
+    .usage-fill.low  { background: var(--status-running); }
+    .usage-fill.mid  { background: var(--status-waiting); }
+    .usage-fill.high { background: var(--status-error); }
+    .usage-pct {
+      font-size: 10px; color: var(--text-secondary); width: 62px; text-align: right;
+      flex-shrink: 0; font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .usage-pct-week { color: var(--text-tertiary); }
+    .usage-reset { font-size: 9px; color: var(--text-disabled); margin-top: 2px; }
+    .usage-nodata { font-size: 9.5px; color: var(--text-disabled); font-style: italic; padding: 1px 0; }
+    .app.sidebar-collapsed .usage-foot { display: none; }
+    /* Painel de Contas (Configurações) */
+    .acc-panel { display: flex; flex-direction: column; gap: 6px; }
+    .acc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .acc-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .acc-group-label {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-tertiary); margin: 12px 0 4px;
+    }
+    .acc-group-label { display: flex; align-items: center; justify-content: space-between; }
+    .acc-row2 {
+      padding: 11px 13px; border: 1px solid var(--border-default); border-radius: 8px;
+      background: var(--bg-2); margin-bottom: 8px;
+    }
+    .acc-row2.is-active { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.05); }
+    .acc-row2-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .acc-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .acc-email { font-size: 12.5px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .acc-plan { font-size: 10px; color: var(--text-tertiary); padding: 1px 6px; border: 1px solid var(--border-default); border-radius: 4px; flex-shrink: 0; }
+    .acc-bars { display: flex; flex-direction: column; gap: 5px; margin-top: 9px; }
+    .acc-line { display: flex; align-items: center; gap: 9px; }
+    .acc-line-lbl { font-size: 10px; color: var(--text-tertiary); width: 18px; flex-shrink: 0; }
+    .acc-bar { flex: 1; display: block; height: 6px; border-radius: 3px; background: var(--bg-4); overflow: hidden; min-width: 0; }
+    .acc-bar-fill { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
+    .acc-bar-fill.low { background: var(--status-running); }
+    .acc-bar-fill.mid { background: var(--status-waiting); }
+    .acc-bar-fill.high { background: var(--status-error); }
+    .acc-line-pct { font-size: 11px; color: var(--text-secondary); width: 36px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .acc-line-reset { font-size: 10px; color: var(--text-disabled); width: 120px; flex-shrink: 0; }
+    .acc-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .acc-badge-active { font-size: 10.5px; color: var(--status-running); font-weight: 600; }
+    .acc-btn {
+      font-family: var(--font-ui); font-size: 11.5px; cursor: pointer;
+      padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border-strong);
+      background: var(--bg-3); color: var(--text-primary);
+    }
+    .acc-btn:hover { background: var(--bg-4); }
+    .acc-btn.ghost { background: none; border-color: var(--border-default); }
+    .acc-btn.ghost.small { font-size: 10.5px; padding: 3px 9px; color: var(--text-secondary); }
+    .acc-btn:disabled { opacity: .6; cursor: default; }
+    .acc-icon-btn {
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      width: 28px; height: 28px; border-radius: 6px; border: 1px solid transparent;
+      background: none; color: var(--text-tertiary);
+    }
+    .acc-icon-btn svg { width: 14px; height: 14px; }
+    .acc-icon-btn:hover { color: var(--status-error); border-color: var(--border-default); background: var(--bg-3); }
+    .acc-msg { font-size: 11.5px; color: var(--text-tertiary); padding: 6px 2px; }
+    .acc-msg.warn { color: var(--status-waiting); }
+    .acc-foot-note { font-size: 10.5px; color: var(--text-tertiary); margin-top: 14px; line-height: 1.5; }
+    .acc-foot-note code { font-size: 10px; background: var(--bg-3); padding: 1px 4px; border-radius: 3px; }
     .project-search-wrap {
       flex-shrink: 0;
       padding: 0 10px 6px;
@@ -2885,6 +2980,20 @@
         </button>
       </div>
       <div class="project-list" id="projectList"></div>
+      <div class="sidebar-footer usage-foot" id="usageFoot">
+        <div class="sidebar-section usage-head">
+          <span>Uso das contas</span>
+          <button class="section-action" id="usageRefresh" title="Atualizar uso (Codex faz ping ~12s/conta)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+        </div>
+        <div class="usage-rows" id="usageRows">
+          <div class="usage-empty">carregando…</div>
+        </div>
+      </div>
     </aside>
     <div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
 
@@ -7875,6 +7984,7 @@
       keys: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="7" y1="14" x2="17" y2="14"/></svg>',
       close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
       trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+      accounts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     };
 
     // === Schema declarativo ===
@@ -7897,6 +8007,11 @@
               ],
             },
           ],
+        },
+        {
+          id: "accounts", label: "Contas", icon: "accounts",
+          custom: "accounts",
+          sections: [],
         },
         {
           id: "audio", label: "Áudio", icon: "audio",
@@ -8040,6 +8155,167 @@
       }
     }
 
+    // Painel customizado da categoria "Contas" nas Configurações.
+    async function renderAccountsPanel(main) {
+      const TZBR = "America/Sao_Paulo";
+      const fmtReset = (v) => {
+        if (v == null) return null;
+        const d = new Date(v); if (isNaN(d)) return null;
+        try {
+          return new Intl.DateTimeFormat("pt-BR", { timeZone: TZBR, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(d).replace(",", "");
+        } catch { return null; }
+      };
+      const cls = (p) => (p == null ? "low" : p >= 90 ? "high" : p >= 70 ? "mid" : "low");
+      const pct = (p) => (p == null ? "–" : Math.round(p) + "%");
+
+      main.innerHTML = `<div class="acc-panel"><div class="acc-msg">carregando contas…</div></div>`;
+      const panel = main.querySelector(".acc-panel");
+
+      function bar(label, pctVal, resetVal) {
+        if (pctVal == null) {
+          return `<div class="acc-line"><span class="acc-line-lbl">${label}</span>` +
+            `<span class="acc-bar"><span class="acc-bar-fill low" style="width:0%"></span></span>` +
+            `<span class="acc-line-pct">–</span><span class="acc-line-reset"></span></div>`;
+        }
+        const w = Math.min(100, Math.max(0, pctVal));
+        const r = fmtReset(resetVal);
+        return `<div class="acc-line">` +
+          `<span class="acc-line-lbl">${label}</span>` +
+          `<span class="acc-bar"><span class="acc-bar-fill ${cls(pctVal)}" style="width:${w}%"></span></span>` +
+          `<span class="acc-line-pct">${pct(pctVal)}</span>` +
+          `<span class="acc-line-reset">${r ? "reset " + r : ""}</span></div>`;
+      }
+
+      function row(acc, platLabel) {
+        let body;
+        if (acc.status === "ok") {
+          body = bar("5h", acc.fiveHour, acc.fiveHourReset) +
+                 bar("7d", acc.weekly, acc.weeklyReset);
+        } else if (acc.status === "expired") {
+          body = `<div class="acc-msg warn">sessão expirada — relogar no terminal</div>`;
+        } else if (acc.status === "ratelimited") {
+          body = `<div class="acc-msg">limite de consultas (429) — tente em instantes</div>`;
+        } else if (acc.status === "error") {
+          body = `<div class="acc-msg">não foi possível consultar agora</div>`;
+        } else {
+          body = `<div class="acc-msg">sem dados — clique “⟳ Atualizar”</div>`;
+        }
+        const actions =
+          (acc.active
+            ? `<span class="acc-badge-active">● ativa</span>`
+            : `<button class="acc-btn" data-act="switch" data-plat="${acc.platform}" data-id="${acc.id}">Ativar</button>`) +
+          `<button class="acc-icon-btn" data-act="remove" data-plat="${acc.platform}" data-id="${acc.id}" data-email="${acc.email}" title="Remover do gerenciamento">${SV_ICONS.trash}</button>`;
+        return `<div class="acc-row2 ${acc.active ? "is-active" : ""}">` +
+          `<div class="acc-row2-head">` +
+            `<div class="acc-meta">` +
+              `<span class="usage-acc-plat ${acc.platform}">${platLabel}</span>` +
+              `<span class="acc-email" title="${acc.email}">${acc.email}</span>` +
+              (acc.plan ? `<span class="acc-plan">${acc.plan}</span>` : "") +
+            `</div><div class="acc-actions">${actions}</div></div>` +
+          `<div class="acc-bars">${body}</div></div>`;
+      }
+
+      function groupLabel(text, platform) {
+        return `<div class="acc-group-label"><span>${text}</span>` +
+          `<button class="acc-btn ghost small" data-act="add" data-plat="${platform}">+ Adicionar conta logada</button></div>`;
+      }
+
+      function render(table) {
+        const claude = (table.claude || []).map((a) => row(a, "Claude")).join("");
+        const codex = (table.codex || []).map((a) => row(a, "Codex")).join("");
+        panel.innerHTML =
+          `<div class="acc-head"><div class="acc-title">Contas conectadas</div>` +
+          `<button class="acc-btn ghost" id="accRefreshCodex">⟳ Atualizar</button></div>` +
+          groupLabel("Anthropic / Claude", "claude") +
+          (claude || '<div class="acc-msg">nenhuma conta Claude gerenciada</div>') +
+          groupLabel("Codex / ChatGPT", "codex") +
+          (codex || '<div class="acc-msg">nenhuma conta Codex gerenciada</div>') +
+          `<div class="acc-foot-note">Trocar a conta vale para <b>novos</b> terminais; sessões já abertas seguem na conta anterior. ` +
+          `“Adicionar” captura a conta que estiver logada no momento (faça <code>claude</code>/<code>codex login</code> antes). ` +
+          `O uso (Claude e Codex) atualiza sozinho a cada 20 min; use ⟳ para forçar agora.</div>`;
+
+        // trocar de conta
+        panel.querySelectorAll('[data-act="switch"]').forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            btn.disabled = true; btn.textContent = "trocando…";
+            try {
+              const j = await postJson("/accounts/switch", { platform: btn.dataset.plat, id: btn.dataset.id });
+              if (j.error) throw new Error(j.error);
+              await load(true);
+              window.__loadUsageBar && window.__loadUsageBar();
+            } catch (e) {
+              btn.disabled = false; btn.textContent = "Ativar";
+              alert("Erro ao trocar de conta: " + e.message);
+            }
+          });
+        });
+
+        // adicionar conta logada
+        panel.querySelectorAll('[data-act="add"]').forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const plat = btn.dataset.plat;
+            btn.disabled = true; const old = btn.textContent; btn.textContent = "capturando…";
+            try {
+              const j = await postJson("/accounts/add", { platform: plat });
+              if (j.error) throw new Error(j.error);
+              await load(true);
+              window.__loadUsageBar && window.__loadUsageBar();
+            } catch (e) {
+              alert("Erro ao adicionar conta: " + e.message + "\n\nDica: faça login da conta no terminal (claude / codex login) antes de adicionar.");
+            } finally { btn.disabled = false; btn.textContent = old; }
+          });
+        });
+
+        // remover conta
+        panel.querySelectorAll('[data-act="remove"]').forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const email = btn.dataset.email;
+            if (!confirm(`Remover a conta "${email}" do gerenciamento?\n\nIsso apaga só o registro/backup no Cockpit — não desloga nem apaga a conta de verdade.`)) return;
+            btn.disabled = true;
+            try {
+              const j = await postJson("/accounts/remove", { platform: btn.dataset.plat, id: btn.dataset.id });
+              if (j.error) throw new Error(j.error);
+              await load(true);
+              window.__loadUsageBar && window.__loadUsageBar();
+            } catch (e) {
+              btn.disabled = false;
+              alert("Erro ao remover: " + e.message);
+            }
+          });
+        });
+
+        const rc = panel.querySelector("#accRefreshCodex");
+        rc?.addEventListener("click", async () => {
+          rc.disabled = true; const old = rc.textContent;
+          rc.textContent = "atualizando…";
+          try {
+            await load(true); // força re-fetch (Claude + Codex via HTTP, instantâneo)
+            window.__loadUsageBar && window.__loadUsageBar(true);
+          } catch (e) {
+            alert("Erro ao atualizar: " + e.message);
+          } finally { rc.disabled = false; rc.textContent = old; }
+        });
+      }
+
+      function postJson(url, body) {
+        return fetch(url, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }).then((r) => r.json());
+      }
+
+      async function load(force) {
+        try {
+          const table = await (await fetch("/accounts/usage" + (force ? "?force=1" : ""))).json();
+          if (table && !table.error) render(table);
+          else panel.innerHTML = `<div class="acc-msg warn">erro ao ler contas</div>`;
+        } catch {
+          panel.innerHTML = `<div class="acc-msg warn">backend offline</div>`;
+        }
+      }
+      load();
+    }
+
     function showSettingsModal() {
       // garante que temos o voice config no client antes de abrir (UI sem dados fica vazia)
       if (!voiceConfigCache) requestVoiceConfig();
@@ -8134,6 +8410,12 @@
         const main = overlay.querySelector("#svMain");
         const cat = getCat();
         main.innerHTML = "";
+
+        // categoria com painel customizado (ex: Contas)
+        if (cat.custom === "accounts") {
+          renderAccountsPanel(main);
+          return;
+        }
 
         // se a categoria tem abas, renderiza a tab bar
         if (cat.tabs && cat.tabs.length > 1) {
@@ -9483,6 +9765,97 @@
         window.cockpitDesktop.toggleMaximize();
       });
     }
+
+    // ===================== BARRA DE USO DAS CONTAS =====================
+    // Mostra o consumo (5h/semanal) da conta ATIVA de cada plataforma no
+    // rodapé da sidebar. Claude atualiza sozinho (HTTP barato); Codex mostra
+    // o último valor conhecido (lido dos logs) — atualização real é sob demanda.
+    (function initUsageBar() {
+      const rowsEl = document.getElementById("usageRows");
+      const btnRefresh = document.getElementById("usageRefresh");
+      if (!rowsEl) return;
+
+      const TZBR = "America/Sao_Paulo";
+      function fmtReset(v) {
+        if (v == null) return null;
+        const d = new Date(v); // aceita ISO (Claude) ou epoch ms (Codex)
+        if (isNaN(d)) return null;
+        try {
+          return new Intl.DateTimeFormat("pt-BR", {
+            timeZone: TZBR, day: "2-digit", month: "2-digit",
+            hour: "2-digit", minute: "2-digit",
+          }).format(d).replace(",", "");
+        } catch { return null; }
+      }
+      function cls(p) { return p == null ? "low" : p >= 90 ? "high" : p >= 70 ? "mid" : "low"; }
+
+      function fmtPct(p) { return p == null ? "–" : Math.round(p) + "%"; }
+
+      // Uma única barra (janela de 5h) + os dois números no fim: 5h% / semanal%
+      function usageLine(acc) {
+        const w = Math.min(100, Math.max(0, acc.fiveHour || 0));
+        const r = fmtReset(acc.fiveHourReset);
+        return `<div class="usage-line">` +
+          `<span class="usage-track"><span class="usage-fill ${cls(acc.fiveHour)}" style="width:${w}%"></span></span>` +
+          `<span class="usage-pct">${fmtPct(acc.fiveHour)}` +
+          `<span class="usage-pct-week"> / ${fmtPct(acc.weekly)}</span></span></div>` +
+          (r ? `<div class="usage-reset">reset 5h ${r}</div>` : "");
+      }
+
+      function accBlock(acc, platLabel) {
+        const head =
+          `<div class="usage-acc-head">` +
+          `<span class="usage-acc-plat ${acc.platform}">${platLabel}</span>` +
+          `<span class="usage-acc-name" title="${acc.email}">${acc.email}</span>` +
+          (acc.plan ? `<span class="usage-acc-plan">${acc.plan}</span>` : "") +
+          `</div>`;
+        if (acc.status === "expired") {
+          return `<div class="usage-acc">${head}<div class="usage-nodata">sessão expirada — relogar</div></div>`;
+        }
+        if (acc.status === "ratelimited") {
+          return `<div class="usage-acc">${head}<div class="usage-nodata">limite de consultas (429)</div></div>`;
+        }
+        if (acc.status === "error") {
+          return `<div class="usage-acc">${head}<div class="usage-nodata">indisponível agora</div></div>`;
+        }
+        if (acc.status === "nodata") {
+          return `<div class="usage-acc">${head}<div class="usage-nodata">sem dados — clique ⟳</div></div>`;
+        }
+        return `<div class="usage-acc">${head}${usageLine(acc)}</div>`;
+      }
+
+      function render(table) {
+        const claudeActive = (table.claude || []).find((a) => a.active) || (table.claude || [])[0];
+        const codexActive  = (table.codex  || []).find((a) => a.active) || (table.codex  || [])[0];
+        const parts = [];
+        if (claudeActive) parts.push(accBlock(claudeActive, "Claude"));
+        if (codexActive)  parts.push(accBlock(codexActive, "Codex"));
+        rowsEl.innerHTML = parts.length ? parts.join("") : `<div class="usage-empty">nenhuma conta gerenciada</div>`;
+        // guarda a tabela completa p/ a futura tela de configurações
+        window.__usageTable = table;
+      }
+
+      async function load(force) {
+        try {
+          const res = await fetch("/accounts/usage" + (force ? "?force=1" : ""));
+          const table = await res.json();
+          if (table && !table.error) render(table);
+          else rowsEl.innerHTML = `<div class="usage-empty">erro ao ler uso</div>`;
+        } catch {
+          rowsEl.innerHTML = `<div class="usage-empty">backend offline</div>`;
+        }
+      }
+
+      btnRefresh?.addEventListener("click", () => {
+        btnRefresh.classList.add("spinning");
+        load(true).finally(() => setTimeout(() => btnRefresh.classList.remove("spinning"), 400));
+      });
+
+      load();
+      // atualiza sozinho a cada 20 min (evita rate limit; é só monitoramento)
+      setInterval(load, 20 * 60 * 1000);
+      window.__loadUsageBar = load;
+    })();
   </script>
 </body>
 </html>
