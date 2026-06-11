@@ -117,6 +117,42 @@
       color: var(--text-primary); font-weight: 700;
       letter-spacing: 0.22em;
     }
+    .help-btn {
+      -webkit-app-region: no-drag;
+      display: flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; margin: 0 -2px;
+      padding: 0; border: none; border-radius: 50%;
+      background: transparent; color: var(--text-tertiary);
+      cursor: pointer; transition: color 0.15s, background 0.15s;
+    }
+    .help-btn svg { width: 14px; height: 14px; }
+    .help-btn:hover { color: #5b8def; background: rgba(91,141,239,0.1); }
+    /* Modal de atalhos */
+    .shortcuts-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 4px 26px; margin-top: 6px;
+      max-height: 56vh; overflow-y: auto; padding: 2px;
+    }
+    .shortcuts-group-title {
+      grid-column: 1 / -1;
+      font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: #5b8def; font-weight: 700;
+      margin: 12px 0 2px; padding-bottom: 4px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .shortcuts-group-title:first-child { margin-top: 0; }
+    .shortcut-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 4px 2px; font-size: 12px;
+    }
+    .shortcut-row .desc { color: var(--text-secondary); }
+    .shortcut-row .keys { display: flex; gap: 4px; flex-shrink: 0; }
+    .shortcut-row kbd {
+      font-family: var(--font-ui); font-size: 10.5px; line-height: 1;
+      padding: 3px 6px; color: var(--text-primary);
+      background: var(--bg-4); border: 1px solid var(--border-strong);
+      border-radius: 4px; box-shadow: 0 1px 0 rgba(0,0,0,0.35);
+    }
     .title-version {
       padding: 2px 7px;
       font-size: 9px; letter-spacing: 0.18em;
@@ -2925,6 +2961,9 @@
       <div class="title-spacer"></div>
       <div class="title-bar-text">
         <strong>COCKPIT</strong>
+        <button class="help-btn" id="helpBtn" title="Atalhos de teclado" aria-label="Atalhos de teclado">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
         <span>· cabine de comando</span>
         <span class="title-version" id="titleVersion">…</span>
       </div>
@@ -3402,7 +3441,14 @@
       xt.loadAddon(fit);
       let searchAddon = null;
       try { searchAddon = new window.SearchAddon.SearchAddon(); xt.loadAddon(searchAddon); } catch {}
-      try { xt.loadAddon(new window.WebLinksAddon.WebLinksAddon()); } catch {}
+      // Links só abrem com Ctrl/Cmd+click (estilo VS Code); clique simples não abre.
+      try {
+        xt.loadAddon(new window.WebLinksAddon.WebLinksAddon((event, uri) => {
+          if (event.ctrlKey || event.metaKey) {
+            try { window.open(uri, "_blank"); } catch {}
+          }
+        }));
+      } catch {}
       // Unicode 11: largura correta para emojis, CJK e símbolos modernos
       try {
         xt.loadAddon(new window.Unicode11Addon.Unicode11Addon());
@@ -3441,9 +3487,27 @@
 
       xt.attachCustomKeyEventHandler((e) => {
         const isMod = e.ctrlKey || e.metaKey;
-        // Ctrl+Tab — alterna abas do editor mesmo com foco no terminal
+        // Ctrl+Tab / Ctrl+Shift+Tab — alterna entre as abas de terminal do
+        // projeto. Sem isto o xterm mandava um TAB literal pro shell.
+        // Se houver abas de editor (≥2 arquivos), elas têm prioridade.
         if (e.ctrlKey && !e.altKey && !e.metaKey && e.key === "Tab" && e.type === "keydown") {
           if (cycleEditorTab(e.shiftKey ? -1 : 1)) return false;
+          const p = getProj(proj.id);
+          if (p && p.terminals.length >= 2) {
+            selectAdjacentTerminal(e.shiftKey ? -1 : 1);
+            return false;
+          }
+        }
+        // Ctrl+Backspace — apaga a palavra anterior. O xterm não manda nada útil
+        // nesse caso, então enviamos Alt+Backspace (\x1b\x7f = backward-kill-word
+        // no readline) direto ao PTY.
+        if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key === "Backspace" && e.type === "keydown") {
+          if (ws?.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: "input", projectId: proj.id, terminalId: term.id, data: "\x1b\x7f",
+            }));
+          }
+          return false;
         }
         // Shift+Enter — bloqueia o xterm de processar (o handler global em
         // document keydown capture já enviou \n via WS).
@@ -3884,6 +3948,91 @@
       overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
       document.addEventListener("keydown", kb, true);
     }
+
+    // ============================================================
+    // MODAL DE ATALHOS DE TECLADO
+    // ============================================================
+    // Em Mac, ⌘ (Cmd); nos demais, Ctrl. O app trata ctrlKey||metaKey igual.
+    const SHORTCUT_MOD = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
+    const SHORTCUT_GROUPS = [
+      { title: "Geral", items: [
+        ["Paleta de comandos", [SHORTCUT_MOD, "K"]],
+        ["Novo terminal", [SHORTCUT_MOD, "B"]],
+        ["Painel de arquivos", [SHORTCUT_MOD, "E"]],
+        ["Painel Git", [SHORTCUT_MOD, "G"]],
+        ["Fechar terminal/arquivo", [SHORTCUT_MOD, "W"]],
+      ]},
+      { title: "Terminal", items: [
+        ["Copiar (com seleção) / interromper", [SHORTCUT_MOD, "C"]],
+        ["Colar", [SHORTCUT_MOD, "V"]],
+        ["Buscar no terminal", [SHORTCUT_MOD, "F"]],
+        ["Limpar a tela", [SHORTCUT_MOD, "L"]],
+        ["Ir ao início da linha", ["Ctrl", "A"]],
+        ["Ir ao fim da linha", ["Ctrl", "E"]],
+        ["Apagar a linha inteira", ["Ctrl", "U"]],
+        ["Apagar até o fim da linha", ["Ctrl", "K"]],
+        ["Apagar a palavra anterior", ["Ctrl", "Backspace"]],
+        ["Quebra de linha (sem enviar)", ["Shift", "Enter"]],
+        ["Aumentar / diminuir fonte", [SHORTCUT_MOD, "+ / −"]],
+        ["Resetar fonte", [SHORTCUT_MOD, "0"]],
+        ["Reiniciar shell", [SHORTCUT_MOD, "Shift", "R"]],
+        ["Próximo / anterior terminal", ["Ctrl", "Tab"]],
+        ["Terminal anterior / próximo", [SHORTCUT_MOD, "Shift", "[ / ]"]],
+        ["Ir à aba de terminal 1–9", [SHORTCUT_MOD, "Shift", "1–9"]],
+      ]},
+      { title: "Editor de arquivos", items: [
+        ["Salvar arquivo", [SHORTCUT_MOD, "S"]],
+        ["Renomear arquivo / aba", ["F2"]],
+        ["Excluir arquivo ativo", [SHORTCUT_MOD, "Delete"]],
+      ]},
+      { title: "Voz e projetos", items: [
+        ["Ditado por voz (gravar)", [SHORTCUT_MOD, "Espaço"]],
+        ["Executar comando rápido 1–9", ["Alt", "1–9"]],
+      ]},
+      { title: "Seletor de pasta", items: [
+        ["Subir um nível", ["Backspace"]],
+        ["Mostrar/ocultar pastas ocultas", ["Ctrl", "H"]],
+      ]},
+    ];
+
+    let shortcutsOpen = false;
+    function openShortcutsModal() {
+      if (shortcutsOpen) return;
+      shortcutsOpen = true;
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay visible";
+      const groupsHtml = SHORTCUT_GROUPS.map((g) => {
+        const rows = g.items.map(([desc, keys]) => `
+          <div class="shortcut-row">
+            <span class="desc">${escapeHtml(desc)}</span>
+            <span class="keys">${keys.map((k) => `<kbd>${escapeHtml(k)}</kbd>`).join("")}</span>
+          </div>`).join("");
+        return `<div class="shortcuts-group-title">${escapeHtml(g.title)}</div>${rows}`;
+      }).join("");
+      overlay.innerHTML = `
+        <div class="modal modal-form" role="dialog" aria-modal="true" style="width:620px;max-width:92vw">
+          <div class="modal-content" style="padding-bottom:10px">
+            <div class="modal-title">Atalhos de teclado</div>
+            <div style="font-size:11.5px;color:var(--text-tertiary);text-align:center;margin-top:4px">${SHORTCUT_MOD === "⌘" ? "⌘ = Command" : "Ctrl ou ⌘"} · pressione Esc para fechar</div>
+            <div class="shortcuts-grid">${groupsHtml}</div>
+          </div>
+          <div class="modal-buttons">
+            <button class="modal-btn primary confirm-btn" type="button">Fechar</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const close = () => {
+        shortcutsOpen = false;
+        document.removeEventListener("keydown", kb, true);
+        overlay.style.transition = "opacity 140ms ease"; overlay.style.opacity = "0";
+        setTimeout(() => overlay.remove(), 150);
+      };
+      const kb = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
+      overlay.querySelector(".confirm-btn").addEventListener("click", close);
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+      document.addEventListener("keydown", kb, true);
+    }
+    document.getElementById("helpBtn")?.addEventListener("click", openShortcutsModal);
 
     // ============================================================
     // BUSCA NO TERMINAL

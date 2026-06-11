@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.8.1] — 2026-06-11
+
+### Adicionado
+- **Modal de atalhos de teclado** — novo botão de ajuda (?) ao lado do título "COCKPIT" abre um painel com todos os atalhos, agrupados por contexto (Geral, Terminal, Editor, Voz e projetos, Seletor de pasta). Fecha com Esc, clique fora ou no botão.
+- **Ctrl+Backspace no terminal** — apaga a palavra anterior (envia `ESC+DEL` = `backward-kill-word` do readline).
+
+### Corrigido
+- **Ctrl+Tab não trocava de aba de terminal** — o atalho só ciclava abas do editor (e só com 2+ arquivos abertos); fora disso vazava um TAB literal pro shell. Agora cicla as abas de terminal do projeto ativo (Ctrl+Shift+Tab volta), mantendo a prioridade das abas de editor quando há 2+ arquivos abertos.
+- **Links do terminal abriam com clique simples** — agora só abrem com Ctrl/Cmd+click (estilo VS Code), evitando aberturas acidentais ao selecionar texto.
+
+---
+
 ## [0.8.0] — 2026-06-09
 
 ### Adicionado
