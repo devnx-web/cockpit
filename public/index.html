@@ -4104,14 +4104,29 @@
     // Limpa o texto selecionado no xterm para colar em outros apps sem o
     // "estilo terminal": o xterm preenche cada linha com espaços até o fim
     // da coluna visível, e ao colar isso vira pseudo-tabs/colunas tortas.
-    // Estratégia conservadora: rtrim por linha (preserva indentação à esquerda,
-    // segura pra código) e tabs literais viram 1 espaço.
+    // Estratégia: rtrim por linha + dedent (remove a margem comum a todas as
+    // linhas não-vazias), pra o texto colar "desde o início" como num bloco de
+    // notas, mas preservando a estrutura relativa da indentação (seguro pra
+    // código). Tabs literais viram 1 espaço e nbsp vira espaço normal.
     function cleanTerminalSelection(text) {
-      return text
+      const lines = text
         .replace(/\t/g, " ")
         .replace(/ /g, " ")
         .split("\n")
         .map((line) => line.replace(/[  ]+$/, ""))
+        ;
+
+      // menor indentação entre as linhas não-vazias = margem comum a remover
+      let minIndent = Infinity;
+      for (const line of lines) {
+        if (line.trim() === "") continue;
+        const indent = line.match(/^ */)[0].length;
+        if (indent < minIndent) minIndent = indent;
+      }
+      if (minIndent === Infinity) minIndent = 0;
+
+      return lines
+        .map((line) => (line.trim() === "" ? "" : line.slice(minIndent)))
         .join("\n")
         .replace(/\n{3,}/g, "\n\n");
     }

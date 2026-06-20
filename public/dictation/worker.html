@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Cockpit — dictation worker</title>
+</head>
+<body>
+  <!-- Renderer oculto: captura o mic via AudioWorklet e manda o PCM pro main
+       (que transcreve no Groq). Sem UI; conversa via IPC (dictation-preload). -->
+  <script type="module" src="/dictation/worker.js"></script>
+</body>
+</html>

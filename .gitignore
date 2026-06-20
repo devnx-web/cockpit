@@ -14,3 +14,6 @@ public/vendor/
 
 # Config local do daemon de voz (paths absolutos do ambiente)
 config.json
+
+# Chave da API Groq (STT do ditado) — nunca commitar
+.groq-key

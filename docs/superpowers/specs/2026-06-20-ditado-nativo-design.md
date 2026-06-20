@@ -1,7 +1,48 @@
-# Ditado nativo no Cockpit (transformers.js + WebGPU)
+# Ditado nativo no Cockpit (STT por voz)
 
 **Data:** 2026-06-20
-**Status:** aprovado (design) — implementação em andamento
+**Status:** ✅ implementado — transcrição via **Groq** (whisper-large-v3-turbo)
+
+> ## ⚠️ Arquitetura final (substitui o design WebGPU abaixo)
+>
+> O design original (Whisper local via transformers.js + WebGPU) foi
+> **abandonado** depois de validar na prática:
+> - **WebGPU**: carrega o modelo mas **trava a inferência** (Electron 41 + Linux
+>   + NVIDIA) — congela em qualquer modelo testado.
+> - **CPU/WASM**: funciona, mas o `whisper-base/small` local errava muito; e a
+>   captura via `ScriptProcessorNode` (thread principal, travada pelo modelo)
+>   **picotava o áudio** — até o whisper de referência lia lixo do WAV.
+>
+> **Solução final (a que está no código):**
+> 1. **Captura** no worker oculto via **AudioWorklet** (thread de áudio, não
+>    picota) → PCM 16k mono pro main.
+> 2. **Transcrição** no **Groq** (`whisper-large-v3-turbo`), API compatível com a
+>    da OpenAI. ~0,5–1s, qualidade excelente. Sem modelo local.
+> 3. **Injeção** imediata via `xdotool type` na janela focada (o overlay não
+>    rouba foco, então não precisa de `windowactivate`).
+>
+> **Gatilho/UX:** Ctrl+Espaço (toggle global) → overlay "Ouvindo…" →
+> "Transcrevendo…" → texto na janela. Sem preview ao vivo (seria de um motor
+> diferente do Groq = sempre divergente).
+>
+> **Config** (`modules/voice/config.json` → bloco `dictation`):
+> `enabled`, `hotkey` (ex. `Control+Space`), `provider: "groq"`,
+> `model: "whisper-large-v3-turbo"`, `language: "pt"`, `api_key` (opcional).
+>
+> **Chave Groq** (`getGroqKey`, nesta ordem): `dictation.api_key` no config →
+> env `GROQ_API_KEY` → arquivo `.groq-key` (gitignored) ao lado do config
+> (userData em produção) ou na raiz do projeto (dev). **Para distribuir, cada
+> usuário usa a própria chave** — não embutir a chave pessoal no pacote.
+>
+> **Arquivos:** `lib/dictation-native.js` (orquestra + Groq + xdotool),
+> `public/dictation/{worker.html,worker.js,capture-worklet.js,overlay.*}`,
+> `dictation-preload.cjs`, wiring em `electron-main.js`.
+>
+> Removido no release: dependência `@huggingface/transformers` + onnxruntime e o
+> vendor `public/vendor/transformers/`.
+>
+> ---
+> _O texto abaixo é o design original (histórico), mantido por contexto._
 
 ## Problema
 

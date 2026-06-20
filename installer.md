@@ -2,9 +2,9 @@
 
 Cabine de comando para múltiplos agentes de IA em vários projetos. Roda como app desktop em Linux (Electron + node-pty + xterm.js).
 
-Versão atual: **0.8.1** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.8.1/CHANGELOG.md))
+Versão atual: **0.8.3** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.8.3/CHANGELOG.md))
 
-> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.8.1/install.sh | sudo bash`
+> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.8.3/install.sh | sudo bash`
 
 ---
 
@@ -23,7 +23,7 @@ Versão atual: **0.8.1** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.8
 ### Opção 1 — `.deb` (recomendado pra Debian/Ubuntu)
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.8.1/cockpit-devnx_0.8.1_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.8.3/cockpit-devnx_0.8.3_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb
 ```
 
@@ -42,7 +42,7 @@ Após instalar, o **Cockpit** aparece no menu de aplicativos. Ou abra pelo termi
 Não exige `sudo` nem instala nada no sistema.
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.8.1/Cockpit-0.8.1.AppImage -o ~/Cockpit.AppImage
+curl -L https://arquivos.devnx.com.br/cockpit/v0.8.3/Cockpit-0.8.3.AppImage -o ~/Cockpit.AppImage
 chmod +x ~/Cockpit.AppImage
 ~/Cockpit.AppImage
 ```
@@ -131,7 +131,7 @@ Edite `voice-config.json` e troque `tts_engine` para:
 ### A partir do `.deb`
 ```bash
 pkill -f "/opt/Cockpit/cockpit" 2>/dev/null    # fecha o app
-curl -L https://arquivos.devnx.com.br/cockpit/v0.8.1/cockpit-devnx_0.8.1_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.8.3/cockpit-devnx_0.8.3_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb       # substitui a versão anterior
 ```
 
@@ -147,7 +147,7 @@ Baixe o novo arquivo e substitua o antigo.
 ```bash
 # .deb
 dpkg -l cockpit
-# espera: ii  cockpit-devnx  0.8.1  amd64
+# espera: ii  cockpit-devnx  0.8.3  amd64
 
 # AppImage (sem dpkg)
 ~/Cockpit.AppImage --version
@@ -255,7 +255,7 @@ sudo pacman -S fuse2
 
 ## Versões anteriores
 
-Disponíveis no mesmo bucket — basta trocar `v0.8.1` no path:
+Disponíveis no mesmo bucket — basta trocar `v0.8.3` no path:
 
 ```
 https://arquivos.devnx.com.br/cockpit/v<MAJOR.MINOR.PATCH>/cockpit_<versão>_amd64.deb
@@ -271,7 +271,7 @@ Histórico completo: [CHANGELOG.md](./CHANGELOG.md)
 Tudo num único comando:
 
 ```bash
-npm run release -- 0.8.1
+npm run release -- 0.8.3
 ```
 
 Isso roda `scripts/release.sh`, que faz nesta ordem:
@@ -294,9 +294,9 @@ Isso roda `scripts/release.sh`, que faz nesta ordem:
 ### Overrides via env
 
 ```bash
-COCKPIT_AWS_PROFILE=outro-profile  npm run release -- 0.8.1
-COCKPIT_SKIP_UPLOAD=1              npm run release -- 0.8.1    # só local
-COCKPIT_SKIP_BUILD=1               npm run release -- 0.8.1    # só upload
+COCKPIT_AWS_PROFILE=outro-profile  npm run release -- 0.8.3
+COCKPIT_SKIP_UPLOAD=1              npm run release -- 0.8.3    # só local
+COCKPIT_SKIP_BUILD=1               npm run release -- 0.8.3    # só upload
 ```
 
 ### Pós-release
@@ -304,14 +304,14 @@ COCKPIT_SKIP_BUILD=1               npm run release -- 0.8.1    # só upload
 Depois que o release subiu, valide:
 
 ```bash
-curl -sI https://arquivos.devnx.com.br/cockpit/v0.8.1/install.sh   # HTTP/2 200
-curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.8.1/install.sh | sudo bash
+curl -sI https://arquivos.devnx.com.br/cockpit/v0.8.3/install.sh   # HTTP/2 200
+curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.8.3/install.sh | sudo bash
 ```
 
-Commitar a v0.8.1 (tag opcional):
+Commitar a v0.8.3 (tag opcional):
 
 ```bash
-git add -A && git commit -m "release: v0.8.1 — <resumo>"
-git tag v0.8.1
+git add -A && git commit -m "release: v0.8.3 — <resumo>"
+git tag v0.8.3
 git push --tags
 ```

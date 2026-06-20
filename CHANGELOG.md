@@ -10,6 +10,20 @@ _(nada ainda)_
 
 ---
 
+## [0.8.3] — 2026-06-20
+
+### Adicionado
+- **Ditado por voz global (Ctrl+Espaço)** — aperte o atalho em qualquer janela do desktop, fale, aperte de novo e o texto é transcrito e digitado no campo que estava focado. A transcrição usa o **Groq** (`whisper-large-v3-turbo`, rápido e preciso) e a captura do microfone roda num **AudioWorklet** (áudio limpo). É opt-in e configurável em `modules/voice/config.json` no bloco `dictation`: `enabled`, `hotkey` (ex. `Control+Space`), `model`, `language` e `api_key`. Requer uma chave do Groq (em `dictation.api_key`, no env `GROQ_API_KEY`, ou num arquivo `.groq-key`).
+
+---
+
+## [0.8.2] — 2026-06-17
+
+### Corrigido
+- **"Copiar como texto" do terminal agora cola desde o início** — a limpeza era conservadora demais (só `rtrim`) e mantinha toda a margem esquerda da TUI, fazendo o texto colar afastado do começo. Agora aplica _dedent_: remove a indentação comum a todas as linhas não-vazias, deixando o texto flush à esquerda como num bloco de notas, mas preservando a estrutura relativa da indentação (seguro pra código).
+
+---
+
 ## [0.8.1] — 2026-06-11
 
 ### Adicionado

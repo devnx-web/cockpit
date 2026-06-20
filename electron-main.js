@@ -1,14 +1,24 @@
 // Cockpit — Electron main process
 // Sobe o server.js in-process e abre uma janela frameless apontando pra ele.
 
-import { app, BrowserWindow, ipcMain, shell, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, shell, nativeImage, session } from "electron";
 import path from "path";
 import fs from "fs";
 import url from "url";
 import { startServer } from "./server.js";
+import { initDictation, disposeDictation, getStatus as dictationStatus, setEnabled as dictationSetEnabled } from "./lib/dictation-native.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
+
+// Porta de loopback fixa (origem estável pro worker de ditado). Cai pra
+// aleatória se estiver ocupada.
+const FIXED_PORT = 47817;
+
+// Instância única — evita dois Cockpits disputando o atalho global Ctrl+Espaço.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
 
 // projects.json fica em userData (gravável em produção, fora do asar)
 function ensureProjectsFile() {
@@ -73,13 +83,14 @@ function ensureVoiceLogsDir() {
 
 let mainWindow = null;
 let serverInstance = null;
+let voiceConfigPathRef = null;
 
 async function bootServer() {
   const projectsPath = ensureProjectsFile();
   const voiceConfigPath = ensureVoiceConfigFile();
+  voiceConfigPathRef = voiceConfigPath;
   const voiceLogsDir = ensureVoiceLogsDir();
-  serverInstance = await startServer({
-    port: 0, // OS escolhe
+  const common = {
     rootDir: __dirname,
     publicDir: path.join(__dirname, "public"),
     projectsPath,
@@ -87,7 +98,14 @@ async function bootServer() {
     voiceLogsDir,
     voiceEnabled: process.platform === "linux",
     dictationEnabled: process.platform === "linux",
-  });
+  };
+  // Tenta a porta fixa (origem estável p/ cache do modelo); cai pra aleatória.
+  try {
+    serverInstance = await startServer({ port: FIXED_PORT, ...common });
+  } catch (e) {
+    console.warn(`porta ${FIXED_PORT} indisponível (${e?.code || e?.message}); usando aleatória`);
+    serverInstance = await startServer({ port: 0, ...common });
+  }
   return serverInstance;
 }
 
@@ -150,6 +168,10 @@ ipcMain.handle("window:close", () => mainWindow?.close());
 ipcMain.handle("window:is-maximized", () => !!mainWindow?.isMaximized());
 ipcMain.handle("app:platform", () => process.platform);
 
+// Ditado por voz nativo — status e liga/desliga (painel de voz)
+ipcMain.handle("dictation:get-status", () => dictationStatus());
+ipcMain.handle("dictation:set-enabled", (_e, enabled) => dictationSetEnabled(enabled));
+
 // shell.showItemInFolder revela o arquivo no gerenciador de arquivos do SO
 // (Nautilus/Files no Linux, Finder no macOS, Explorer no Windows). Se for
 // pasta, abre a pasta-pai com a pasta destacada.
@@ -209,7 +231,6 @@ app.whenReady().then(async () => {
   // explicitamente clicou no botão 🎙 / Ctrl+Espaço. Sem isso, alguns builds
   // do Chromium negam getUserMedia silenciosamente.
   try {
-    const { session } = require("electron");
     session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
       if (permission === "media" || permission === "microphone" || permission === "audioCapture") {
         return cb(true);
@@ -226,6 +247,8 @@ app.whenReady().then(async () => {
   try {
     const inst = await bootServer();
     createWindow(inst.url);
+    // Ditado nativo (Ctrl+Espaço global). Opt-in por config; só Linux/X11.
+    initDictation({ serverUrl: inst.url, configPath: voiceConfigPathRef });
   } catch (e) {
     console.error("falha ao subir servidor:", e);
     app.quit();
@@ -248,6 +271,7 @@ app.on("before-quit", async (e) => {
   if (serverInstance) {
     e.preventDefault();
     shuttingDown = true;
+    try { disposeDictation(); } catch {}
     try { await serverInstance.shutdown({ exit: false }); } catch {}
     serverInstance = null;
     app.exit(0);

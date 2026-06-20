@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'self';" />
+  <title>Cockpit — ditado</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0; height: 100%; width: 100%;
+      background: transparent; overflow: hidden;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      -webkit-user-select: none; user-select: none; cursor: default;
+    }
+    #card {
+      position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+      max-width: 92%; min-width: 240px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 18px; border-radius: 16px;
+      background: rgba(16, 18, 22, 0.92);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);
+      backdrop-filter: blur(10px);
+      opacity: 0; transition: opacity .15s ease;
+    }
+    #card.show { opacity: 1; }
+    #dot {
+      flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%;
+      background: #d34615; box-shadow: 0 0 0 0 rgba(211,70,21,.6);
+    }
+    #card.recording #dot { animation: pulse 1.2s infinite; }
+    #card.transcribing #dot { background: #e0a72a; animation: none; }
+    #card.done #dot { background: #2ecc71; animation: none; }
+    #card.error #dot { background: #e0392a; animation: none; }
+    #card.info #dot { background: #4a9eea; animation: none; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(211,70,21,.55); }
+      70% { box-shadow: 0 0 0 10px rgba(211,70,21,0); }
+      100% { box-shadow: 0 0 0 0 rgba(211,70,21,0); }
+    }
+    #text {
+      color: #f1f3f5; font-size: 15px; line-height: 1.35;
+      max-height: 4.1em; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    }
+    #text.placeholder { color: #9aa3ad; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div id="card"><div id="dot"></div><div id="text" class="placeholder">Ouvindo…</div></div>
+  <script src="/dictation/overlay.js"></script>
+</body>
+</html>

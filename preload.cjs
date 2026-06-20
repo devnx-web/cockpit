@@ -23,4 +23,9 @@ contextBridge.exposeInMainWorld("cockpitDesktop", {
   getPathForFile: (file) => {
     try { return webUtils.getPathForFile(file); } catch { return ""; }
   },
+  // Ditado por voz nativo (Ctrl+Espaço). status/liga-desliga p/ o painel de voz.
+  dictation: {
+    getStatus: () => ipcRenderer.invoke("dictation:get-status"),
+    setEnabled: (enabled) => ipcRenderer.invoke("dictation:set-enabled", enabled),
+  },
 });

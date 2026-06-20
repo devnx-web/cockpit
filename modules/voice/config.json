@@ -15,6 +15,13 @@
     "dtype": "float16",
     "socket_path": "/tmp/claude-voice.sock",
     "log_file": "/home/ftgk/cockpit/modules/voice/logs/daemon.log",
+    "dictation": {
+        "enabled": true,
+        "hotkey": "Control+Space",
+        "provider": "groq",
+        "model": "whisper-large-v3-turbo",
+        "language": "pt"
+    },
     "pronunciation": {
         ".py": " ponto pi",
         ".js": " ponto djei ési",

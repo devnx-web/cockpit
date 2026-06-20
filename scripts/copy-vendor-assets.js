@@ -83,5 +83,7 @@ function copyMonaco() {
 fs.mkdirSync(VENDOR, { recursive: true });
 copyXterm();
 copyMonaco();
+// O ditado por voz transcreve no Groq (nuvem) — não vendoriza modelo local.
+rmrf(path.join(VENDOR, "transformers"));
 // Garante que um diretório de fontes legado não fique para trás após o downgrade.
 rmrf(path.join(VENDOR, "fonts"));
