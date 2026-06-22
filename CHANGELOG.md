@@ -10,6 +10,14 @@ _(nada ainda)_
 
 ---
 
+## [0.8.5] — 2026-06-22
+
+### Corrigido
+- **Copiar e colar pararam de funcionar no terminal** — o handler de permissões do Electron (adicionado para liberar o microfone do ditado) só permitia `media`/`microphone`/`audioCapture` e negava todo o resto, inclusive `clipboard-read`. Como o copiar/colar do terminal usa `navigator.clipboard.read()`/`readText()`/`writeText()`, o paste passou a ser bloqueado — e o erro era engolido em silêncio (`catch {}`), por isso falhava sem aviso. Funcionava em outros apps porque o clipboard do SO estava OK; só a janela do Cockpit bloqueava. Agora `clipboard-read` e `clipboard-sanitized-write` estão liberados.
+- **Ditado por voz não funcionava no app instalado** — o `dictation-preload.cjs` não estava na lista `build.files` do empacotamento, então não ia para dentro do asar. Sem ele, o worker oculto ficava sem a ponte IPC (`window.dictation`) e o Ctrl+Espaço gravava sem nunca transcrever. No 0.8.3 o ditado só funcionava rodando a partir do código (dev). Agora o preload é empacotado e o ditado funciona na instalação.
+
+---
+
 ## [0.8.3] — 2026-06-20
 
 ### Adicionado

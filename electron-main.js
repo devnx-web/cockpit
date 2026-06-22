@@ -231,14 +231,17 @@ app.whenReady().then(async () => {
   // explicitamente clicou no botão 🎙 / Ctrl+Espaço. Sem isso, alguns builds
   // do Chromium negam getUserMedia silenciosamente.
   try {
+    const ALLOWED_PERMS = new Set([
+      "media", "microphone", "audioCapture",
+      // colar/copiar no terminal usa navigator.clipboard.read/readText/writeText,
+      // que exigem estas permissões. Sem elas o paste falha silenciosamente.
+      "clipboard-read", "clipboard-sanitized-write",
+    ]);
     session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
-      if (permission === "media" || permission === "microphone" || permission === "audioCapture") {
-        return cb(true);
-      }
-      cb(false);
+      cb(ALLOWED_PERMS.has(permission));
     });
     session.defaultSession.setPermissionCheckHandler((wc, permission) => {
-      return permission === "media" || permission === "microphone" || permission === "audioCapture";
+      return ALLOWED_PERMS.has(permission);
     });
   } catch (e) {
     console.warn("setPermissionHandler falhou:", e?.message);
