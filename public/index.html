@@ -15,6 +15,10 @@
   <script src="/vendor/monaco/vs/loader.js"></script>
   <script src="/file-icons/icon-map.js"></script>
   <script src="/lsp-client.js"></script>
+  <script type="module">
+    import * as Privacy from "/privacy.js";
+    window.CockpitPrivacy = Privacy;
+  </script>
   <style>
     :root {
       --bg-0: #0a0b0d;
@@ -454,6 +458,10 @@
     }
     .usage-acc-plat.claude { background: rgba(217,119,87,.18); color: #e0a07f; }
     .usage-acc-plat.codex  { background: rgba(74,222,128,.14); color: #74d39a; }
+    body.privacy-on .usage-acc-plat.claude,
+    body.privacy-on .usage-acc-plat.codex {
+      background: rgba(148,163,184,.16); color: var(--text-secondary);
+    }
     .usage-acc-name {
       font-size: 11px; color: var(--text-secondary); font-weight: 500;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
@@ -527,6 +535,55 @@
     .acc-msg.warn { color: var(--status-waiting); }
     .acc-foot-note { font-size: 10.5px; color: var(--text-tertiary); margin-top: 14px; line-height: 1.5; }
     .acc-foot-note code { font-size: 10px; background: var(--bg-3); padding: 1px 4px; border-radius: 3px; }
+    .team-vault {
+      position: relative; overflow: hidden;
+      border: 1px solid rgba(74,222,128,.24); border-radius: 10px;
+      background:
+        linear-gradient(90deg, rgba(74,222,128,.035) 1px, transparent 1px) 0 0 / 22px 22px,
+        linear-gradient(rgba(74,222,128,.035) 1px, transparent 1px) 0 0 / 22px 22px,
+        var(--bg-1);
+      padding: 15px 16px; margin-bottom: 14px;
+    }
+    .team-vault::before {
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+      background: var(--status-running); box-shadow: 0 0 18px rgba(74,222,128,.45);
+    }
+    .team-vault.offline { border-color: var(--border-default); background: var(--bg-1); }
+    .team-vault.offline::before { background: var(--text-disabled); box-shadow: none; }
+    .team-vault-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+    .team-vault-kicker {
+      display: flex; align-items: center; gap: 7px; margin-bottom: 3px;
+      font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--status-running);
+    }
+    .team-vault.offline .team-vault-kicker { color: var(--text-tertiary); }
+    .team-vault-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+      box-shadow: 0 0 0 3px rgba(74,222,128,.09);
+    }
+    .team-vault-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .team-vault-sub { margin-top: 4px; font-size: 10.5px; color: var(--text-tertiary); line-height: 1.45; }
+    .team-vault-actions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+    .team-connect-form { display: grid; grid-template-columns: minmax(170px,1.25fr) minmax(150px,1fr) minmax(140px,1fr) auto; gap: 8px; margin-top: 13px; }
+    .team-input {
+      min-width: 0; background: rgba(0,0,0,.18); border: 1px solid var(--border-default);
+      border-radius: 5px; padding: 7px 9px; color: var(--text-primary);
+      font: 11.5px var(--font-ui); outline: none;
+    }
+    .team-input:focus { border-color: rgba(74,222,128,.55); box-shadow: 0 0 0 2px rgba(74,222,128,.07); }
+    .team-publish {
+      display: grid; grid-template-columns: minmax(130px,.65fr) minmax(240px,1.35fr) auto;
+      gap: 8px; align-items: center; padding: 10px 12px; margin: 7px 0 10px;
+      border: 1px dashed var(--border-default); border-radius: 7px;
+    }
+    .team-publish-label { font-size: 10.5px; color: var(--text-tertiary); grid-column: 1 / -1; }
+    .team-selection-note { display: flex; align-items: center; gap: 6px; color: var(--status-running); font-size: 10px; font-weight: 600; }
+    .team-selection-note::before { content: "AUTO"; font-size: 8px; letter-spacing: .08em; border: 1px solid rgba(74,222,128,.35); padding: 1px 4px; border-radius: 3px; }
+    @media (max-width: 900px) {
+      .team-connect-form, .team-publish { grid-template-columns: 1fr; }
+      .team-publish-label { grid-column: auto; }
+      .team-vault-head { flex-direction: column; }
+    }
     .project-search-wrap {
       flex-shrink: 0;
       padding: 0 10px 6px;
@@ -707,6 +764,13 @@
     .agent-badge .agent-name { color: var(--text-primary); font-weight: 600; text-transform: none; letter-spacing: -0.005em; font-size: 11.5px; }
     .agent-badge .agent-divider { color: var(--text-disabled); }
     .agent-badge .agent-runtime { color: var(--text-secondary); font-variant-numeric: tabular-nums; font-family: var(--font-term); letter-spacing: 0.05em; }
+    .privacy-chip { display: none; }
+    body.privacy-on .privacy-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: rgba(148,163,184,.18); color: var(--text-secondary);
+      user-select: none;
+    }
     .header-actions { display: flex; gap: 4px; }
     .icon-btn {
       width: 28px; height: 28px;
@@ -3052,6 +3116,7 @@
           <span class="breadcrumb-path" id="hdrPath">—</span>
         </div>
         <div class="header-right">
+          <span class="privacy-chip" id="privacyChip" title="Modo discreto ativo (Ctrl+Shift+H)">🕶 discreto</span>
           <div class="agent-badge">
             <span class="status-dot" id="hdrStatusDot"></span>
             <span class="agent-name" id="hdrAgent">—</span>
@@ -3330,6 +3395,48 @@
       cockpitSettings[key] = val;
       localStorage.setItem("cockpit-settings", JSON.stringify(cockpitSettings));
     }
+
+    // ============================================================
+    // MODO DISCRETO
+    // ============================================================
+    let privacyMode = !!getSetting("privacyMode");
+
+    function redact(data) {
+      const P = window.CockpitPrivacy;
+      return P ? P.redactStream(data, privacyMode) : data;
+    }
+    function nlabel(s) {
+      const P = window.CockpitPrivacy;
+      return (P && privacyMode) ? P.neutralizeLabel(s, true) : s;
+    }
+
+    function setPrivacyMode(on) {
+      privacyMode = !!on;
+      setSetting("privacyMode", privacyMode);
+      document.body.classList.toggle("privacy-on", privacyMode);
+      try { renderHeader(); } catch {}
+      try { renderTabs(); } catch {}
+      // Re-renderiza os terminais a partir do buffer cru, para redigir/restaurar
+      // o conteúdo que já estava na tela (ex.: banner de inicialização).
+      for (const inst of xtermInstances.values()) {
+        if (!inst || inst.raw == null) continue;
+        try { inst.term.reset(); inst.term.write(redact(inst.raw)); } catch {}
+      }
+    }
+
+    // Aplica o estado persistido assim que o DOM básico existe.
+    document.body.classList.toggle("privacy-on", privacyMode);
+
+    // Ctrl+Shift+H (ou Cmd+Shift+H) — liga/desliga o modo discreto.
+    // Fase de captura para preceder o handler do xterm.
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey &&
+          (e.key === "H" || e.key === "h")) {
+        e.preventDefault();
+        e.stopPropagation();
+        setPrivacyMode(!privacyMode);
+      }
+    }, true);
 
     // Terminal font size (persisted)
     let termFontSize = parseInt(localStorage.getItem("cockpit-font-size") || "13", 10);
@@ -3657,7 +3764,7 @@
         xt.focus();
       });
 
-      xtermInstances.set(k(proj.id, term.id), { term: xt, fitAddon: fit, container, ro, search: searchAddon, webgl: webglAddon });
+      xtermInstances.set(k(proj.id, term.id), { term: xt, fitAddon: fit, container, ro, search: searchAddon, webgl: webglAddon, raw: "" });
     }
 
     function destroyXterm(projId, tid) {
@@ -3726,8 +3833,8 @@
         pill.className = "qcmd-pill";
         pill.dataset.idx = i;
         pill.style.setProperty("--qcmd-color", col);
-        pill.title = c.cmd;
-        pill.innerHTML = `<span class="qcmd-play">${ICONS.play}</span><span>${escapeHtml(c.label)}</span><span class="qcmd-remove" data-remove="${i}">${ICONS.x}</span>`;
+        pill.title = redact(c.cmd);
+        pill.innerHTML = `<span class="qcmd-play">${ICONS.play}</span><span>${escapeHtml(nlabel(c.label))}</span><span class="qcmd-remove" data-remove="${i}">${ICONS.x}</span>`;
         pill.draggable = true;
 
         pill.addEventListener("click", (e) => {
@@ -4664,7 +4771,7 @@
       document.getElementById("hdrName").textContent = p.name;
       document.getElementById("hdrPath").textContent = p.path;
       if (t) {
-        document.getElementById("hdrAgent").textContent = t.name;
+        document.getElementById("hdrAgent").textContent = nlabel(t.name);
         document.getElementById("hdrRuntime").textContent = t.statusText;
         document.getElementById("hdrStatusDot").className = "status-dot " + t.status;
       } else {
@@ -4710,7 +4817,7 @@
         html += `
           <button class="tab kind-terminal ${active ? "active" : ""}" data-kind="terminal" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" style="--proj-color: ${color}" draggable="true">
             <span class="status-dot ${t.status}"></span>
-            <span class="tab-name">${escapeHtml(t.name)}</span>
+            <span class="tab-name">${escapeHtml(nlabel(t.name))}</span>
             <span class="tab-close" data-close="${t.id}" data-kind="terminal" title="Fechar">${ICONS.x}</span>
           </button>`;
       });
@@ -6687,12 +6794,28 @@
       text.textContent = ok ? "conectado" : "reconectando…";
     }
 
+    // Ring buffer cru por terminal: guarda o stream ANTES da redação, para
+    // permitir re-render ao ligar/desligar o Modo Discreto. Cap por bytes.
+    const RAW_CAP = 256 * 1024;
+    function pushRaw(inst, data) {
+      if (!inst || data == null) return;
+      inst.raw = (inst.raw || "") + data;
+      if (inst.raw.length > RAW_CAP) {
+        inst.raw = inst.raw.slice(inst.raw.length - RAW_CAP);
+      }
+    }
+    function writeToTerm(inst, data) {
+      if (!inst) return;
+      pushRaw(inst, data);
+      inst.term.write(redact(data));
+    }
+
     function handleMessage(msg) {
       switch (msg.type) {
         case "hello": handleHello(msg); break;
         case "output": {
           const inst = xtermInstances.get(k(msg.projectId, msg.terminalId));
-          if (inst) inst.term.write(msg.data);
+          if (inst) writeToTerm(inst, msg.data);
           const isActiveView = msg.projectId === activeProjId &&
             msg.terminalId === getActiveTid() &&
             (viewModeByProj.get(activeProjId) || "terminal") === "terminal";
@@ -6733,7 +6856,7 @@
           // replay do buffer histórico (ex.: aviso de path inexistente)
           if (msg.terminal.buffer) {
             const inst = xtermInstances.get(k(msg.projectId, msg.terminal.id));
-            if (inst) inst.term.write(msg.terminal.buffer);
+            if (inst) writeToTerm(inst, msg.terminal.buffer);
           }
           // se for no projeto ativo, foca a nova
           if (msg.projectId === activeProjId) {
@@ -6946,7 +7069,7 @@
           createXterm(proj, t);
           if (t.buffer) {
             const inst = xtermInstances.get(k(p.id, t.id));
-            if (inst) inst.term.write(t.buffer);
+            if (inst) writeToTerm(inst, t.buffer);
           }
         });
         if (p.terminals.length > 0 && !activeTerminalByProj.has(p.id)) {
@@ -8322,6 +8445,8 @@
     // Painel customizado da categoria "Contas" nas Configurações.
     async function renderAccountsPanel(main) {
       const TZBR = "America/Sao_Paulo";
+      const htmlEscapes = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+      const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => htmlEscapes[c]);
       const fmtReset = (v) => {
         if (v == null) return null;
         const d = new Date(v); if (isNaN(d)) return null;
@@ -8330,151 +8455,317 @@
         } catch { return null; }
       };
       const cls = (p) => (p == null ? "low" : p >= 90 ? "high" : p >= 70 ? "mid" : "low");
-      const pct = (p) => (p == null ? "–" : Math.round(p) + "%");
+      const pct = (p) => (p == null ? "–" : Math.round(Number(p)) + "%");
+      const platformOf = (p) => (p === "openai" ? "codex" : p === "codex" ? "codex" : "claude");
 
       main.innerHTML = `<div class="acc-panel"><div class="acc-msg">carregando contas…</div></div>`;
       const panel = main.querySelector(".acc-panel");
 
       function bar(label, pctVal, resetVal) {
-        if (pctVal == null) {
+        const value = pctVal == null ? null : Number(pctVal);
+        if (value == null || !Number.isFinite(value)) {
           return `<div class="acc-line"><span class="acc-line-lbl">${label}</span>` +
             `<span class="acc-bar"><span class="acc-bar-fill low" style="width:0%"></span></span>` +
             `<span class="acc-line-pct">–</span><span class="acc-line-reset"></span></div>`;
         }
-        const w = Math.min(100, Math.max(0, pctVal));
+        const w = Math.min(100, Math.max(0, value));
         const r = fmtReset(resetVal);
         return `<div class="acc-line">` +
           `<span class="acc-line-lbl">${label}</span>` +
-          `<span class="acc-bar"><span class="acc-bar-fill ${cls(pctVal)}" style="width:${w}%"></span></span>` +
-          `<span class="acc-line-pct">${pct(pctVal)}</span>` +
-          `<span class="acc-line-reset">${r ? "reset " + r : ""}</span></div>`;
+          `<span class="acc-bar"><span class="acc-bar-fill ${cls(value)}" style="width:${w}%"></span></span>` +
+          `<span class="acc-line-pct">${pct(value)}</span>` +
+          `<span class="acc-line-reset">${r ? "reset " + esc(r) : ""}</span></div>`;
       }
 
-      function row(acc, platLabel) {
+      function normalizeAccount(raw, team = false) {
+        const provider = raw.provider || raw.platform;
+        const platform = platformOf(provider);
+        return {
+          platform,
+          provider: platform === "codex" ? "openai" : "claude",
+          id: raw.uuid || raw.public_id || raw.id,
+          email: raw.label || raw.email || raw.name || "conta sem nome",
+          plan: raw.plan || raw.subscription_type || null,
+          active: Boolean(raw.active || raw.selected),
+          status: raw.status || (raw.available === false ? "error" : "ok"),
+          fiveHour: raw.fiveHour ?? raw.usage_5h_percent ?? raw.usage?.five_hour?.percent ?? null,
+          fiveHourReset: raw.fiveHourReset ?? raw.usage_5h_reset_at ?? raw.usage?.five_hour?.resets_at ?? raw.usage?.five_hour?.reset_at ?? null,
+          weekly: raw.weekly ?? raw.usage_weekly_percent ?? raw.usage?.weekly?.percent ?? null,
+          weeklyReset: raw.weeklyReset ?? raw.usage_weekly_reset_at ?? raw.usage?.weekly?.resets_at ?? raw.usage?.weekly?.reset_at ?? null,
+          team,
+        };
+      }
+
+      function row(raw, platLabel, team = false) {
+        const acc = normalizeAccount(raw, team);
         let body;
-        if (acc.status === "ok") {
-          body = bar("5h", acc.fiveHour, acc.fiveHourReset) +
-                 bar("7d", acc.weekly, acc.weeklyReset);
-        } else if (acc.status === "expired") {
-          body = `<div class="acc-msg warn">sessão expirada — relogar no terminal</div>`;
+        if (acc.fiveHour != null || acc.weekly != null || ["ok", "available", "healthy"].includes(acc.status)) {
+          body = bar("5h", acc.fiveHour, acc.fiveHourReset) + bar("7d", acc.weekly, acc.weeklyReset);
+        } else if (["expired", "auth_expired", "reauth_required"].includes(acc.status)) {
+          body = `<div class="acc-msg warn">sessão expirada — precisa reautenticar</div>`;
+        } else if (acc.status === "refresh_pending") {
+          body = `<div class="acc-msg">abra o Claude para renovar a leitura de uso</div>`;
         } else if (acc.status === "ratelimited") {
           body = `<div class="acc-msg">limite de consultas (429) — tente em instantes</div>`;
-        } else if (acc.status === "error") {
-          body = `<div class="acc-msg">não foi possível consultar agora</div>`;
+        } else if (["disabled", "unavailable", "error"].includes(acc.status)) {
+          body = `<div class="acc-msg">conta indisponível agora</div>`;
         } else {
-          body = `<div class="acc-msg">sem dados — clique “⟳ Atualizar”</div>`;
+          body = `<div class="acc-msg">sem leitura de uso ainda</div>`;
         }
-        const actions =
-          (acc.active
-            ? `<span class="acc-badge-active">● ativa</span>`
-            : `<button class="acc-btn" data-act="switch" data-plat="${acc.platform}" data-id="${acc.id}">Ativar</button>`) +
-          `<button class="acc-icon-btn" data-act="remove" data-plat="${acc.platform}" data-id="${acc.id}" data-email="${acc.email}" title="Remover do gerenciamento">${SV_ICONS.trash}</button>`;
+
+        let actions;
+        if (team) {
+          actions = acc.active
+            ? `<span class="team-selection-note">selecionada</span>`
+            : `<button class="acc-btn" data-team-select data-provider="${esc(acc.provider)}" data-id="${esc(acc.id)}">Usar em novos terminais</button>`;
+        } else {
+          actions =
+            (acc.active
+              ? `<span class="acc-badge-active">● ativa</span>`
+              : `<button class="acc-btn" data-act="switch" data-plat="${esc(acc.platform)}" data-id="${esc(acc.id)}">Ativar</button>`) +
+            `<button class="acc-icon-btn" data-act="remove" data-plat="${esc(acc.platform)}" data-id="${esc(acc.id)}" data-email="${esc(acc.email)}" title="Remover do gerenciamento">${SV_ICONS.trash}</button>`;
+        }
+
         return `<div class="acc-row2 ${acc.active ? "is-active" : ""}">` +
-          `<div class="acc-row2-head">` +
-            `<div class="acc-meta">` +
-              `<span class="usage-acc-plat ${acc.platform}">${platLabel}</span>` +
-              `<span class="acc-email" title="${acc.email}">${acc.email}</span>` +
-              (acc.plan ? `<span class="acc-plan">${acc.plan}</span>` : "") +
-            `</div><div class="acc-actions">${actions}</div></div>` +
+          `<div class="acc-row2-head"><div class="acc-meta">` +
+            `<span class="usage-acc-plat ${esc(acc.platform)}">${esc(platLabel)}</span>` +
+            `<span class="acc-email" title="${esc(acc.email)}">${esc(acc.email)}</span>` +
+            (acc.plan ? `<span class="acc-plan">${esc(acc.plan)}</span>` : "") +
+          `</div><div class="acc-actions">${actions}</div></div>` +
           `<div class="acc-bars">${body}</div></div>`;
       }
 
-      function groupLabel(text, platform) {
-        return `<div class="acc-group-label"><span>${text}</span>` +
-          `<button class="acc-btn ghost small" data-act="add" data-plat="${platform}">+ Adicionar conta logada</button></div>`;
+      function groupLabel(text, action = "") {
+        return `<div class="acc-group-label"><span>${esc(text)}</span>${action}</div>`;
       }
 
-      function render(table) {
+      function vault(status) {
+        if (!status?.connected) {
+          const savedUrl = esc(status?.baseUrl || "");
+          return `<div class="team-vault offline">` +
+            `<div class="team-vault-head"><div><div class="team-vault-kicker"><span class="team-vault-dot"></span>pool central offline</div>` +
+            `<div class="team-vault-title">Conectar ao DevNX Control</div>` +
+            `<div class="team-vault-sub">Uma autenticação por dispositivo. O Cockpit guarda apenas o token restrito deste dispositivo.</div></div></div>` +
+            `<form class="team-connect-form" id="teamConnectForm">` +
+              `<input class="team-input" id="teamBaseUrl" type="url" required placeholder="https://control.suaempresa.com" value="${savedUrl}" aria-label="URL do DevNX Control">` +
+              `<input class="team-input" id="teamEmail" type="email" required autocomplete="username" placeholder="seu@email.com" aria-label="E-mail">` +
+              `<input class="team-input" id="teamPassword" type="password" required autocomplete="current-password" placeholder="senha" aria-label="Senha">` +
+              `<button class="acc-btn" type="submit">Conectar</button>` +
+            `</form></div>`;
+        }
+        return `<div class="team-vault">` +
+          `<div class="team-vault-head"><div><div class="team-vault-kicker"><span class="team-vault-dot"></span>pool central ativo</div>` +
+          `<div class="team-vault-title">DevNX Control</div>` +
+          `<div class="team-vault-sub">${esc(status.baseUrl || "servidor conectado")} · menor pressão de uso escolhida para novos terminais</div></div>` +
+          `<div class="team-vault-actions"><button class="acc-btn" id="teamOptimize">Otimizar agora</button>` +
+          `<button class="acc-btn ghost" id="teamDisconnect">Desconectar</button></div></div></div>`;
+      }
+
+      function renderLocal(table, teamStatus = {}) {
         const claude = (table.claude || []).map((a) => row(a, "Claude")).join("");
         const codex = (table.codex || []).map((a) => row(a, "Codex")).join("");
-        panel.innerHTML =
-          `<div class="acc-head"><div class="acc-title">Contas conectadas</div>` +
-          `<button class="acc-btn ghost" id="accRefreshCodex">⟳ Atualizar</button></div>` +
-          groupLabel("Anthropic / Claude", "claude") +
+        panel.innerHTML = vault(teamStatus) +
+          `<div class="acc-head"><div class="acc-title">Contas deste computador</div>` +
+          `<button class="acc-btn ghost" id="accRefresh">⟳ Atualizar</button></div>` +
+          groupLabel("Anthropic / Claude", `<button class="acc-btn ghost small" data-act="add" data-plat="claude">+ Adicionar conta logada</button>`) +
           (claude || '<div class="acc-msg">nenhuma conta Claude gerenciada</div>') +
-          groupLabel("Codex / ChatGPT", "codex") +
+          groupLabel("Codex / ChatGPT", `<button class="acc-btn ghost small" data-act="add" data-plat="codex">+ Adicionar conta logada</button>`) +
           (codex || '<div class="acc-msg">nenhuma conta Codex gerenciada</div>') +
-          `<div class="acc-foot-note">Trocar a conta vale para <b>novos</b> terminais; sessões já abertas seguem na conta anterior. ` +
-          `“Adicionar” captura a conta que estiver logada no momento (faça <code>claude</code>/<code>codex login</code> antes). ` +
-          `O uso (Claude e Codex) atualiza sozinho a cada 20 min; use ⟳ para forçar agora.</div>`;
+          `<div class="acc-foot-note">Sem o DevNX Control, as contas ficam somente nesta máquina. ` +
+          `A troca vale para <b>novos</b> terminais; sessões já abertas seguem na conta anterior.</div>`;
+        wireConnect();
+        wireLocal();
+      }
 
-        // trocar de conta
+      function renderTeam(payload, teamStatus) {
+        const list = Array.isArray(payload) ? payload : (payload.accounts || []);
+        const claude = list.filter((a) => platformOf(a.provider || a.platform) === "claude").map((a) => row(a, "Claude", true)).join("");
+        const codex = list.filter((a) => platformOf(a.provider || a.platform) === "codex").map((a) => row(a, "Codex", true)).join("");
+        panel.innerHTML = vault(teamStatus) +
+          `<div class="acc-head"><div class="acc-title">Pool compartilhado</div>` +
+          `<button class="acc-btn ghost" id="teamRefresh">⟳ Sincronizar uso</button></div>` +
+          groupLabel("Anthropic / Claude") +
+          (claude || '<div class="acc-msg">nenhuma conta Claude no pool</div>') +
+          `<form class="team-publish" id="teamClaudePublish">` +
+            `<div class="team-publish-label">Em um terminal fora do pool, execute <code>claude setup-token</code> uma vez e publique o token anual no cofre.</div>` +
+            `<input class="team-input" id="teamClaudeLabel" required placeholder="Nome da conta (ex.: fabio@devnx)">` +
+            `<input class="team-input" id="teamClaudeToken" type="password" required autocomplete="off" placeholder="Token gerado pelo Claude">` +
+            `<button class="acc-btn ghost" type="submit">Publicar Claude</button>` +
+          `</form>` +
+          groupLabel("Codex / ChatGPT", `<button class="acc-btn ghost small" id="teamPublishOpenAI" title="Lê a sessão pessoal em ~/.codex/auth.json">+ Publicar conta Codex logada</button>`) +
+          (codex || '<div class="acc-msg">nenhuma conta Codex no pool</div>') +
+          `<div class="acc-foot-note">O Laravel guarda as credenciais cifradas, renova quando necessário e escolhe a conta com menor uso entre 5h e 7d. ` +
+          `Não há cota por usuário. A seleção afeta somente <b>novos</b> terminais.</div>`;
+        wireTeam();
+      }
+
+      async function requestJson(endpoint, options = {}) {
+        const response = await fetch(endpoint, { cache: "no-store", ...options });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.error) {
+          throw new Error(data?.message || data?.error || `falha HTTP ${response.status}`);
+        }
+        return data;
+      }
+
+      function postJson(endpoint, body) {
+        return requestJson(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        });
+      }
+
+      function wireConnect() {
+        const form = panel.querySelector("#teamConnectForm");
+        form?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const button = form.querySelector('button[type="submit"]');
+          button.disabled = true; button.textContent = "conectando…";
+          try {
+            await postJson("/team/connect", {
+              baseUrl: form.querySelector("#teamBaseUrl").value.trim(),
+              email: form.querySelector("#teamEmail").value.trim(),
+              password: form.querySelector("#teamPassword").value,
+            });
+            form.querySelector("#teamPassword").value = "";
+            await load(true);
+            window.__loadUsageBar && window.__loadUsageBar(true);
+          } catch (error) {
+            form.querySelector("#teamPassword").value = "";
+            alert("Não foi possível conectar: " + error.message);
+            button.disabled = false; button.textContent = "Conectar";
+          }
+        });
+      }
+
+      function wireLocal() {
         panel.querySelectorAll('[data-act="switch"]').forEach((btn) => {
           btn.addEventListener("click", async () => {
             btn.disabled = true; btn.textContent = "trocando…";
             try {
-              const j = await postJson("/accounts/switch", { platform: btn.dataset.plat, id: btn.dataset.id });
-              if (j.error) throw new Error(j.error);
+              await postJson("/accounts/switch", { platform: btn.dataset.plat, id: btn.dataset.id });
               await load(true);
               window.__loadUsageBar && window.__loadUsageBar();
-            } catch (e) {
+            } catch (error) {
+              alert("Erro ao trocar de conta: " + error.message);
               btn.disabled = false; btn.textContent = "Ativar";
-              alert("Erro ao trocar de conta: " + e.message);
             }
           });
         });
-
-        // adicionar conta logada
         panel.querySelectorAll('[data-act="add"]').forEach((btn) => {
           btn.addEventListener("click", async () => {
-            const plat = btn.dataset.plat;
-            btn.disabled = true; const old = btn.textContent; btn.textContent = "capturando…";
+            const old = btn.textContent; btn.disabled = true; btn.textContent = "capturando…";
             try {
-              const j = await postJson("/accounts/add", { platform: plat });
-              if (j.error) throw new Error(j.error);
+              await postJson("/accounts/add", { platform: btn.dataset.plat });
               await load(true);
               window.__loadUsageBar && window.__loadUsageBar();
-            } catch (e) {
-              alert("Erro ao adicionar conta: " + e.message + "\n\nDica: faça login da conta no terminal (claude / codex login) antes de adicionar.");
-            } finally { btn.disabled = false; btn.textContent = old; }
+            } catch (error) {
+              alert("Erro ao adicionar conta: " + error.message + "\n\nFaça login da conta no terminal antes de adicionar.");
+              btn.disabled = false; btn.textContent = old;
+            }
           });
         });
-
-        // remover conta
         panel.querySelectorAll('[data-act="remove"]').forEach((btn) => {
           btn.addEventListener("click", async () => {
             const email = btn.dataset.email;
-            if (!confirm(`Remover a conta "${email}" do gerenciamento?\n\nIsso apaga só o registro/backup no Cockpit — não desloga nem apaga a conta de verdade.`)) return;
-            btn.disabled = true;
+            if (!confirm(`Remover a conta "${email}" do gerenciamento local?`)) return;
             try {
-              const j = await postJson("/accounts/remove", { platform: btn.dataset.plat, id: btn.dataset.id });
-              if (j.error) throw new Error(j.error);
+              btn.disabled = true;
+              await postJson("/accounts/remove", { platform: btn.dataset.plat, id: btn.dataset.id });
               await load(true);
               window.__loadUsageBar && window.__loadUsageBar();
-            } catch (e) {
+            } catch (error) {
+              alert("Erro ao remover: " + error.message);
               btn.disabled = false;
-              alert("Erro ao remover: " + e.message);
             }
           });
         });
-
-        const rc = panel.querySelector("#accRefreshCodex");
-        rc?.addEventListener("click", async () => {
-          rc.disabled = true; const old = rc.textContent;
-          rc.textContent = "atualizando…";
-          try {
-            await load(true); // força re-fetch (Claude + Codex via HTTP, instantâneo)
-            window.__loadUsageBar && window.__loadUsageBar(true);
-          } catch (e) {
-            alert("Erro ao atualizar: " + e.message);
-          } finally { rc.disabled = false; rc.textContent = old; }
+        panel.querySelector("#accRefresh")?.addEventListener("click", async (event) => {
+          const btn = event.currentTarget; btn.disabled = true; btn.textContent = "atualizando…";
+          try { await load(true); window.__loadUsageBar && window.__loadUsageBar(true); }
+          catch (error) { alert("Erro ao atualizar: " + error.message); }
         });
       }
 
-      function postJson(url, body) {
-        return fetch(url, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }).then((r) => r.json());
+      function wireTeam() {
+        panel.querySelector("#teamDisconnect")?.addEventListener("click", async () => {
+          if (!confirm("Desconectar este Cockpit do pool central?")) return;
+          try { await postJson("/team/disconnect"); await load(); }
+          catch (error) { alert("Erro ao desconectar: " + error.message); }
+        });
+        panel.querySelector("#teamOptimize")?.addEventListener("click", async (event) => {
+          const btn = event.currentTarget; btn.disabled = true; btn.textContent = "otimizando…";
+          try {
+            await postJson("/team/optimize", { syncUsage: true });
+            await load();
+            window.__loadUsageBar && window.__loadUsageBar(true);
+          } catch (error) { alert("Erro ao otimizar: " + error.message); btn.disabled = false; btn.textContent = "Otimizar agora"; }
+        });
+        panel.querySelector("#teamRefresh")?.addEventListener("click", async (event) => {
+          const btn = event.currentTarget; btn.disabled = true; btn.textContent = "sincronizando…";
+          try {
+            await postJson("/team/sync", { force: true });
+            await load();
+            window.__loadUsageBar && window.__loadUsageBar(true);
+          } catch (error) { alert("Erro ao sincronizar: " + error.message); btn.disabled = false; btn.textContent = "⟳ Sincronizar uso"; }
+        });
+        panel.querySelectorAll("[data-team-select]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            btn.disabled = true; btn.textContent = "selecionando…";
+            try {
+              await postJson("/team/select", { provider: btn.dataset.provider, accountId: btn.dataset.id });
+              await load();
+            } catch (error) { alert("Erro ao selecionar: " + error.message); btn.disabled = false; btn.textContent = "Usar em novos terminais"; }
+          });
+        });
+        panel.querySelector("#teamPublishOpenAI")?.addEventListener("click", async (event) => {
+          const btn = event.currentTarget; btn.disabled = true; btn.textContent = "publicando…";
+          try {
+            await postJson("/team/publish", { provider: "openai" });
+            await load(true);
+          } catch (error) { alert("Erro ao publicar Codex: " + error.message); btn.disabled = false; btn.textContent = "+ Publicar conta Codex logada"; }
+        });
+        const claudeForm = panel.querySelector("#teamClaudePublish");
+        claudeForm?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const btn = claudeForm.querySelector('button[type="submit"]');
+          btn.disabled = true; btn.textContent = "publicando…";
+          try {
+            await postJson("/team/publish", {
+              provider: "claude",
+              label: claudeForm.querySelector("#teamClaudeLabel").value.trim(),
+              setupToken: claudeForm.querySelector("#teamClaudeToken").value,
+            });
+            claudeForm.reset();
+            await load(true);
+          } catch (error) {
+            claudeForm.querySelector("#teamClaudeToken").value = "";
+            alert("Erro ao publicar Claude: " + error.message);
+            btn.disabled = false; btn.textContent = "Publicar Claude";
+          }
+        });
       }
 
-      async function load(force) {
+      async function load(force = false) {
+        let teamStatus = {};
+        try { teamStatus = await requestJson("/team/status"); } catch {}
+        if (teamStatus.connected) {
+          try {
+            const payload = await requestJson("/team/accounts" + (force ? "?force=1" : ""));
+            renderTeam(payload, teamStatus);
+          } catch (error) {
+            panel.innerHTML = vault(teamStatus) + `<div class="acc-msg warn">pool indisponível: ${esc(error.message)}</div>`;
+            wireTeam();
+          }
+          return;
+        }
         try {
-          const table = await (await fetch("/accounts/usage" + (force ? "?force=1" : ""))).json();
-          if (table && !table.error) render(table);
-          else panel.innerHTML = `<div class="acc-msg warn">erro ao ler contas</div>`;
+          const table = await requestJson("/accounts/usage" + (force ? "?force=1" : ""));
+          renderLocal(table, teamStatus);
         } catch {
-          panel.innerHTML = `<div class="acc-msg warn">backend offline</div>`;
+          panel.innerHTML = vault(teamStatus) + `<div class="acc-msg warn">backend de contas offline</div>`;
+          wireConnect();
         }
       }
       load();
@@ -9940,6 +10231,9 @@
       if (!rowsEl) return;
 
       const TZBR = "America/Sao_Paulo";
+      const safeText = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      })[c]);
       function fmtReset(v) {
         if (v == null) return null;
         const d = new Date(v); // aceita ISO (Claude) ou epoch ms (Codex)
@@ -9957,24 +10251,29 @@
 
       // Uma única barra (janela de 5h) + os dois números no fim: 5h% / semanal%
       function usageLine(acc) {
-        const w = Math.min(100, Math.max(0, acc.fiveHour || 0));
+        const raw = Number(acc.fiveHour);
+        const w = Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 0;
         const r = fmtReset(acc.fiveHourReset);
         return `<div class="usage-line">` +
           `<span class="usage-track"><span class="usage-fill ${cls(acc.fiveHour)}" style="width:${w}%"></span></span>` +
           `<span class="usage-pct">${fmtPct(acc.fiveHour)}` +
           `<span class="usage-pct-week"> / ${fmtPct(acc.weekly)}</span></span></div>` +
-          (r ? `<div class="usage-reset">reset 5h ${r}</div>` : "");
+          (r ? `<div class="usage-reset">reset 5h ${safeText(r)}</div>` : "");
       }
 
       function accBlock(acc, platLabel) {
+        const platform = acc.platform === "codex" ? "codex" : "claude";
         const head =
           `<div class="usage-acc-head">` +
-          `<span class="usage-acc-plat ${acc.platform}">${platLabel}</span>` +
-          `<span class="usage-acc-name" title="${acc.email}">${acc.email}</span>` +
-          (acc.plan ? `<span class="usage-acc-plan">${acc.plan}</span>` : "") +
+          `<span class="usage-acc-plat ${platform}">${safeText(platLabel)}</span>` +
+          `<span class="usage-acc-name" title="${safeText(acc.email)}">${safeText(acc.email)}</span>` +
+          (acc.plan ? `<span class="usage-acc-plan">${safeText(acc.plan)}</span>` : "") +
           `</div>`;
         if (acc.status === "expired") {
           return `<div class="usage-acc">${head}<div class="usage-nodata">sessão expirada — relogar</div></div>`;
+        }
+        if (acc.status === "refresh_pending") {
+          return `<div class="usage-acc">${head}<div class="usage-nodata">renovação pendente pela CLI</div></div>`;
         }
         if (acc.status === "ratelimited") {
           return `<div class="usage-acc">${head}<div class="usage-nodata">limite de consultas (429)</div></div>`;
