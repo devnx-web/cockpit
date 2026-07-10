@@ -32,6 +32,23 @@ export function redactStream(data, on) {
   }
 }
 
+// Redação no nível das CÉLULAS renderizadas do xterm (para TUIs como o claude/codex,
+// que desenham a statusline com posicionamento de cursor — o texto só é contíguo
+// DEPOIS de renderizado). Blanka cada trecho de marca com espaços do MESMO tamanho,
+// para não deslocar as colunas ao sobrescrever. Fail-open.
+export function redactCells(text, on) {
+  if (!on || !text) return text;
+  try {
+    let out = text;
+    for (const { re } of PRIVACY_PATTERNS) {
+      out = out.replace(re, (m) => " ".repeat(m.length));
+    }
+    return out;
+  } catch {
+    return text;
+  }
+}
+
 // Rótulos discretos de chrome (botões do launcher, nome do terminal no header/abas).
 // Marca exata → "Agent N" (preserva a distinção entre os botões); demais strings
 // caem no redactStream para cobrir casos compostos (ex.: linha de comando).

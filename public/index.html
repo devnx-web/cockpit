@@ -462,6 +462,9 @@
     body.privacy-on .usage-acc-plat.codex {
       background: rgba(148,163,184,.16); color: var(--text-secondary);
     }
+    /* Modo Discreto: oculta o painel de uso das contas por inteiro — ele expõe
+       plataforma (CLAUDE/CODEX), e-mail da conta e plano, tudo revelador. */
+    body.privacy-on #usageFoot { display: none; }
     .usage-acc-name {
       font-size: 11px; color: var(--text-secondary); font-weight: 500;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
@@ -3410,6 +3413,37 @@
       return (P && privacyMode) ? P.neutralizeLabel(s, true) : s;
     }
 
+    // Redação no nível do buffer renderizado — cobre TUIs (claude/codex) que
+    // desenham a statusline com posicionamento de cursor, onde a marca só é texto
+    // contíguo DEPOIS de renderizada. Sobrescreve as células da marca com espaços
+    // do mesmo tamanho. Chamado a cada render (xterm.onRender) quando o modo está on.
+    // A própria escrita dispara outro render, mas converge: as células já blanqueadas
+    // não voltam a casar os padrões.
+    function redactViewport(term, start, end) {
+      const P = window.CockpitPrivacy;
+      if (!P || !privacyMode || !term) return;
+      let buf;
+      try { buf = term.buffer.active; } catch { return; }
+      const top = buf.viewportY;
+      const rows = term.rows;
+      const lo = Math.max(0, start | 0);
+      const hi = Math.min(rows - 1, end | 0);
+      let writes = "";
+      for (let r = lo; r <= hi; r++) {
+        const line = buf.getLine(top + r);
+        if (!line) continue;
+        const text = line.translateToString(false);
+        const blanked = P.redactCells(text, true);
+        if (blanked === text) continue;
+        let a = 0; while (a < text.length && text[a] === blanked[a]) a++;
+        let b = text.length - 1; while (b > a && text[b] === blanked[b]) b--;
+        const seg = blanked.slice(a, b + 1);
+        // salva cursor → move p/ (linha r+1, col a+1) → escreve o trecho → restaura
+        writes += "\x1b7\x1b[" + (r + 1) + ";" + (a + 1) + "H\x1b[0m" + seg + "\x1b8";
+      }
+      if (writes) term.write(writes);
+    }
+
     function setPrivacyMode(on) {
       privacyMode = !!on;
       setSetting("privacyMode", privacyMode);
@@ -3724,6 +3758,13 @@
             type: "input", projectId: proj.id, terminalId: term.id, data,
           }));
         }
+      });
+
+      // Modo Discreto: a cada render, blanqueia as células de marca (cobre a
+      // statusline das TUIs, que a redação de stream não pega por causa do
+      // posicionamento de cursor).
+      xt.onRender(({ start, end }) => {
+        if (privacyMode) redactViewport(xt, start, end);
       });
 
       const ro = new ResizeObserver(() => {

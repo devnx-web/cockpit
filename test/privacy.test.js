@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { redactStream, neutralizeLabel } from "../public/privacy.js";
+import { redactStream, neutralizeLabel, redactCells } from "../public/privacy.js";
 
 test("redactStream: desligado retorna o texto intacto", () => {
   const input = "Claude Code v2.1.206 · Opus 4.8 (1M context)";
@@ -60,4 +60,28 @@ test("neutralizeLabel: desligado passa intacto", () => {
 test("neutralizeLabel: string composta com marca é redigida via patterns", () => {
   const out = neutralizeLabel("claude --dangerously-skip-permissions", true);
   assert.doesNotMatch(out, /claude/i);
+});
+
+// redactCells: usado na sobrescrita de células do xterm (TUI). Precisa BLANKAR a
+// marca preservando EXATAMENTE o comprimento, para não deslocar as colunas.
+test("redactCells: blanka a marca preservando o comprimento", () => {
+  const inp = "Opus 4.8 (1M context) with high effort · Claude Max";
+  const out = redactCells(inp, true);
+  assert.equal(out.length, inp.length);
+  assert.doesNotMatch(out, /Opus|Claude|1M context|effort/i);
+});
+
+test("redactCells: statusline do codex blanqueada", () => {
+  const inp = "gpt-5.6-sol default · YOLO mode";
+  const out = redactCells(inp, true);
+  assert.equal(out.length, inp.length);
+  assert.doesNotMatch(out, /gpt-5|YOLO/i);
+});
+
+test("redactCells: desligado passa intacto", () => {
+  assert.equal(redactCells("Opus 4.8", false), "Opus 4.8");
+});
+
+test("redactCells: texto sem marca fica idêntico", () => {
+  assert.equal(redactCells("npm run dev", true), "npm run dev");
 });
