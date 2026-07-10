@@ -85,3 +85,20 @@ test("redactCells: desligado passa intacto", () => {
 test("redactCells: texto sem marca fica idêntico", () => {
   assert.equal(redactCells("npm run dev", true), "npm run dev");
 });
+
+test("redactStream: redige identificadores do Kimi/Moonshot", () => {
+  const out = redactStream("Kimi Code v0.20.2 · Model: K2.7 Code · moonshotai.github.io", true);
+  assert.doesNotMatch(out, /Kimi/i);
+  assert.doesNotMatch(out, /moonshot/i);
+  assert.doesNotMatch(out, /\bK2\b|K2\.7/);
+});
+
+test("redactStream: redige ChatGPT e Anthropic", () => {
+  assert.doesNotMatch(redactStream("Signed in with ChatGPT", true), /ChatGPT/i);
+  assert.doesNotMatch(redactStream("Anthropic · Claude", true), /Anthropic|Claude/i);
+});
+
+test("redactStream: K2 minúsculo comum não é redigido (evita falso positivo)", () => {
+  // 'k2s' como variável/rota não deve virar Agent — só o modelo K2 maiúsculo
+  assert.equal(redactStream("const k2s = load()", true), "const k2s = load()");
+});

@@ -14,6 +14,10 @@ export const PRIVACY_PATTERNS = [
   { re: /\bGPT-\d[\w.\-]*/gi, repl: "Agent" },
   { re: /YOLO mode/gi, repl: "Auto mode" },
   { re: /\bYOLO\b/gi, repl: "Auto" },
+  { re: /\bChatGPT\b/gi, repl: "Agent" },
+  { re: /\bAnthropic\b/gi, repl: "agent" },
+  { re: /moonshot\w*/gi, repl: "agent" },
+  { re: /\bK2(?:\.\d+)?\b/g, repl: "Agent" }, // modelo do Kimi (K2 maiúsculo; não pega 'k2s')
   { re: /\bCodex\b/gi, repl: "Agent" },
   { re: /\bClaude\b/gi, repl: "Agent" },
   { re: /\bKimi\b/gi, repl: "Agent" },
