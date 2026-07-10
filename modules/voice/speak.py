@@ -12,6 +12,7 @@ Uso via hook (transcript_path em stdin JSON):
 from __future__ import annotations
 
 import json
+import os
 import re
 import socket
 import sys
@@ -113,7 +114,9 @@ def summarize_with_llm(raw_text: str, summarize_cfg: dict) -> str:
     provider = summarize_cfg.get("provider", "openai")
     if provider != "openai":
         return ""
-    api_key = summarize_cfg.get("api_key", "").strip()
+    # Prefere a chave do config; cai pra variável de ambiente OPENAI_API_KEY.
+    # Assim o config.json (agora fora do git) não precisa carregar o segredo.
+    api_key = (summarize_cfg.get("api_key") or os.environ.get("OPENAI_API_KEY", "")).strip()
     if not api_key:
         return ""
     try:

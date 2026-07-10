@@ -17,3 +17,7 @@ config.json
 
 # Chave da API Groq (STT do ditado) — nunca commitar
 .groq-key
+modules/voice/config.json
+.env
+.env.local
+__pycache__/
