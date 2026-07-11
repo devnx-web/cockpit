@@ -10,7 +10,8 @@ import * as voice from "./lib/voice.js";
 import * as dictation from "./lib/dictation.js";
 import * as stt from "./lib/stt.js";
 import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
-import * as accounts from "./lib/accounts.js";
+import { createTeamAccountsClient } from "./lib/team-accounts.js";
+import { createTeamRouter } from "./lib/team-router.js";
 const { spawn } = pkg;
 
 // === config dinâmica — populada por startServer() ===
@@ -20,6 +21,12 @@ let ROOT = DEFAULT_ROOT;
 let PUBLIC_DIR = path.join(DEFAULT_ROOT, "public");
 let PROJECTS_PATH = path.join(DEFAULT_ROOT, "projects.json");
 let PROJECTS = []; // populado em startServer()
+let SERVER_URL = null;
+const teamAccounts = createTeamAccountsClient();
+const teamRouter = createTeamRouter({
+  client: teamAccounts,
+  brokerUrl: () => SERVER_URL,
+});
 // Versão do app — lida uma vez do package.json e enviada ao cliente no hello.
 // Evita ter o número hardcoded em vários lugares e sair de sincronia.
 const APP_VERSION = (() => {
@@ -58,20 +65,30 @@ function createTerminalIn(session, name = null) {
     );
   }
 
+  const baseEnv = {
+    ...process.env,
+    ...(session.proj.env || {}),
+    TERM: "xterm-256color",
+    COLORTERM: "truecolor",
+    COCKPIT_PROJECT: session.proj.id,
+    COCKPIT_TERMINAL: tid,
+    COCKPIT: "1",
+  };
+  let terminalEnv = baseEnv;
+  try {
+    terminalEnv = teamRouter.enrichPtyEnv(baseEnv, {
+      claudeProjectPath: pathOk ? cwd : undefined,
+    });
+  } catch (error) {
+    console.warn(`[cockpit/team] terminal sem pool central: ${error.message}`);
+  }
+
   const pty = spawn(session.proj.shell || defaultShell(), [], {
     name: "xterm-256color",
     cols: 120,
     rows: 30,
     cwd,
-    env: {
-      ...process.env,
-      ...(session.proj.env || {}),
-      TERM: "xterm-256color",
-      COLORTERM: "truecolor",
-      COCKPIT_PROJECT: session.proj.id,
-      COCKPIT_TERMINAL: tid,
-      COCKPIT: "1",
-    },
+    env: terminalEnv,
   });
 
   const terminal = {
@@ -129,7 +146,15 @@ function createSession(proj) {
   };
   sessions.set(proj.id, session);
   // cada projeto começa com 1 terminal default
-  createTerminalIn(session, "Terminal 1");
+  try {
+    createTerminalIn(session, "Terminal 1");
+  } catch (error) {
+    // Um shell inválido em um projeto não pode derrubar o servidor inteiro
+    // depois que ele já começou a escutar. O usuário ainda pode corrigir o
+    // projeto ou tentar abrir outro terminal pela interface.
+    console.error(`[cockpit] falha ao abrir terminal de "${proj.id}": ${error.message}`);
+    session.bootError = error.message;
+  }
   return session;
 }
 
@@ -1352,85 +1377,43 @@ const MIME = {
   ".ttc": "font/collection",
 };
 
-// Lê o corpo de uma requisição como JSON (limite simples de tamanho).
-function readJsonBody(req, cb) {
-  let data = "";
-  req.on("data", (chunk) => {
-    data += chunk;
-    if (data.length > 1e6) req.destroy(); // ~1MB de guarda
-  });
-  req.on("end", () => {
-    try { cb(data ? JSON.parse(data) : {}); }
-    catch { cb({}); }
-  });
-}
-
 const server = http.createServer((req, res) => {
   const u = url.parse(req.url);
+  if (teamRouter.handle(req, res, u)) return;
   if (u.pathname === "/projects.json") {
     res.writeHead(200, { "Content-Type": MIME[".json"] });
     res.end(JSON.stringify(PROJECTS));
     return;
   }
-  // /accounts/usage — consumo das contas Claude + Codex (barra/sidebar e settings)
-  // ?force=1 ignora o cache do Claude (usado pelo botão ⟳ manual)
+  // /accounts/usage — somente o pool central. Quando desconectado, retorna
+  // vazio deliberadamente: nunca faça fallback para credenciais do host.
   if (u.pathname === "/accounts/usage") {
-    const force = /(?:^|&)force=1(?:&|$)/.test(u.query || "");
-    accounts.getUsageTable(force)
+    const usage = teamRouter.status().connected
+      ? teamRouter.usageTable()
+      : Promise.resolve({ claude: [], codex: [], central: true, connected: false });
+    usage
       .then((table) => {
         res.writeHead(200, { "Content-Type": MIME[".json"], "Cache-Control": "no-cache" });
         res.end(JSON.stringify(table));
       })
       .catch((err) => {
-        res.writeHead(500, { "Content-Type": MIME[".json"] });
-        res.end(JSON.stringify({ error: String(err) }));
+        console.warn(`[cockpit/accounts] uso indisponível: ${err?.message || "erro"}`);
+        res.writeHead(503, { "Content-Type": MIME[".json"], "Cache-Control": "no-store" });
+        res.end(JSON.stringify({ error: "uso das contas indisponível" }));
       });
-    return;
-  }
-  // /accounts/switch — troca a conta ativa (POST {platform, id})
-  if (u.pathname === "/accounts/switch" && req.method === "POST") {
-    readJsonBody(req, (body) => {
-      const sendJson = (code, obj) => {
-        res.writeHead(code, { "Content-Type": MIME[".json"] });
-        res.end(JSON.stringify(obj));
-      };
-      try {
-        const result = accounts.switchAccount(body.platform, body.id);
-        sendJson(200, result);
-      } catch (err) {
-        sendJson(400, { error: String(err.message || err) });
-      }
-    });
-    return;
-  }
-  // /accounts/add — captura a conta logada agora (POST {platform})
-  if (u.pathname === "/accounts/add" && req.method === "POST") {
-    readJsonBody(req, (body) => {
-      const sendJson = (code, obj) => {
-        res.writeHead(code, { "Content-Type": MIME[".json"] });
-        res.end(JSON.stringify(obj));
-      };
-      try { sendJson(200, accounts.addAccount(body.platform)); }
-      catch (err) { sendJson(400, { error: String(err.message || err) }); }
-    });
-    return;
-  }
-  // /accounts/remove — remove conta do gerenciamento (POST {platform, id})
-  if (u.pathname === "/accounts/remove" && req.method === "POST") {
-    readJsonBody(req, (body) => {
-      const sendJson = (code, obj) => {
-        res.writeHead(code, { "Content-Type": MIME[".json"] });
-        res.end(JSON.stringify(obj));
-      };
-      try { sendJson(200, accounts.removeAccount(body.platform, body.id)); }
-      catch (err) { sendJson(400, { error: String(err.message || err) }); }
-    });
     return;
   }
   // /file/<projectId>/<relPath...> — serve conteúdo bruto de arquivos do
   // projeto para preview de imagens/PDFs no editor. safePath impede escape.
   if (u.pathname && u.pathname.startsWith("/file/")) {
-    const rest = decodeURIComponent(u.pathname.slice("/file/".length));
+    let rest;
+    try {
+      rest = decodeURIComponent(u.pathname.slice("/file/".length));
+    } catch {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("invalid file path");
+      return;
+    }
     const slash = rest.indexOf("/");
     const projectId = slash >= 0 ? rest.slice(0, slash) : rest;
     const relPath = slash >= 0 ? rest.slice(slash + 1) : "";
@@ -1441,19 +1424,32 @@ const server = http.createServer((req, res) => {
     fs.stat(abs, (err, stat) => {
       if (err || !stat.isFile()) { res.writeHead(404); res.end("not found"); return; }
       const ext = path.extname(abs).toLowerCase();
+      const previewable = new Set([
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".ico", ".svg", ".pdf",
+      ]);
+      if (!previewable.has(ext)) {
+        res.writeHead(415, { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" });
+        res.end("preview not supported");
+        return;
+      }
       const mime = MIME[ext] || "application/octet-stream";
       res.writeHead(200, {
         "Content-Type": mime,
         "Content-Length": stat.size,
         "Cache-Control": "no-cache",
+        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(path.basename(abs))}`,
+        "Content-Security-Policy": "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "X-Content-Type-Options": "nosniff",
       });
       fs.createReadStream(abs).pipe(res);
     });
     return;
   }
   let rel = u.pathname === "/" ? "/index.html" : u.pathname;
-  const filePath = path.join(PUBLIC_DIR, rel);
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  const publicRoot = path.resolve(PUBLIC_DIR);
+  const filePath = path.resolve(publicRoot, `.${rel}`);
+  if (filePath !== publicRoot && !filePath.startsWith(`${publicRoot}${path.sep}`)) {
     res.writeHead(403);
     res.end("forbidden");
     return;
@@ -1470,6 +1466,20 @@ const server = http.createServer((req, res) => {
 });
 
 server.on("upgrade", (req, socket, head) => {
+  if (!SERVER_URL) {
+    socket.destroy();
+    return;
+  }
+  const expected = new URL(SERVER_URL);
+  const fetchSite = String(req.headers["sec-fetch-site"] || "");
+  const allowed = String(req.headers.host || "") === expected.host
+    && req.headers.origin === expected.origin
+    && (!fetchSite || ["same-origin", "none"].includes(fetchSite));
+  if (!allowed) {
+    try { socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"); } catch {}
+    socket.destroy();
+    return;
+  }
   const u = url.parse(req.url, true);
   if (u.pathname === "/ws") {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
@@ -1504,6 +1514,7 @@ async function shutdown(opts = {}) {
       try { t.pty.kill(); } catch {}
     }
   }
+  teamAccounts.cleanupRuntime();
   try { dictation.stop(); } catch {}
   shutdownAllLsp();
   await voice.stop().catch(() => {});
@@ -1548,17 +1559,6 @@ export async function startServer({
   PROJECTS.length = 0;
   for (const p of raw) PROJECTS.push(p);
 
-  log.log("\x1b[36m▸ cockpit\x1b[0m criando sessões…");
-  PROJECTS.forEach((p) => {
-    const exists = fs.existsSync(p.path);
-    log.log(
-      `  \x1b[2m·\x1b[0m ${p.id.padEnd(12)} ${
-        exists ? "\x1b[32m✓\x1b[0m" : "\x1b[33m⚠\x1b[0m"
-      } ${p.path}`
-    );
-    createSession(p);
-  });
-
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => {
@@ -1570,7 +1570,32 @@ export async function startServer({
   const addr = server.address();
   const actualPort = typeof addr === "object" && addr ? addr.port : port;
   const serverUrl = `http://127.0.0.1:${actualPort}`;
+  SERVER_URL = serverUrl;
   log.log(`\n\x1b[36m▸ cockpit\x1b[0m rodando em \x1b[1m${serverUrl}\x1b[0m\n`);
+
+  // Ao abrir o Cockpit, escolhe uma vez a conta de menor pressão de uso por
+  // provedor. As seleções ficam em memória e só afetam PTYs criados depois.
+  if (teamRouter.status().connected) {
+    log.log("\x1b[36m▸ cockpit\x1b[0m selecionando pool central…");
+    const boot = await teamRouter.bootstrap();
+    for (const warning of boot.warnings) {
+      log.log(`  \x1b[33m⚠\x1b[0m ${warning}`);
+    }
+  }
+
+  // Só cria PTYs depois que a porta real é conhecida. Além de impedir PTYs
+  // órfãos quando a porta fixa está ocupada, isso permite injetar nos novos
+  // terminais o endpoint loopback usado pelo broker de autenticação.
+  log.log("\x1b[36m▸ cockpit\x1b[0m criando sessões…");
+  PROJECTS.forEach((p) => {
+    const exists = fs.existsSync(p.path);
+    log.log(
+      `  \x1b[2m·\x1b[0m ${p.id.padEnd(12)} ${
+        exists ? "\x1b[32m✓\x1b[0m" : "\x1b[33m⚠\x1b[0m"
+      } ${p.path}`
+    );
+    createSession(p);
+  });
 
   // voz/ditado opt-in — não derrubam o boot se faltar binário
   if (voiceEnabled && process.platform === "linux") {
@@ -1582,7 +1607,7 @@ export async function startServer({
   }
   // STT: também só em Linux por enquanto (depende do venv com faster-whisper).
   // Falha silenciosa — o UI mostra o estado e o usuário decide.
-  if (process.platform === "linux") {
+  if (dictationEnabled && process.platform === "linux") {
     stt.start().catch((e) =>
       log.log(`\x1b[33m▸ stt\x1b[0m offline: ${e.message}`)
     );

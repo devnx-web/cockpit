@@ -527,6 +527,59 @@
     .acc-msg.warn { color: var(--status-waiting); }
     .acc-foot-note { font-size: 10.5px; color: var(--text-tertiary); margin-top: 14px; line-height: 1.5; }
     .acc-foot-note code { font-size: 10px; background: var(--bg-3); padding: 1px 4px; border-radius: 3px; }
+    .team-hub {
+      position: relative; overflow: hidden; margin-bottom: 18px;
+      border: 1px solid var(--border-strong); border-radius: 10px;
+      background: linear-gradient(135deg, rgba(74,158,255,.09), transparent 42%), var(--bg-1);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+    }
+    .team-hub::before {
+      content: ""; position: absolute; inset: 0 auto 0 0; width: 3px;
+      background: var(--accent, #4a9eff); box-shadow: 0 0 18px rgba(74,158,255,.45);
+    }
+    .team-hub.is-connected::before { background: var(--status-running); box-shadow: 0 0 18px rgba(74,222,128,.4); }
+    .team-hub-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 17px 18px 12px 20px; }
+    .team-kicker { font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent, #4a9eff); margin-bottom: 5px; }
+    .team-hub.is-connected .team-kicker { color: var(--status-running); }
+    .team-heading { font-size: 15px; font-weight: 650; color: var(--text-primary); letter-spacing: -.01em; }
+    .team-subtitle { margin-top: 5px; max-width: 650px; font-size: 11px; line-height: 1.5; color: var(--text-tertiary); }
+    .team-status {
+      display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+      padding: 5px 9px; border: 1px solid var(--border-default); border-radius: 999px;
+      color: var(--text-tertiary); background: rgba(0,0,0,.12); font-size: 10px; font-weight: 600;
+    }
+    .team-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--text-disabled); }
+    .team-status.online { color: var(--status-running); border-color: rgba(74,222,128,.25); }
+    .team-status.online::before { background: var(--status-running); box-shadow: 0 0 8px rgba(74,222,128,.65); }
+    .team-form { padding: 4px 18px 18px 20px; }
+    .team-form-grid { display: grid; grid-template-columns: minmax(210px, 1.35fr) minmax(180px, 1fr) minmax(160px, 1fr); gap: 10px; }
+    .team-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .team-field label { font-size: 9.5px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .06em; }
+    .team-input {
+      width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px;
+      border: 1px solid var(--border-default); border-radius: 6px; outline: none;
+      background: var(--bg-0); color: var(--text-primary); font: 12px var(--font-ui);
+      transition: border-color 140ms, box-shadow 140ms;
+    }
+    .team-input:focus { border-color: var(--accent, #4a9eff); box-shadow: 0 0 0 2px rgba(74,158,255,.11); }
+    .team-input::placeholder { color: var(--text-disabled); }
+    .team-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .team-primary {
+      border: 1px solid color-mix(in srgb, var(--accent, #4a9eff) 70%, white 8%);
+      background: var(--accent, #4a9eff); color: #fff; font-weight: 650;
+    }
+    .team-primary:hover { filter: brightness(1.08); background: var(--accent, #4a9eff); }
+    .team-danger { color: var(--status-error); }
+    .team-url { font: 10px var(--font-term); color: var(--text-disabled); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
+    .team-notice { min-height: 16px; padding: 0 20px 13px; font-size: 10.5px; line-height: 1.45; color: var(--text-tertiary); }
+    .team-notice.error { color: var(--status-error); }
+    .team-notice.ok { color: var(--status-running); }
+    .team-divider-label { display: flex; align-items: center; justify-content: space-between; margin: 3px 0 2px; }
+    .team-central-mark { font-size: 9px; color: var(--status-running); letter-spacing: .08em; text-transform: uppercase; }
+    @media (max-width: 900px) {
+      .team-form-grid { grid-template-columns: 1fr; }
+      .team-hub-head { flex-direction: column; }
+    }
     .project-search-wrap {
       flex-shrink: 0;
       padding: 0 10px 6px;
@@ -8321,160 +8374,124 @@
 
     // Painel customizado da categoria "Contas" nas Configurações.
     async function renderAccountsPanel(main) {
-      const TZBR = "America/Sao_Paulo";
-      const fmtReset = (v) => {
-        if (v == null) return null;
-        const d = new Date(v); if (isNaN(d)) return null;
-        try {
-          return new Intl.DateTimeFormat("pt-BR", { timeZone: TZBR, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(d).replace(",", "");
-        } catch { return null; }
-      };
-      const cls = (p) => (p == null ? "low" : p >= 90 ? "high" : p >= 70 ? "mid" : "low");
-      const pct = (p) => (p == null ? "–" : Math.round(p) + "%");
-
-      main.innerHTML = `<div class="acc-panel"><div class="acc-msg">carregando contas…</div></div>`;
+      main.innerHTML = `<div class="acc-panel"><div class="acc-msg">carregando conexão…</div></div>`;
       const panel = main.querySelector(".acc-panel");
 
-      function bar(label, pctVal, resetVal) {
-        if (pctVal == null) {
-          return `<div class="acc-line"><span class="acc-line-lbl">${label}</span>` +
-            `<span class="acc-bar"><span class="acc-bar-fill low" style="width:0%"></span></span>` +
-            `<span class="acc-line-pct">–</span><span class="acc-line-reset"></span></div>`;
+      async function requestJson(url, options = {}) {
+        const response = await fetch(url, { cache: "no-store", ...options });
+        let payload = null;
+        try { payload = await response.json(); } catch { /* handled below */ }
+        if (!response.ok || payload?.error) {
+          throw new Error(payload?.error || `requisição falhou (HTTP ${response.status})`);
         }
-        const w = Math.min(100, Math.max(0, pctVal));
-        const r = fmtReset(resetVal);
-        return `<div class="acc-line">` +
-          `<span class="acc-line-lbl">${label}</span>` +
-          `<span class="acc-bar"><span class="acc-bar-fill ${cls(pctVal)}" style="width:${w}%"></span></span>` +
-          `<span class="acc-line-pct">${pct(pctVal)}</span>` +
-          `<span class="acc-line-reset">${r ? "reset " + r : ""}</span></div>`;
-      }
-
-      function row(acc, platLabel) {
-        let body;
-        if (acc.status === "ok") {
-          body = bar("5h", acc.fiveHour, acc.fiveHourReset) +
-                 bar("7d", acc.weekly, acc.weeklyReset);
-        } else if (acc.status === "expired") {
-          body = `<div class="acc-msg warn">sessão expirada — relogar no terminal</div>`;
-        } else if (acc.status === "ratelimited") {
-          body = `<div class="acc-msg">limite de consultas (429) — tente em instantes</div>`;
-        } else if (acc.status === "error") {
-          body = `<div class="acc-msg">não foi possível consultar agora</div>`;
-        } else {
-          body = `<div class="acc-msg">sem dados — clique “⟳ Atualizar”</div>`;
-        }
-        const actions =
-          (acc.active
-            ? `<span class="acc-badge-active">● ativa</span>`
-            : `<button class="acc-btn" data-act="switch" data-plat="${acc.platform}" data-id="${acc.id}">Ativar</button>`) +
-          `<button class="acc-icon-btn" data-act="remove" data-plat="${acc.platform}" data-id="${acc.id}" data-email="${acc.email}" title="Remover do gerenciamento">${SV_ICONS.trash}</button>`;
-        return `<div class="acc-row2 ${acc.active ? "is-active" : ""}">` +
-          `<div class="acc-row2-head">` +
-            `<div class="acc-meta">` +
-              `<span class="usage-acc-plat ${acc.platform}">${platLabel}</span>` +
-              `<span class="acc-email" title="${acc.email}">${acc.email}</span>` +
-              (acc.plan ? `<span class="acc-plan">${acc.plan}</span>` : "") +
-            `</div><div class="acc-actions">${actions}</div></div>` +
-          `<div class="acc-bars">${body}</div></div>`;
-      }
-
-      function groupLabel(text, platform) {
-        return `<div class="acc-group-label"><span>${text}</span>` +
-          `<button class="acc-btn ghost small" data-act="add" data-plat="${platform}">+ Adicionar conta logada</button></div>`;
-      }
-
-      function render(table) {
-        const claude = (table.claude || []).map((a) => row(a, "Claude")).join("");
-        const codex = (table.codex || []).map((a) => row(a, "Codex")).join("");
-        panel.innerHTML =
-          `<div class="acc-head"><div class="acc-title">Contas conectadas</div>` +
-          `<button class="acc-btn ghost" id="accRefreshCodex">⟳ Atualizar</button></div>` +
-          groupLabel("Anthropic / Claude", "claude") +
-          (claude || '<div class="acc-msg">nenhuma conta Claude gerenciada</div>') +
-          groupLabel("Codex / ChatGPT", "codex") +
-          (codex || '<div class="acc-msg">nenhuma conta Codex gerenciada</div>') +
-          `<div class="acc-foot-note">Trocar a conta vale para <b>novos</b> terminais; sessões já abertas seguem na conta anterior. ` +
-          `“Adicionar” captura a conta que estiver logada no momento (faça <code>claude</code>/<code>codex login</code> antes). ` +
-          `O uso (Claude e Codex) atualiza sozinho a cada 20 min; use ⟳ para forçar agora.</div>`;
-
-        // trocar de conta
-        panel.querySelectorAll('[data-act="switch"]').forEach((btn) => {
-          btn.addEventListener("click", async () => {
-            btn.disabled = true; btn.textContent = "trocando…";
-            try {
-              const j = await postJson("/accounts/switch", { platform: btn.dataset.plat, id: btn.dataset.id });
-              if (j.error) throw new Error(j.error);
-              await load(true);
-              window.__loadUsageBar && window.__loadUsageBar();
-            } catch (e) {
-              btn.disabled = false; btn.textContent = "Ativar";
-              alert("Erro ao trocar de conta: " + e.message);
-            }
-          });
-        });
-
-        // adicionar conta logada
-        panel.querySelectorAll('[data-act="add"]').forEach((btn) => {
-          btn.addEventListener("click", async () => {
-            const plat = btn.dataset.plat;
-            btn.disabled = true; const old = btn.textContent; btn.textContent = "capturando…";
-            try {
-              const j = await postJson("/accounts/add", { platform: plat });
-              if (j.error) throw new Error(j.error);
-              await load(true);
-              window.__loadUsageBar && window.__loadUsageBar();
-            } catch (e) {
-              alert("Erro ao adicionar conta: " + e.message + "\n\nDica: faça login da conta no terminal (claude / codex login) antes de adicionar.");
-            } finally { btn.disabled = false; btn.textContent = old; }
-          });
-        });
-
-        // remover conta
-        panel.querySelectorAll('[data-act="remove"]').forEach((btn) => {
-          btn.addEventListener("click", async () => {
-            const email = btn.dataset.email;
-            if (!confirm(`Remover a conta "${email}" do gerenciamento?\n\nIsso apaga só o registro/backup no Cockpit — não desloga nem apaga a conta de verdade.`)) return;
-            btn.disabled = true;
-            try {
-              const j = await postJson("/accounts/remove", { platform: btn.dataset.plat, id: btn.dataset.id });
-              if (j.error) throw new Error(j.error);
-              await load(true);
-              window.__loadUsageBar && window.__loadUsageBar();
-            } catch (e) {
-              btn.disabled = false;
-              alert("Erro ao remover: " + e.message);
-            }
-          });
-        });
-
-        const rc = panel.querySelector("#accRefreshCodex");
-        rc?.addEventListener("click", async () => {
-          rc.disabled = true; const old = rc.textContent;
-          rc.textContent = "atualizando…";
-          try {
-            await load(true); // força re-fetch (Claude + Codex via HTTP, instantâneo)
-            window.__loadUsageBar && window.__loadUsageBar(true);
-          } catch (e) {
-            alert("Erro ao atualizar: " + e.message);
-          } finally { rc.disabled = false; rc.textContent = old; }
-        });
+        return payload;
       }
 
       function postJson(url, body) {
-        return fetch(url, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }).then((r) => r.json());
+        return requestJson(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        });
       }
 
-      async function load(force) {
+      function setNotice(message, type = "") {
+        const notice = panel.querySelector("#teamNotice");
+        if (!notice) return;
+        notice.className = `team-notice${type ? " " + type : ""}`;
+        notice.textContent = message || "";
+      }
+
+      function hubMarkup(status) {
+        const connected = Boolean(status?.connected);
+        const baseUrl = escapeHtml(String(status?.baseUrl || ""));
+        if (!connected) {
+          return `<section class="team-hub" aria-label="Conectar ao DevNX Control">
+            <div class="team-hub-head">
+              <div><div class="team-kicker">Central de sessões</div><div class="team-heading">DevNX Control</div>
+              <div class="team-subtitle">Conecte este Cockpit ao Laravel para baixar a conta com menor uso. Claude e Codex ficam isolados das contas locais deste computador.</div></div>
+              <span class="team-status">não conectado</span>
+            </div>
+            <form class="team-form" id="teamConnectForm">
+              <div class="team-form-grid">
+                <div class="team-field"><label for="teamBaseUrl">Servidor Laravel</label><input class="team-input" id="teamBaseUrl" type="url" value="${baseUrl}" placeholder="https://control.suaempresa.com" required /></div>
+                <div class="team-field"><label for="teamEmail">E-mail</label><input class="team-input" id="teamEmail" type="email" autocomplete="username" placeholder="voce@empresa.com" required /></div>
+                <div class="team-field"><label for="teamPassword">Senha</label><input class="team-input" id="teamPassword" type="password" autocomplete="current-password" placeholder="senha do DevNX Control" required /></div>
+              </div>
+              <div class="team-actions"><button class="acc-btn team-primary" id="teamConnect" type="submit">Conectar este Cockpit</button><span class="team-url">a senha é usada apenas neste login e não é salva</span></div>
+            </form><div class="team-notice" id="teamNotice"></div>
+          </section>`;
+        }
+        return `<section class="team-hub is-connected" aria-label="DevNX Control conectado">
+          <div class="team-hub-head">
+            <div><div class="team-kicker">Pool central ativo</div><div class="team-heading">DevNX Control</div>
+            <div class="team-subtitle">Novos terminais usam exclusivamente as sessões baixadas do Laravel. As contas de <code>~/.claude</code> e <code>~/.codex</code> não entram no runtime.</div></div>
+            <span class="team-status online">conectado</span>
+          </div>
+          <div class="team-form">
+            <div class="team-actions"><button class="acc-btn team-primary" id="teamOptimize">Baixar seleção agora</button><button class="acc-btn ghost team-danger" id="teamDisconnect">Desconectar</button><span class="team-url" title="${baseUrl}">${baseUrl}</span></div>
+          </div>
+          <div class="team-notice" id="teamNotice"></div>
+        </section>`;
+      }
+
+      function render(status) {
+        const connected = Boolean(status?.connected);
+        const selected = status?.selected || {};
+        const runtime = [
+          ["claude", "Claude", selected.claude],
+          ["codex", "Codex", selected.openai],
+        ].map(([platform, label, account]) => `<div class="acc-row2 ${account ? "is-active" : ""}"><div class="acc-row2-head"><div class="acc-meta"><span class="usage-acc-plat ${platform}">${label}</span><span class="acc-email">${account ? escapeHtml(account.label || "selecionada pelo Laravel") : "aguardando seleção central"}</span></div>${account ? '<span class="acc-badge-active">● em uso</span>' : ""}</div></div>`).join("");
+        panel.innerHTML = hubMarkup(status) +
+          `<div class="acc-head team-divider-label"><div class="acc-title">Sessões recebidas</div><span class="team-central-mark">definidas pelo Laravel</span></div>` +
+          (connected ? runtime : '<div class="acc-msg">Conecte o DevNX Control para receber as sessões selecionadas pelo Laravel.</div>') +
+          `<div class="acc-foot-note">O gerenciamento completo, consumo, validade, renovação e disponibilidade ficam no painel DevNX Control. O Cockpit apenas recebe a seleção para novos terminais.</div>`;
+
+        const connectForm = panel.querySelector("#teamConnectForm");
+        connectForm?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const button = panel.querySelector("#teamConnect");
+          const password = panel.querySelector("#teamPassword");
+          button.disabled = true; button.textContent = "conectando…";
+          setNotice("Autenticando e emitindo o token exclusivo deste dispositivo…");
+          try {
+            const result = await postJson("/team/connect", {
+              baseUrl: panel.querySelector("#teamBaseUrl").value.trim(),
+              email: panel.querySelector("#teamEmail").value.trim(),
+              password: password.value,
+            });
+            password.value = "";
+            await load();
+            setNotice(result.warnings?.length ? result.warnings.join(" · ") : "Cockpit conectado ao pool central.", result.warnings?.length ? "" : "ok");
+            window.__loadUsageBar && window.__loadUsageBar(true);
+          } catch (error) {
+            password.value = "";
+            button.disabled = false; button.textContent = "Conectar este Cockpit";
+            setNotice(error.message, "error");
+          }
+        });
+
+        panel.querySelector("#teamDisconnect")?.addEventListener("click", async (event) => {
+          const button = event.currentTarget;
+          if (!confirm("Desconectar este Cockpit do DevNX Control? O token local será revogado e apagado.")) return;
+          button.disabled = true;
+          try { await postJson("/team/disconnect"); await load(); window.__loadUsageBar && window.__loadUsageBar(true); }
+          catch (error) { button.disabled = false; setNotice(error.message, "error"); }
+        });
+
+        panel.querySelector("#teamOptimize")?.addEventListener("click", async (event) => {
+          const button = event.currentTarget; button.disabled = true; button.textContent = "baixando…";
+          try { await postJson("/team/optimize"); await load(); window.__loadUsageBar && window.__loadUsageBar(); }
+          catch (error) { button.disabled = false; button.textContent = "Baixar seleção agora"; setNotice(error.message, "error"); }
+        });
+      }
+
+      async function load() {
         try {
-          const table = await (await fetch("/accounts/usage" + (force ? "?force=1" : ""))).json();
-          if (table && !table.error) render(table);
-          else panel.innerHTML = `<div class="acc-msg warn">erro ao ler contas</div>`;
-        } catch {
-          panel.innerHTML = `<div class="acc-msg warn">backend offline</div>`;
+          const status = await requestJson("/team/status");
+          render(status);
+        } catch (error) {
+          panel.innerHTML = `<div class="team-hub"><div class="team-hub-head"><div><div class="team-kicker">Central de sessões</div><div class="team-heading">Cockpit indisponível</div><div class="team-subtitle">${escapeHtml(error.message)}</div></div><span class="team-status">offline</span></div></div>`;
         }
       }
       load();

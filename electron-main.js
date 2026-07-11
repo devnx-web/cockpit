@@ -59,7 +59,7 @@ function ensureVoiceConfigFile() {
   const target = path.join(dir, "voice-config.json");
   if (!fs.existsSync(target)) {
     // o asar é read-only, mas readable — copiamos o seed embutido
-    const seed = path.join(__dirname, "modules", "voice", "config.json");
+    const seed = path.join(__dirname, "modules", "voice", "config.example.json");
     try {
       if (fs.existsSync(seed)) fs.copyFileSync(seed, target);
     } catch (e) {

@@ -10,6 +10,29 @@ _(nada ainda)_
 
 ---
 
+## [0.9.0] — 2026-07-11
+
+### Adicionado
+- **Pool central de contas OpenAI e Claude** — o Cockpit agora consulta o DevNX Control por HTTPS, escolhe automaticamente a conta disponível com menor pressão de uso e injeta a sessão apenas nos novos terminais.
+- **Autenticação de dispositivo limitada** — o pareamento troca o login inicial por um token Sanctum com permissões específicas para leitura, seleção, renovação e sincronização das contas de IA.
+- **Broker de renovação do Codex** — refresh tokens reais permanecem no Laravel; o Cockpit recebe uma capability efêmera e renova o acesso pelo endpoint loopback local.
+- **Testes automatizados do pool central** — cobertura para conexão, seleção, isolamento dos perfis, renovação, sanitização de respostas, publicação controlada e roteamento HTTP.
+
+### Alterado
+- **Contas locais deixaram de ser fonte de autenticação** — terminais Claude e Codex usam perfis isolados em `~/.cockpit`; sessões locais só podem ser enviadas explicitamente ao painel central durante a migração.
+- **Uso das contas vem exclusivamente do backend** — barra lateral e configurações mostram os metadados permitidos pelo DevNX Control, sem enumerar backups locais.
+
+### Corrigido
+- **Claude abria a tela de login mesmo com OAuth válido** — o perfil isolado agora registra apenas os metadados não sensíveis de onboarding, confiança do projeto aberto e confirmação do modo `--dangerously-skip-permissions`, entrando diretamente no REPL autenticado.
+
+### Segurança
+- **Credenciais não são expostas ao renderer** — respostas públicas usam allowlist, erros são redigidos e endpoints sensíveis exigem origem loopback válida.
+- **Arquivos de autenticação endurecidos** — escrita atômica, permissões `0600`, diretórios `0700`, isolamento por conta no Codex e remoção de credenciais locais herdadas do ambiente.
+- **Configuração de voz não é mais empacotada** — `modules/voice/config.json` permanece somente na máquina de desenvolvimento; builds usam um seed público sem chaves nem caminhos pessoais.
+- **WebSocket atualizado para `ws 8.21.0`** — corrige as vulnerabilidades de exaustão de memória por fragmentos pequenos e divulgação de memória não inicializada; dependências de produção ficam com `npm audit` zerado.
+
+---
+
 ## [0.8.5] — 2026-06-22
 
 ### Corrigido

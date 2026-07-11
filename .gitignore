@@ -17,3 +17,7 @@ config.json
 
 # Chave da API Groq (STT do ditado) — nunca commitar
 .groq-key
+
+# Estados transitórios de ferramentas de planejamento/brainstorm
+.planning/debug/
+.superpowers/brainstorm/

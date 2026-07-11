@@ -1,7 +1,7 @@
 {
   "name": "cockpit-devnx",
   "productName": "Cockpit",
-  "version": "0.8.5",
+  "version": "0.9.0",
   "description": "Cabine de comando para múltiplos agentes de IA em vários projetos",
   "homepage": "https://github.com/devnx/cockpit",
   "author": {
@@ -13,6 +13,7 @@
   "scripts": {
     "start": "electron .",
     "server": "node server.js",
+    "test": "node --test",
     "rebuild": "electron-rebuild -f -w node-pty",
     "vendor": "node scripts/copy-vendor-assets.js",
     "postinstall": "node scripts/copy-vendor-assets.js && (electron-rebuild -f -w node-pty || true)",
@@ -35,7 +36,7 @@
     "node-pty": "^1.0.0",
     "typescript": "^6.0.3",
     "typescript-language-server": "^5.1.3",
-    "ws": "^8.18.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
@@ -58,6 +59,8 @@
       "server.js",
       "lib/**/*",
       "modules/**/*",
+      "!modules/voice/config.json",
+      "!**/__pycache__/**",
       "public/**/*",
       "package.json",
       "!**/*.md",
