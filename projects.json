@@ -13,12 +13,12 @@
         "color": "#BD93F9"
       },
       {
-        "label": "claude",
+        "label": "ailiv c",
         "cmd": "claude --dangerously-skip-permissions",
         "color": "#FF79C6"
       },
       {
-        "label": "codex",
+        "label": "ailiv g",
         "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
         "color": "#8BE9FD"
       },
@@ -37,19 +37,19 @@
   },
   {
     "id": "voice",
-    "name": "Claude Voice",
+    "name": "Ailiv Voice",
     "path": "/home/ftgk/Documentos/claude-voice",
     "color": "#22d3ee",
     "icon": "mic",
     "shell": "bash",
     "commands": [
       {
-        "label": "claude",
+        "label": "ailiv c",
         "cmd": "claude --dangerously-skip-permissions",
         "color": "#FF79C6"
       },
       {
-        "label": "codex",
+        "label": "ailiv g",
         "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
         "color": "#8BE9FD"
       },
@@ -75,12 +75,12 @@
     "shell": "bash",
     "commands": [
       {
-        "label": "claude",
+        "label": "ailiv c",
         "cmd": "claude --dangerously-skip-permissions",
         "color": "#FF79C6"
       },
       {
-        "label": "codex",
+        "label": "ailiv g",
         "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
         "color": "#8BE9FD"
       },
@@ -106,12 +106,12 @@
     "shell": "bash",
     "commands": [
       {
-        "label": "claude",
+        "label": "ailiv c",
         "cmd": "claude --dangerously-skip-permissions",
         "color": "#FF79C6"
       },
       {
-        "label": "codex",
+        "label": "ailiv g",
         "cmd": "codex --dangerously-bypass-approvals-and-sandbox",
         "color": "#8BE9FD"
       },
@@ -137,7 +137,7 @@
     "shell": "bash",
     "commands": [
       {
-        "label": "claude",
+        "label": "ailiv c",
         "cmd": "claude --dangerously-skip-permissions",
         "color": "#FF79C6"
       },
@@ -168,7 +168,7 @@
     "shell": "bash",
     "commands": [
       {
-        "label": "claude",
+        "label": "ailiv c",
         "cmd": "claude --dangerously-skip-permissions",
         "color": "#FF79C6"
       },

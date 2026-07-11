@@ -15,6 +15,7 @@
   <script src="/vendor/monaco/vs/loader.js"></script>
   <script src="/file-icons/icon-map.js"></script>
   <script src="/lsp-client.js"></script>
+  <script src="/terminal-branding.js"></script>
   <style>
     :root {
       --bg-0: #0a0b0d;
@@ -433,7 +434,8 @@
     }
     .sidebar-footer .sidebar-section { padding-top: 12px; }
     /* Barra de uso das contas (rodapé da sidebar) */
-    .usage-foot { padding-bottom: 8px; }
+    .usage-foot { padding-bottom: 5px; }
+    .usage-foot .usage-head { padding: 9px 12px 6px; }
     .usage-head { cursor: default; }
     .usage-head .section-action {
       background: none; border: none; color: var(--text-tertiary);
@@ -443,10 +445,14 @@
     .usage-head .section-action:hover { color: var(--text-secondary); background: var(--bg-3); }
     .usage-head .section-action.spinning svg { animation: usage-spin 0.8s linear infinite; }
     @keyframes usage-spin { to { transform: rotate(360deg); } }
-    .usage-rows { padding: 0 14px 4px; display: flex; flex-direction: column; gap: 9px; }
-    .usage-empty { font-size: 10.5px; color: var(--text-tertiary); padding: 2px 0 6px; }
+    .usage-rows { padding: 0 10px 3px; display: flex; flex-direction: column; gap: 4px; }
+    .usage-empty { font-size: 9.5px; color: var(--text-tertiary); padding: 3px 2px 5px; }
+    .usage-acc {
+      padding: 6px 7px 5px; border: 1px solid var(--border-default); border-radius: 5px;
+      background: color-mix(in srgb, var(--bg-2) 68%, transparent);
+    }
     .usage-acc-head {
-      display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 5px; min-width: 0;
     }
     .usage-acc-plat {
       font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
@@ -454,28 +460,32 @@
     }
     .usage-acc-plat.claude { background: rgba(217,119,87,.18); color: #e0a07f; }
     .usage-acc-plat.codex  { background: rgba(74,222,128,.14); color: #74d39a; }
-    .usage-acc-name {
-      font-size: 11px; color: var(--text-secondary); font-weight: 500;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+    .usage-acc-plan {
+      font-size: 8px; line-height: 1; color: var(--text-disabled); text-transform: uppercase;
+      letter-spacing: .06em; font-variant-numeric: tabular-nums;
     }
-    .usage-acc-plan { font-size: 9.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-    .usage-line { display: flex; align-items: center; gap: 7px; margin: 2px 0; }
-    .usage-line .lbl { font-size: 9.5px; color: var(--text-tertiary); width: 16px; flex-shrink: 0; }
+    .usage-metrics { margin-left: auto; display: flex; align-items: baseline; gap: 7px; }
+    .usage-metric { display: inline-flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+    .usage-metric-label {
+      font-size: 7px; font-weight: 700; letter-spacing: .08em; color: var(--text-disabled);
+    }
+    .usage-metric-value {
+      font-size: 9.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums;
+    }
+    .usage-line { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
     .usage-track {
-      flex: 1; display: block; height: 6px; border-radius: 3px;
+      flex: 1; display: block; height: 3px; border-radius: 2px;
       background: var(--bg-4); overflow: hidden; min-width: 0;
     }
-    .usage-fill { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
+    .usage-fill { display: block; height: 100%; border-radius: 2px; transition: width .4s ease; }
     .usage-fill.low  { background: var(--status-running); }
     .usage-fill.mid  { background: var(--status-waiting); }
     .usage-fill.high { background: var(--status-error); }
-    .usage-pct {
-      font-size: 10px; color: var(--text-secondary); width: 62px; text-align: right;
-      flex-shrink: 0; font-variant-numeric: tabular-nums; white-space: nowrap;
+    .usage-reset {
+      font-size: 8px; line-height: 1; color: var(--text-disabled); white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
-    .usage-pct-week { color: var(--text-tertiary); }
-    .usage-reset { font-size: 9px; color: var(--text-disabled); margin-top: 2px; }
-    .usage-nodata { font-size: 9.5px; color: var(--text-disabled); font-style: italic; padding: 1px 0; }
+    .usage-nodata { font-size: 8.5px; color: var(--text-disabled); padding-top: 4px; }
     .app.sidebar-collapsed .usage-foot { display: none; }
     /* Painel de Contas (Configurações) */
     .acc-panel { display: flex; flex-direction: column; gap: 6px; }
@@ -3074,8 +3084,8 @@
       <div class="project-list" id="projectList"></div>
       <div class="sidebar-footer usage-foot" id="usageFoot">
         <div class="sidebar-section usage-head">
-          <span>Uso das contas</span>
-          <button class="section-action" id="usageRefresh" title="Atualizar uso (Codex faz ping ~12s/conta)">
+          <span>Consumo</span>
+          <button class="section-action" id="usageRefresh" title="Atualizar consumo das sessões">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -3333,8 +3343,8 @@
     // editar/remover por projeto via popover ⚡, mas não precisa adicionar
     // do zero toda vez.
     const DEFAULT_PROJECT_COMMANDS = [
-      { label: "claude",  cmd: "claude --dangerously-skip-permissions",        color: "#FF79C6" },
-      { label: "codex",   cmd: "codex --dangerously-bypass-approvals-and-sandbox", color: "#8BE9FD" },
+      { label: "ailiv c", cmd: "claude --dangerously-skip-permissions",        color: "#FF79C6" },
+      { label: "ailiv g", cmd: "codex --dangerously-bypass-approvals-and-sandbox", color: "#8BE9FD" },
       { label: "kimi",    cmd: "kimi --yolo",                                  color: "#BD93F9" },
       { label: "npm dev", cmd: "npm run dev",                                  color: "#50FA7B" },
     ];
@@ -3412,6 +3422,17 @@
     let systemInfo = { home: "/", platform: "linux", sep: "/", commonPaths: [] };
 
     const k = (projId, tid) => `${projId}:${tid}`;
+
+    function observeTerminalInput(projId, tid, data) {
+      window.CockpitTerminalBranding?.observeInput(k(projId, tid), data);
+    }
+
+    function writeTerminalOutput(projId, tid, data) {
+      const inst = xtermInstances.get(k(projId, tid));
+      if (!inst) return;
+      const branded = window.CockpitTerminalBranding?.transformOutput(k(projId, tid), data) ?? data;
+      inst.term.write(branded);
+    }
 
     function getProj(id) { return projects.find((p) => p.id === id); }
     function getActiveProj() { return getProj(activeProjId); }
@@ -3666,6 +3687,7 @@
 
       xt.onData((data) => {
         if (ws?.readyState === 1) {
+          observeTerminalInput(proj.id, term.id, data);
           ws.send(JSON.stringify({
             type: "input", projectId: proj.id, terminalId: term.id, data,
           }));
@@ -3721,6 +3743,7 @@
       try { inst.term.dispose(); } catch {}
       try { inst.container.remove(); } catch {}
       xtermInstances.delete(k(projId, tid));
+      window.CockpitTerminalBranding?.forget(k(projId, tid));
     }
 
     // ============================================================
@@ -3862,6 +3885,7 @@
     function sendQuickCmd(cmd) {
       const tid = getActiveTid();
       if (!tid || ws?.readyState !== 1) return;
+      observeTerminalInput(activeProjId, tid, cmd + "\n");
       ws.send(JSON.stringify({ type: "input", projectId: activeProjId, terminalId: tid, data: cmd + "\n" }));
       const inst = xtermInstances.get(k(activeProjId, tid));
       if (inst) inst.term.focus();
@@ -3876,8 +3900,8 @@
     }
 
     const ALL_PRESETS = [
-      { label: "claude",          cmd: "claude --dangerously-skip-permissions",          color: "#FF79C6" },
-      { label: "codex",           cmd: "codex --dangerously-bypass-approvals-and-sandbox", color: "#8BE9FD" },
+      { label: "ailiv c",         cmd: "claude --dangerously-skip-permissions",          color: "#FF79C6" },
+      { label: "ailiv g",         cmd: "codex --dangerously-bypass-approvals-and-sandbox", color: "#8BE9FD" },
       { label: "npm dev",         cmd: "npm run dev",          color: "#50FA7B" },
       { label: "npm build",       cmd: "npm run build",        color: "#50FA7B" },
       { label: "artisan serve",   cmd: "php artisan serve",    color: "#FFB86C" },
@@ -6744,8 +6768,7 @@
       switch (msg.type) {
         case "hello": handleHello(msg); break;
         case "output": {
-          const inst = xtermInstances.get(k(msg.projectId, msg.terminalId));
-          if (inst) inst.term.write(msg.data);
+          writeTerminalOutput(msg.projectId, msg.terminalId, msg.data);
           const isActiveView = msg.projectId === activeProjId &&
             msg.terminalId === getActiveTid() &&
             (viewModeByProj.get(activeProjId) || "terminal") === "terminal";
@@ -6785,8 +6808,7 @@
           createXterm(p, msg.terminal);
           // replay do buffer histórico (ex.: aviso de path inexistente)
           if (msg.terminal.buffer) {
-            const inst = xtermInstances.get(k(msg.projectId, msg.terminal.id));
-            if (inst) inst.term.write(msg.terminal.buffer);
+            writeTerminalOutput(msg.projectId, msg.terminal.id, msg.terminal.buffer);
           }
           // se for no projeto ativo, foca a nova
           if (msg.projectId === activeProjId) {
@@ -6998,8 +7020,7 @@
         p.terminals.forEach((t) => {
           createXterm(proj, t);
           if (t.buffer) {
-            const inst = xtermInstances.get(k(p.id, t.id));
-            if (inst) inst.term.write(t.buffer);
+            writeTerminalOutput(p.id, t.id, t.buffer);
           }
         });
         if (p.terminals.length > 0 && !activeTerminalByProj.has(p.id)) {
@@ -7037,7 +7058,7 @@
       { id: "act-rename-term", label: "Renomear terminal atual", hint: "F2", icon: "edit" },
       { id: "act-clear", label: "Limpar saída do terminal", hint: "⌘L", icon: "trash" },
       { id: "act-restart", label: "Reiniciar shell deste terminal", hint: "⌘⇧R", icon: "restart" },
-      { id: "act-claude", label: "Iniciar agente Claude Code aqui", hint: "", icon: "claude" },
+      { id: "act-claude", label: "Iniciar Ailiv C aqui", hint: "", icon: "claude" },
       { id: "act-next-term", label: "Próximo terminal", hint: "⌘⇧]", icon: "plus" },
       { id: "act-prev-term", label: "Terminal anterior", hint: "⌘⇧[", icon: "plus" },
       { id: "act-settings", label: "Configurações…", hint: "", icon: "cog" },
@@ -8409,7 +8430,7 @@
           return `<section class="team-hub" aria-label="Conectar ao DevNX Control">
             <div class="team-hub-head">
               <div><div class="team-kicker">Central de sessões</div><div class="team-heading">DevNX Control</div>
-              <div class="team-subtitle">Conecte este Cockpit ao Laravel para baixar a conta com menor uso. Claude e Codex ficam isolados das contas locais deste computador.</div></div>
+              <div class="team-subtitle">Conecte este Cockpit ao Laravel para baixar a conta com menor uso. Ailiv C e Ailiv G ficam isolados das contas locais deste computador.</div></div>
               <span class="team-status">não conectado</span>
             </div>
             <form class="team-form" id="teamConnectForm">
@@ -8425,7 +8446,7 @@
         return `<section class="team-hub is-connected" aria-label="DevNX Control conectado">
           <div class="team-hub-head">
             <div><div class="team-kicker">Pool central ativo</div><div class="team-heading">DevNX Control</div>
-            <div class="team-subtitle">Novos terminais usam exclusivamente as sessões baixadas do Laravel. As contas de <code>~/.claude</code> e <code>~/.codex</code> não entram no runtime.</div></div>
+            <div class="team-subtitle">Novos terminais usam exclusivamente as sessões baixadas do Laravel. Os perfis locais dos agentes não entram no runtime.</div></div>
             <span class="team-status online">conectado</span>
           </div>
           <div class="team-form">
@@ -8439,8 +8460,8 @@
         const connected = Boolean(status?.connected);
         const selected = status?.selected || {};
         const runtime = [
-          ["claude", "Claude", selected.claude],
-          ["codex", "Codex", selected.openai],
+          ["claude", "Ailiv C", selected.claude],
+          ["codex", "Ailiv G", selected.openai],
         ].map(([platform, label, account]) => `<div class="acc-row2 ${account ? "is-active" : ""}"><div class="acc-row2-head"><div class="acc-meta"><span class="usage-acc-plat ${platform}">${label}</span><span class="acc-email">${account ? escapeHtml(account.label || "selecionada pelo Laravel") : "aguardando seleção central"}</span></div>${account ? '<span class="acc-badge-active">● em uso</span>' : ""}</div></div>`).join("");
         panel.innerHTML = hubMarkup(status) +
           `<div class="acc-head team-divider-label"><div class="acc-title">Sessões recebidas</div><span class="team-central-mark">definidas pelo Laravel</span></div>` +
@@ -9962,55 +9983,64 @@
         const d = new Date(v); // aceita ISO (Claude) ou epoch ms (Codex)
         if (isNaN(d)) return null;
         try {
-          return new Intl.DateTimeFormat("pt-BR", {
+          const dateFmt = new Intl.DateTimeFormat("pt-BR", {
             timeZone: TZBR, day: "2-digit", month: "2-digit",
-            hour: "2-digit", minute: "2-digit",
-          }).format(d).replace(",", "");
+          });
+          const timeFmt = new Intl.DateTimeFormat("pt-BR", {
+            timeZone: TZBR, hour: "2-digit", minute: "2-digit",
+          });
+          const day = dateFmt.format(d);
+          const today = dateFmt.format(new Date());
+          return day === today ? timeFmt.format(d) : `${day} ${timeFmt.format(d)}`;
         } catch { return null; }
       }
       function cls(p) { return p == null ? "low" : p >= 90 ? "high" : p >= 70 ? "mid" : "low"; }
 
       function fmtPct(p) { return p == null ? "–" : Math.round(p) + "%"; }
 
-      // Uma única barra (janela de 5h) + os dois números no fim: 5h% / semanal%
+      // Barra compacta da janela de 5h; os dois períodos ficam identificados no topo.
       function usageLine(acc) {
         const w = Math.min(100, Math.max(0, acc.fiveHour || 0));
         const r = fmtReset(acc.fiveHourReset);
         return `<div class="usage-line">` +
           `<span class="usage-track"><span class="usage-fill ${cls(acc.fiveHour)}" style="width:${w}%"></span></span>` +
-          `<span class="usage-pct">${fmtPct(acc.fiveHour)}` +
-          `<span class="usage-pct-week"> / ${fmtPct(acc.weekly)}</span></span></div>` +
-          (r ? `<div class="usage-reset">reset 5h ${r}</div>` : "");
+          (r ? `<span class="usage-reset" title="Reset da janela de 5 horas">↻ ${r}</span>` : "") +
+          `</div>`;
       }
 
       function accBlock(acc, platLabel) {
+        const plan = acc.plan ? escapeHtml(String(acc.plan)) : "";
+        const statusLabel = `${platLabel}${plan ? `, plano ${plan}` : ""}, uso em 5 horas ${fmtPct(acc.fiveHour)}, uso semanal ${fmtPct(acc.weekly)}`;
         const head =
           `<div class="usage-acc-head">` +
           `<span class="usage-acc-plat ${acc.platform}">${platLabel}</span>` +
-          `<span class="usage-acc-name" title="${acc.email}">${acc.email}</span>` +
-          (acc.plan ? `<span class="usage-acc-plan">${acc.plan}</span>` : "") +
+          (plan ? `<span class="usage-acc-plan">${plan}</span>` : "") +
+          `<span class="usage-metrics">` +
+          `<span class="usage-metric"><span class="usage-metric-label">5H</span><span class="usage-metric-value">${fmtPct(acc.fiveHour)}</span></span>` +
+          `<span class="usage-metric"><span class="usage-metric-label">7D</span><span class="usage-metric-value">${fmtPct(acc.weekly)}</span></span>` +
+          `</span>` +
           `</div>`;
         if (acc.status === "expired") {
-          return `<div class="usage-acc">${head}<div class="usage-nodata">sessão expirada — relogar</div></div>`;
+          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">sessão expirada — relogar</div></div>`;
         }
         if (acc.status === "ratelimited") {
-          return `<div class="usage-acc">${head}<div class="usage-nodata">limite de consultas (429)</div></div>`;
+          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">limite de consultas (429)</div></div>`;
         }
         if (acc.status === "error") {
-          return `<div class="usage-acc">${head}<div class="usage-nodata">indisponível agora</div></div>`;
+          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">indisponível agora</div></div>`;
         }
         if (acc.status === "nodata") {
-          return `<div class="usage-acc">${head}<div class="usage-nodata">sem dados — clique ⟳</div></div>`;
+          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">sem dados — clique ⟳</div></div>`;
         }
-        return `<div class="usage-acc">${head}${usageLine(acc)}</div>`;
+        return `<div class="usage-acc" aria-label="${statusLabel}">${head}${usageLine(acc)}</div>`;
       }
 
       function render(table) {
         const claudeActive = (table.claude || []).find((a) => a.active) || (table.claude || [])[0];
         const codexActive  = (table.codex  || []).find((a) => a.active) || (table.codex  || [])[0];
         const parts = [];
-        if (claudeActive) parts.push(accBlock(claudeActive, "Claude"));
-        if (codexActive)  parts.push(accBlock(codexActive, "Codex"));
+        if (claudeActive) parts.push(accBlock(claudeActive, "Ailiv C"));
+        if (codexActive)  parts.push(accBlock(codexActive, "Ailiv G"));
         rowsEl.innerHTML = parts.length ? parts.join("") : `<div class="usage-empty">nenhuma conta gerenciada</div>`;
         // guarda a tabela completa p/ a futura tela de configurações
         window.__usageTable = table;

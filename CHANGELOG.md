@@ -10,6 +10,28 @@ _(nada ainda)_
 
 ---
 
+## [0.10.0] — 2026-07-11
+
+### Adicionado
+- **Identidade Ailiv C e Ailiv G** — o Cockpit apresenta o agente Claude como Ailiv C e o agente GPT/Codex como Ailiv G nos comandos rápidos, presets, configurações e resumo de consumo, mantendo executáveis e providers originais internamente.
+- **Patchers reversíveis dos dois CLIs** — scripts com backup por versão aplicam o branding Ailiv nos binários locais sem alterar o tamanho em bytes e permitem restaurar os executáveis originais.
+- **Aliases dinâmicos do Ailiv G** — a saída visual do terminal abrevia modelos (`gpt-5.6-sol` → `g-5.6-s`), traduz `YOLO mode` para `modo automático` e remove referências visuais restantes ao produto, sem alterar o model ID enviado à API.
+- **Runbook de manutenção** — documentação completa para reaplicar, restaurar, testar e diagnosticar branding, sessões centralizadas, tema e atualização dos CLIs.
+
+### Alterado
+- **Resumo de consumo mais compacto** — os cartões da sidebar agora identificam claramente as janelas `5H` e `7D`, usam barra fina e reset abreviado, ocupando menos espaço vertical.
+- **Tema ANSI preservado nos perfis isolados** — o primeiro uso do Ailiv C adota `dark-ansi`; preferências escolhidas posteriormente continuam sendo respeitadas.
+
+### Corrigido
+- **Erro HTTP 400 no Ailiv C** — o patch desativa a estratégia incompatível de cache global da versão 2.1.207 que gerava erro em `cache_control.scope`, preservando o restante do cache.
+- **Terminais isolados sem cores** — variáveis herdadas `NO_COLOR` e `COLOR` não tornam mais os terminais interativos monocromáticos, salvo quando o próprio projeto solicita isso explicitamente.
+
+### Segurança
+- **Identidade das contas removida da sidebar** — e-mail/label não é mais inserido no HTML, tooltip ou atributos ocultos do resumo de consumo.
+- **Branding separado da autenticação** — transforms visuais nunca alteram comandos, provider IDs, model IDs reais, tokens ou os perfis isolados gerenciados pelo DevNX Control.
+
+---
+
 ## [0.9.0] — 2026-07-11
 
 ### Adicionado

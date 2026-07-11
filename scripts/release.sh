@@ -73,6 +73,12 @@ if [[ "$CUR_VERSION" != "$NEW_VERSION" ]]; then
     const p = require('./package.json');
     p.version = '$NEW_VERSION';
     fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+    if (fs.existsSync('./package-lock.json')) {
+      const lock = require('./package-lock.json');
+      lock.version = '$NEW_VERSION';
+      if (lock.packages?.['']) lock.packages[''].version = '$NEW_VERSION';
+      fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + '\n');
+    }
   "
   # bump em todos os docs/scripts que referenciam a versão
   for f in scripts/install.sh README.md installer.md; do
@@ -80,7 +86,7 @@ if [[ "$CUR_VERSION" != "$NEW_VERSION" ]]; then
       sed -i "s/${CUR_VERSION//./\\.}/$NEW_VERSION/g" "$f"
     fi
   done
-  echo "  ✓ package.json + scripts/install.sh + README.md + installer.md"
+  echo "  ✓ package.json + package-lock.json + scripts/install.sh + README.md + installer.md"
 else
   echo "▸ versão já é $NEW_VERSION, pulando bump"
 fi
