@@ -140,7 +140,21 @@ test("PTY environment fails closed and never inherits local Claude or Codex auth
     fs.readFileSync(path.join(claudeHome, "settings.json"), "utf8"),
   );
   assert.equal(isolatedClaudeSettings.skipDangerousModePermissionPrompt, true);
+  assert.equal(isolatedClaudeSettings.theme, "dark-ansi");
   assert.equal(fs.statSync(path.join(claudeHome, "settings.json")).mode & 0o777, 0o600);
+});
+
+test("Claude isolated profile preserves a theme selected after its first launch", (t) => {
+  const { client, homeDir } = makeFixture(t, () => json({}));
+  const claudeHome = path.join(homeDir, ".cockpit", "claude");
+  fs.mkdirSync(claudeHome, { recursive: true });
+  fs.writeFileSync(path.join(claudeHome, "settings.json"), JSON.stringify({ theme: "light-ansi" }));
+
+  client.enrichPtyEnv({});
+
+  const settings = JSON.parse(fs.readFileSync(path.join(claudeHome, "settings.json"), "utf8"));
+  assert.equal(settings.theme, "light-ansi");
+  assert.equal(settings.skipDangerousModePermissionPrompt, true);
 });
 
 test("connect exchanges JWT for a device token and persists only the minimum with mode 0600", async (t) => {
@@ -189,8 +203,10 @@ test("selection keeps secrets in memory, writes an isolated Codex auth and enric
     throw new Error(`Unexpected path ${url.pathname}`);
   });
   fs.mkdirSync(path.join(homeDir, ".codex", "skills"), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".codex", "themes"), { recursive: true });
   fs.mkdirSync(path.join(homeDir, ".codex", "sessions"), { recursive: true });
   fs.writeFileSync(path.join(homeDir, ".codex", "config.toml"), "model = \"gpt-5\"\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(homeDir, ".codex", "themes", "devnx.tmTheme"), "<plist />\n");
   await connect(client);
 
   const openai = await client.selectBest("codex");
@@ -213,6 +229,7 @@ test("selection keeps secrets in memory, writes an isolated Codex auth and enric
   assert.equal(fs.statSync(path.join(isolatedHome, "config.toml")).mode & 0o777, 0o600);
   if (process.platform !== "win32") {
     assert.equal(fs.realpathSync(path.join(isolatedHome, "skills")), path.join(homeDir, ".codex", "skills"));
+    assert.equal(fs.realpathSync(path.join(isolatedHome, "themes")), path.join(homeDir, ".codex", "themes"));
   }
   assert.equal(fs.existsSync(path.join(isolatedHome, "sessions")), false);
   assert.equal(auth.tokens.access_token, "access-one");

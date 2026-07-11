@@ -12,6 +12,7 @@ import * as stt from "./lib/stt.js";
 import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
 import { createTeamAccountsClient } from "./lib/team-accounts.js";
 import { createTeamRouter } from "./lib/team-router.js";
+import { interactiveTerminalEnv } from "./lib/terminal-env.js";
 const { spawn } = pkg;
 
 // === config dinâmica — populada por startServer() ===
@@ -65,15 +66,11 @@ function createTerminalIn(session, name = null) {
     );
   }
 
-  const baseEnv = {
-    ...process.env,
-    ...(session.proj.env || {}),
-    TERM: "xterm-256color",
-    COLORTERM: "truecolor",
+  const baseEnv = interactiveTerminalEnv(process.env, session.proj.env, {
     COCKPIT_PROJECT: session.proj.id,
     COCKPIT_TERMINAL: tid,
     COCKPIT: "1",
-  };
+  });
   let terminalEnv = baseEnv;
   try {
     terminalEnv = teamRouter.enrichPtyEnv(baseEnv, {
