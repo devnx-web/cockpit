@@ -1,6 +1,8 @@
 # Runbook — Ailiv C, Ailiv G e sessões centralizadas
 
-> Estado verificado em 11/07/2026. Este documento é o ponto de partida para reaplicar ou ajustar as personalizações depois de atualizações do Claude CLI, Codex CLI ou Cockpit.
+> Estado verificado em 21/07/2026. Este documento é o ponto de partida para reaplicar ou ajustar as personalizações depois de atualizações do Claude CLI, Codex CLI ou Cockpit.
+>
+> **Atualização 21/07/2026 (v0.12.x):** a discrição de tela do **Ailiv C (Claude)** agora é feita **em runtime** na saída dos terminais (igual ao Ailiv G), em `public/terminal-branding.js`. Isso **sobrevive a updates do CLI** (não depende mais do patch de binário pra esconder Claude/Opus/logo). Veja a seção **“Ailiv C — discrição de tela em runtime”**.
 
 ## Objetivo
 
@@ -149,6 +151,134 @@ O Cockpit marca o terminal como Ailiv G quando:
 
 Depois de marcado, o filtro vale até o terminal ser destruído. Ele não deve ser aplicado globalmente a terminais comuns, para não alterar logs e arquivos que apenas mencionem GPT/Codex.
 
+## Ailiv C — discrição de tela em runtime
+
+> Adicionado na v0.12.x. É a forma **preferida** de esconder a identidade do Claude
+> na tela do Cockpit, porque **não altera o binário e sobrevive a atualizações** do
+> CLI. Objetivo: quem olhar a tela enquanto você desenvolve não associa a Claude/Opus/
+> Anthropic. **Não engana usuário final** — é só discrição visual local; provider,
+> comandos e model IDs enviados à API continuam os originais.
+
+### Arquivo e integração
+
+- `public/terminal-branding.js` → `CockpitTerminalBranding.transformOutput(key, data)`.
+- Ligado em `public/index.html`:
+  - entrada: `observeInput(k(projId,tid), data)` (marca o terminal ao digitar `claude`);
+  - saída: `const branded = transformOutput(k(projId,tid), data) ?? data` antes de
+    escrever no xterm (vale pra saída ao vivo **e** pro replay do buffer ao reconectar).
+- Mesma estrutura do filtro do Ailiv G — Claude e Codex convivem no mesmo `transformOutput`.
+
+### Como um terminal vira “Ailiv C”
+
+Marcado (sticky até o terminal ser destruído) quando:
+
+- o usuário roda um comando começando com `claude` (detecção por input); **ou**
+- a saída casa `identifiesAilivC`: `Claude Code | Claude API | Anthropic | claude-(opus|sonnet|haiku)`.
+
+As trocas de **identificadores fortes** rodam **sempre** (sem depender da marcação),
+porque o Ink desenha o banner em frames e partes chegam antes de o terminal ser
+marcado. Só a palavra genérica `Claude` e os rodapés dependem da marcação (pra não
+mexer em terminal comum).
+
+### Substituições (na saída, sem trava de tamanho)
+
+| Saída real | Vira |
+|---|---|
+| `Claude Code` | `Ailiv C` |
+| `Claude API` | `Ailiv Core` |
+| `Claude Pro/Max/Team/Enterprise` | `Ailiv Pro/Max/Team/Enterprise` |
+| `Anthropic` | `Ailiv` |
+| `claude-opus-4-8-…` (model id) | `o-48` (família→inicial + versão; preenche com espaço) |
+| `Opus 4.8 with medium effort` | `o-48m` (inicial + versão sem ponto + inicial do effort) |
+| `Sonnet 4.5` / `Haiku 3.5` | `s-45` / `h-35` |
+| `Claude` (isolado) | `Ailiv C` (só em terminal já marcado) |
+
+**Detalhe crítico:** os textos do CLI vêm logo após um código ANSI que termina em
+letra (ex.: `\x1b[37m` → `m`). Por isso **não usar `\b` no início** das regexes (ex.:
+`\bOpus` nunca casaria depois do `m`). Casos com `\b` no fim continuam ok.
+
+### Logo e header do banner (ocultar em vez de rebrandear)
+
+O logo é arte ANSI de blocos desenhada **na mesma linha do título** (o cursor vai pra
+coluna 12 e escreve o texto). Ou seja: as 3 linhas do topo (título+versão, modelo, pasta)
+**são as mesmas linhas do logo** e todas têm glifos de **quadrante** (`▖▗▘▙▚▛▜▝▞▟` =
+U+2596–U+259F), que barras de progresso, sparklines (`▁▂▃…█`) e tabelas **não** usam.
+
+`hideLogo(data, full)`:
+
+- `full = false` (terminal comum): só troca os glifos de bloco (`▀–▟`) por espaço —
+  neutraliza um logo solto sem mexer no resto.
+- `full = true` (terminal de agente **Ailiv C/G**, ligado em `transformOutput` via
+  `ailivCTerminals.has(key) || ailivGTerminals.has(key)`): apaga a **linha inteira** que
+  tiver quadrante. Como o header do CLI mora nessas linhas, isso **oculta o header todo
+  (logo + título + modelo + pasta) sem depender do texto** — não precisa manter o
+  rebrand do banner; se o CLI mudar as palavras, continua oculto.
+
+- **Limitação conhecida:** sobra uma **sombra fraca** no canto (as células do logo têm
+  cor de **fundo**; apago o conteúdo visível, mas o código de fundo permanece). O robô
+  rosa e o texto do header somem; a sombra é sutil. Eliminar exigiria limpar também os
+  códigos de fundo (mais risco de afetar outras cores).
+- **Nota:** o aviso "⚠ N MCP server needs authentication · run /mcp" fica numa linha
+  **sem** quadrante, então não é ocultado por aqui (e não cita Claude). Se quiser
+  escondê-lo, dá pra adicionar a assinatura em `hideFooters`/uma regra própria.
+
+### Chrome dos agentes: rodapés, header do Codex e aviso de MCP (`hideChrome`)
+
+`hideChrome(data, isC, isG)` processa **linha a linha**; se o conteúdo **sem ANSI** casa
+uma assinatura, `blankVisible` apaga só os caracteres **visíveis**, preservando os
+códigos ANSI (não desalinha as colunas — os CLIs posicionam por coluna absoluta e
+espalham códigos **entre** os tokens, então casar texto literal falharia).
+
+Assinaturas (todas gated ao terminal do agente correspondente):
+
+- **Rodapé Ailiv C:** `bypass permissions | accept edits | plan mode | manual mode` ou
+  `shift+tab to cycle` ou `? for shortcuts`.
+- **Rodapé Ailiv G:** linha com `g-<versão>` **e** `(xhigh|high|medium|low|minimal) · <cwd>`
+  (ex.: `g-5.6-s   xhigh · ~`).
+- **Header do Codex (caixa):** o banner do Codex é uma **caixa** desenhada com bordas
+  `│ ─ ╭╮╰╯` (não usa quadrante, por isso não cai no `hideLogo`). Oculta: linhas com
+  `Ailiv G (v…)` ou label do box precedida de borda (`│ model:`, `│ directory:`,
+  `│ permissions:`, `reasoning:`, `approvals:`, `sandbox:`), as **bordas puras** do box
+  e os **lados vazios** (`│      │`).
+- **Aviso de MCP** (Claude e Codex): linha com `MCP server… authentication` ou `run /mcp`.
+
+> Limitação: as labels do box só são casadas **precedidas de `│`** (pra não apagar um
+> `model:` solto na saída do agente). Bordas puras de box (`─────`) num terminal de
+> agente também são apagadas — se o agente desenhar outra caixa, a borda dela some
+> (o conteúdo com texto permanece). É raro e cosmético.
+
+### Vantagem e limitações
+
+- **Sobrevive a updates**: como é `replace` de string no cliente, atualizar o Claude/
+  Codex **não reverte** nada (diferente do patch de binário).
+- **Só dentro do Cockpit**: o `claude` avulso no seu terminal continua normal.
+- **Fronteira de chunk**: se um identificador vier partido entre dois chunks, aquele
+  pedaço pode escapar (raro). Os identificadores fortes rodando “sempre” minimizam isso.
+
+### Como ajustar depois que o Claude/Codex mudar a UI
+
+Se algum texto/rodapé/logo voltar a aparecer após um update, **capture os bytes reais**
+e ajuste as regexes (não precisa mexer em binário):
+
+```bash
+# banner/rodapé do Claude (roda ~6s e mata):
+timeout 6 script -qefc "claude" /tmp/claude-banner.raw </dev/null >/dev/null 2>&1
+cat -v /tmp/claude-banner.raw | head -30      # vê os escapes/glifos exatos
+```
+
+Ou, com um terminal já aberto no app, leia o rodapé direto do xterm pelo console do
+navegador:
+
+```js
+let inst; xtermInstances.forEach((v,k)=>{ if(k.startsWith("voice:")) inst=v; });
+const b=inst.term.buffer.active;
+[...Array(12)].map((_,i)=>b.getLine(b.length-12+i)?.translateToString(true)).filter(Boolean);
+```
+
+Depois teste o `transformOutput` contra o arquivo capturado antes de publicar (há
+exemplos no histórico: carregar o IIFE com `eval(fs.readFileSync(...))` e comparar
+antes/depois).
+
 ## Identidade visível dentro do Cockpit
 
 Os nomes internos continuam sendo usados em classes CSS, IDs, providers e comandos. Somente os rótulos apresentados ao usuário mudam:
@@ -289,11 +419,14 @@ Se o terminal voltar a ficar cinza depois de uma atualização, verificar primei
 
 ## Checklist visual e funcional
 
-### Ailiv C
+### Ailiv C (discrição de tela em runtime — v0.12.x)
 
-- [ ] Cabeçalho mostra `Ailiv Agent`.
-- [ ] Backend visual mostra `Ailiv Core`.
-- [ ] Opus aparece como `O4.8` e Sonnet como `S5`.
+- [ ] **Header do banner oculto** (logo + título/versão + modelo + pasta somem).
+- [ ] Logo (robozinho rosa) não aparece (pode sobrar sombra fraca).
+- [ ] Rodapé de modo/permissão (`bypass permissions on…`) some.
+- [ ] Menções soltas: `Claude`→`Ailiv C`, `Opus 4.8`→`o-48m`, `Anthropic`→`Ailiv`
+      (rede de segurança pro texto fora do banner).
+- [ ] Terminal comum (sem claude) fica **intacto**.
 - [ ] Tema ANSI colorido, sem tela cinza.
 - [ ] Não abre wizard de login quando a sessão central é válida.
 - [ ] Uma mensagem simples responde sem erro HTTP 400 de cache global.
@@ -354,7 +487,7 @@ Verificar a seleção OpenAI, o `auth.json` materializado no `CODEX_HOME` da con
 | Arquivo | Responsabilidade |
 |---|---|
 | `public/index.html` | Labels Ailiv, consumo compacto, integração do filtro e escrita no xterm. |
-| `public/terminal-branding.js` | Aliases visuais dinâmicos do Ailiv G. |
+| `public/terminal-branding.js` | Filtro de runtime: rebrand da saída do **Ailiv G e Ailiv C** (texto, model ID, logo, rodapés). Preferido pra discrição de tela. |
 | `projects.json` | Labels dos comandos existentes. |
 | `lib/ailiv-cli-branding.js` | Replace binário do Ailiv C. |
 | `lib/ailiv-g-cli-branding.js` | Replace binário do Ailiv G. |
@@ -374,9 +507,17 @@ Verificar a seleção OpenAI, o `auth.json` materializado no `CODEX_HOME` da con
 
 Antes de adicionar um novo replace, decidir em qual camada ele pertence:
 
-- **Texto estático do cabeçalho do CLI:** patch binário, somente se o tamanho em bytes for preservado.
-- **Texto dinâmico/model ID:** filtro visual do xterm; nunca alterar o valor real enviado à API.
+- **Discrição visual na tela do Cockpit (Claude ou Codex):** filtro de runtime em
+  `public/terminal-branding.js` (`transformOutput`). **É a via preferida** — sobrevive
+  a updates e não toca o binário. Cobre texto, model ID, logo e rodapés.
+- **Texto estático do cabeçalho do CLI fora do Cockpit / workaround que só existe no
+  binário (ex.: cache HTTP 400):** patch binário, somente se o tamanho em bytes for
+  preservado. Lembrar que **reverte a cada update** do CLI.
 - **Rótulo do Cockpit:** `public/index.html`/`projects.json`, mantendo provider e comando internos.
 - **Autenticação, consumo ou seleção:** Laravel + `team-accounts.js`; nunca resolver isso com replace visual.
+
+> Nota: desde a v0.12.x, esconder “Claude/Opus/Anthropic/logo/rodapé” **na tela** não
+> precisa mais do patch de binário — faça no `terminal-branding.js`. O patch de binário
+> do Claude fica reservado ao que o runtime não alcança (ex.: o workaround de cache).
 
 Essa separação é o que permite atualizar a aparência sem quebrar login, renovação, histórico, escolha de conta ou compatibilidade com os provedores.

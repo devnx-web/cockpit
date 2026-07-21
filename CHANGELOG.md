@@ -10,6 +10,100 @@ _(nada ainda)_
 
 ---
 
+## [0.12.3] — 2026-07-21
+
+### Corrigido / melhorado (discrição de tela)
+- **Header dos agentes ocultado por completo** dentro do Cockpit — o banner de início
+  do Ailiv C (logo + título/versão + modelo + pasta) e a **caixa de header do Ailiv G
+  (Codex)** somem, independente do texto (não precisa mais rebrandear o banner a cada
+  update do CLI).
+- **Rodapés ocultados** — barra de modo/permissão do Ailiv C ("bypass permissions on…")
+  e a linha de status do Ailiv G ("g-5.6-s xhigh · ~").
+- **Aviso de MCP ocultado** ("N MCP server needs authentication · run /mcp").
+- **Modelo** aparece como `o-48m` (Opus 4.8 medium) / `o-48`; corrigido o caso em que
+  "Opus 4.8" e o logo escapavam (o texto vinha após um código ANSI terminado em letra).
+- Tudo na camada de saída do app (`public/terminal-branding.js`), **sem patch de
+  binário** — sobrevive a atualizações do Claude/Codex. Barras de progresso, tabelas e
+  o output normal do agente não são afetados. Documentado em
+  `docs/AILIV-BRANDING-E-SESSOES.md`.
+
+---
+
+## [0.12.2] — 2026-07-21
+
+### Adicionado
+- **Discrição de tela nos terminais** — a saída do Claude passa a ser reescrita ao vivo dentro do Cockpit (Claude Code → Ailiv C, Claude API → Ailiv Core, Opus/Sonnet/Haiku e ids de modelo → alias, Anthropic → Ailiv) e o logo do banner é ocultado. É feito na camada de saída do app (sem patch de binário), então **sobrevive a atualizações do CLI**. Barras de progresso, tabelas e texto normal não são afetados.
+
+---
+
+## [0.12.1] — 2026-07-21
+
+### Adicionado
+- **Comandos rápidos no mosaico** — cada card do grid ganhou o botão ⚡ de comandos rápidos (os mesmos atalhos por projeto da barra de abas). Clicar num comando envia direto pro terminal daquele card.
+
+---
+
+## [0.12.0] — 2026-07-21
+
+### Adicionado
+- **Modo mosaico** — o espaço central vira um grid de vários projetos lado a lado, cada card mostrando o terminal ativo de um projeto (ideal pra acompanhar vários agentes em paralelo). Alterna com o modo foco tradicional pelo ícone de grade ou `Ctrl/⌘+Shift+M`.
+  - **Layout customizável** — defina quantas linhas e quantas colunas por linha (colunas variáveis por linha), com presets rápidos (1×1, 1×2, 2×2, 3 col, 2×3, 3×3). O layout fica salvo.
+  - **Escolher projetos por célula** — clique numa célula vazia e escolha o projeto num modal com busca.
+  - No mosaico, a sidebar, o cabeçalho da pasta, a barra de abas e o rodapé somem; os controles globais (layout, configurações, sair) vão pro topo — o grid ocupa quase a tela toda.
+- **Encerrar terminais ociosos** — um reaper libera memória fechando terminais sem uso há 2 horas. Nunca encerra terminais com processo rodando (dev server, agente…), aguardando você, ou visíveis; avisa antes com contagem e botão "Manter ativo". Ligado por padrão, com toggle nas Configurações (Terminais). Ajustável por env (`COCKPIT_IDLE_REAP_MS`).
+- **Renomear aba no mosaico** — duplo-clique renomeia o terminal direto no card.
+- **Persistência** — modo (foco/mosaico), layout do grid, projetos de cada célula e o terminal selecionado de cada projeto ficam salvos entre sessões.
+
+### Corrigido
+- **Espaço no rename de aba** — digitar um espaço ao renomear um terminal não encerra mais a edição; nomes com espaço agora funcionam (foco e mosaico).
+
+### Removido
+- **Painel de Consumo** na sidebar — o acompanhamento de consumo passou a ser responsabilidade do backend.
+
+---
+
+## [0.11.0] — 2026-07-20
+
+### Adicionado
+- **Busca rápida de arquivos** — o painel Arquivos agora localiza por nome ou caminho, aceita correspondência aproximada, abre o resultado pelo teclado e pode ser acessado com `Ctrl/⌘+P`.
+
+---
+
+## [0.10.4] — 2026-07-20
+
+### Corrigido
+- **Aba presa na tela de login do Ailiv G** — terminais criados durante uma indisponibilidade transitória agora recebem a sessão assim que o pool central se recupera, mesmo que o shell já esteja aberto.
+- **Retentativa silenciosa de autenticação** — as telas locais `Not logged in` e de seleção de login também acionam a recuperação; uma seleção ausente é repetida uma vez em segundo plano.
+- **Credencial removida entre abas** — o `auth.json` do Codex é rematerializado atomicamente antes de cada novo PTY, cobrindo limpeza concorrente por outra instância do Cockpit.
+
+---
+
+## [0.10.3] — 2026-07-13
+
+### Alterado
+- **Broker loopback real para Claude** — o processo Claude recebe somente uma capability local descartável; access tokens reais permanecem na memória do Cockpit e não entram mais no ambiente do PTY nem no arquivo de credenciais.
+- **Proxy streaming da API Anthropic** — chamadas Claude passam pelo endpoint local protegido do Cockpit, preservando streaming e os cabeçalhos necessários da API.
+
+### Corrigido
+- **401 repetido em sessões abertas** — se a Anthropic revogar um access token, o Cockpit solicita a renovação ao DevNX Control e repete automaticamente a requisição uma vez com o novo token, sem reiniciar Claude, terminal ou aplicativo.
+- **Rotação por arquivo insuficiente** — removida a dependência do reload de `.credentials.json`, pois o Claude podia manter o token anterior em memória mesmo depois da substituição atômica do arquivo.
+
+---
+
+## [0.10.2] — 2026-07-12
+
+### Alterado
+- **Seleção central atualizada a cada 15 minutos** — o Cockpit aberto por vários dias volta a consultar o DevNX Control periodicamente e mantém em memória as melhores sessões disponíveis de Claude e OpenAI.
+- **Atualização antes de criar terminais** — PTYs novos ou reiniciados revalidam a seleção central quando o cache local está antigo, sem depender de reiniciar o aplicativo inteiro.
+- **Credencial Claude rotativa** — o perfil isolado recebe apenas o access token selecionado pelo broker, em arquivo `0600`; o refresh token continua exclusivamente no DevNX Control.
+
+### Corrigido
+- **Sessão OAuth antiga em terminais novos** — uma instância do Cockpit deixada aberta não injeta mais em novos shells o access token carregado no boot anterior.
+- **Sincronizações concorrentes deduplicadas** — criações simultâneas de terminais compartilham a mesma atualização do pool, evitando chamadas duplicadas ao backend.
+- **401 sem reiniciar o terminal Claude** — ao detectar credenciais inválidas, o Cockpit sincroniza uso e seleção imediatamente; a sessão aberta lê a credencial substituída na tentativa seguinte.
+
+---
+
 ## [0.10.0] — 2026-07-11
 
 ### Adicionado

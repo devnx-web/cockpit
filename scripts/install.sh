@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-VERSION="0.10.0"
+VERSION="0.12.3"
 BASE_URL="https://arquivos.devnx.com.br/cockpit/v${VERSION}"
 DEB_FILE="cockpit-devnx_${VERSION}_amd64.deb"
 TMP="/tmp/${DEB_FILE}"

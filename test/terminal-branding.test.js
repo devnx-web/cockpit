@@ -33,9 +33,16 @@ test("Ailiv G terminal aliases are display-only and abbreviate future model fami
   assert.equal(branding.modelAlias("gpt-5.1-codex-max").trimEnd(), "g-5.1-c-m");
 });
 
-test("Ailiv G header can activate aliases when replaying an existing terminal buffer", () => {
+test("Ailiv G: cabeçalho do banner é ocultado e o replay ativa o alias do modelo", () => {
   const branding = loadBranding();
-  const output = branding.transformOutput("project:replay", "Ailiv G (v1) model: gpt-5.6-sol");
+  // 1ª linha = cabeçalho do banner (marca o terminal e é ocultado);
+  // 2ª linha = output normal, onde o model id deve ser aliasado.
+  const output = branding.transformOutput(
+    "project:replay",
+    "Ailiv G (v1)\nrodando gpt-5.6-sol agora",
+  );
 
-  assert.match(output, /Ailiv G \(v1\) model: g-5\.6-s/);
+  assert.doesNotMatch(output, /Ailiv G \(v1\)/);      // cabeçalho ocultado
+  assert.match(output, /rodando g-5\.6-s\s+agora/);   // alias ativa fora do cabeçalho
+  assert.doesNotMatch(output, /gpt-5\.6-sol/);
 });

@@ -25,12 +25,13 @@ test("Cockpit presents managed engines as Ailiv C and Ailiv G while retaining in
   assert.doesNotMatch(html, /Iniciar agente Claude Code aqui/);
 });
 
-test("compact usage summary never renders managed account identities", () => {
+test("consumption panel removed — never renders managed account identities", () => {
   const html = fs.readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
 
-  assert.match(html, /<span>Consumo<\/span>/);
-  assert.match(html, /usage-metric-label">5H/);
-  assert.match(html, /usage-metric-label">7D/);
+  // A seção "Consumo" foi removida em definitivo (o backend cuida do consumo).
+  assert.doesNotMatch(html, /<span>Consumo<\/span>/);
+  assert.doesNotMatch(html, /id="usageRows"/);
+  // Continua valendo: nenhuma identidade de conta gerenciada é renderizada.
   assert.doesNotMatch(html, /usage-acc-name/);
   assert.doesNotMatch(html, /title="\$\{acc\.email\}"/);
 });

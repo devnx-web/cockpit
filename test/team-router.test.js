@@ -78,20 +78,101 @@ test("sensitive Codex refresh rejects browser origins before invoking the client
   assert.equal(invoked, false);
 });
 
-test("bootstrap materializes OpenAI before PTY environment enrichment", async () => {
-  let materialized = false;
+test("bootstrap materializes Codex auth before PTY environment enrichment", async () => {
+  let codexMaterialized = false;
   const router = createTeamRouter({
     client: fakeClient({
-      materializeCodexAuth: async () => { materialized = true; },
+      materializeCodexAuth: async () => { codexMaterialized = true; },
     }),
     brokerUrl: () => BROKER_URL,
   });
 
   const result = await router.bootstrap();
   assert.equal(result.selections.length, 2);
-  assert.equal(materialized, true);
+  assert.equal(codexMaterialized, true);
   assert.equal(
     router.enrichPtyEnv({ TERM: "xterm" }).CODEX_REFRESH_TOKEN_URL_OVERRIDE,
     `${BROKER_URL}/team/openai/oauth/token`,
   );
+});
+
+test("stale PTY selections are refreshed once and concurrent refreshes are deduplicated", async () => {
+  const selected = {};
+  let selections = 0;
+  let materializations = 0;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const client = fakeClient({
+    status: () => ({
+      connected: true,
+      baseUrl: "https://control.example",
+      selected,
+    }),
+    selectBest: async (provider) => {
+      selections += 1;
+      await gate;
+      const account = { id: `${provider}-fresh`, provider, label: `${provider} fresh` };
+      selected[provider] = account;
+      return { account };
+    },
+    materializeCodexAuth: async () => { materializations += 1; },
+  });
+  const router = createTeamRouter({ client, brokerUrl: () => BROKER_URL });
+
+  const first = router.refreshSelectionsIfStale();
+  const second = router.refreshSelectionsIfStale();
+  release();
+  await Promise.all([first, second]);
+
+  assert.equal(selections, 2);
+  const cached = await router.refreshSelectionsIfStale();
+  assert.equal(cached.cached, true);
+  assert.equal(selections, 2);
+  assert.equal(materializations, 2);
+});
+
+test("PTY preparation retries a transient missing provider selection", async () => {
+  const selected = {};
+  let openAiAttempts = 0;
+  const client = fakeClient({
+    status: () => ({
+      connected: true,
+      baseUrl: "https://control.example",
+      selected,
+    }),
+    selectBest: async (provider) => {
+      if (provider === "openai" && ++openAiAttempts === 1) {
+        throw new Error("temporary selection failure");
+      }
+      const account = { id: `${provider}-fresh`, provider, label: `${provider} fresh` };
+      selected[provider] = account;
+      return { account };
+    },
+  });
+  const router = createTeamRouter({ client, brokerUrl: () => BROKER_URL });
+
+  const result = await router.refreshSelectionsIfStale();
+
+  assert.equal(openAiAttempts, 2);
+  assert.equal(result.selections.some((item) => item.provider === "openai"), true);
+  assert.equal(Boolean(router.status().selected.openai), true);
+});
+
+test("manual optimize synchronizes usage before replacing provider selections", async () => {
+  const events = [];
+  const router = createTeamRouter({
+    client: fakeClient({
+      syncUsage: async () => { events.push("usage"); return []; },
+      selectBest: async (provider) => {
+        events.push(`select:${provider}`);
+        return { account: { id: `${provider}-1`, provider, label: provider } };
+      },
+    }),
+    brokerUrl: () => BROKER_URL,
+  });
+
+  await router.dispatch(request("POST", {}), { pathname: "/team/optimize" });
+
+  assert.equal(events[0], "usage");
+  assert.deepEqual(new Set(events.slice(1)), new Set(["select:openai", "select:claude"]));
 });

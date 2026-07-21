@@ -900,6 +900,10 @@
       outline: none;
       border-radius: 3px;
     }
+    .mosaic-tab-input {
+      width: 96px; font-size: 11px; padding: 1px 4px;
+      border-color: var(--proj-color, var(--border-strong));
+    }
     .tab-close {
       display: flex; align-items: center; justify-content: center;
       width: 16px; height: 16px;
@@ -1021,6 +1025,210 @@
     }
     .terminal-empty .big-plus svg { width: 22px; height: 22px; stroke-width: 1.5; }
 
+    /* ── MOSAICO (grid de projetos) ───────────────────────────── */
+    /* Cluster de controles globais do mosaico, hospedado na title-bar
+       (só aparece no modo mosaico). Reúne arranjo + config + sair. */
+    .mosaic-top-actions {
+      display: none; align-items: center; gap: 10px;
+      -webkit-app-region: no-drag;
+    }
+    .app.mosaic .mosaic-top-actions { display: flex; }
+    .mosaic-toolbar {
+      display: flex; align-items: center; gap: 3px;
+      padding: 3px; border-radius: 8px;
+      background: var(--bg-1); border: 1px solid var(--border-default);
+    }
+    .mosaic-arrange-btn {
+      background: transparent; border: none; color: var(--text-secondary);
+      font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 6px;
+      cursor: pointer; transition: all 120ms; white-space: nowrap; letter-spacing: .02em;
+    }
+    .mosaic-arrange-btn:hover { background: var(--bg-3); color: var(--text-primary); }
+    .mosaic-arrange-btn.active { background: var(--accent, #4a9eff); color: #fff; }
+    .mosaic-top-sep { width: 1px; height: 18px; background: var(--border-default); }
+
+    /* No mosaico, a sidebar, o header da pasta e a barra de abas somem —
+       o grid vira o protagonista e ocupa quase toda a tela. */
+    .app.mosaic .sidebar,
+    .app.mosaic .sidebar-resize-handle,
+    .app.mosaic .header,
+    .app.mosaic .tab-bar,
+    .app.mosaic .status-bar { display: none !important; }
+    /* com a sidebar fora do grid, fixa o main na 3ª coluna (senão ele
+       escorrega pra coluna 1 de 0px e o mosaico fica sem largura).
+       colapsa também a linha do rodapé pra ganhar a tela toda. */
+    .app.mosaic .main { grid-column: 3 / -1; }
+    .app.mosaic { grid-template-rows: 38px 1fr 0px !important; }
+
+    /* Grid — ocupa toda a área; só visível no modo mosaico.
+       Flex de linhas (cada .mosaic-row com N colunas variáveis). */
+    .mosaic-grid {
+      position: absolute; inset: 0;
+      display: none;
+      flex-direction: column;
+      gap: 6px; padding: 6px;
+    }
+    .app.mosaic .mosaic-grid { display: flex; }
+    .mosaic-row { display: flex; flex: 1; gap: 6px; min-height: 0; }
+    .mosaic-row > .mosaic-card,
+    .mosaic-row > .mosaic-drop { flex: 1; min-width: 0; }
+
+    .mosaic-card {
+      display: flex; flex-direction: column;
+      min-width: 0; min-height: 0;
+      border: 1px solid var(--border-default);
+      border-radius: 10px; overflow: hidden;
+      background: var(--bg-1);
+      transition: border-color 120ms, box-shadow 120ms;
+    }
+    .mosaic-card.focused {
+      border-color: var(--proj-color, var(--text-secondary));
+      box-shadow: 0 0 0 1px var(--proj-color, var(--text-secondary)), 0 8px 22px rgba(0,0,0,0.30);
+    }
+    .mosaic-card-head {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 6px 5px 9px;
+      border-bottom: 1px solid var(--border-default);
+      border-left: 3px solid var(--proj-color, transparent);
+      background: var(--bg-2);
+      flex-shrink: 0; min-width: 0;
+    }
+    .mosaic-card-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--proj-color, var(--text-tertiary)); flex-shrink: 0;
+    }
+    .mosaic-card-title {
+      font-size: 12px; font-weight: 600; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 40%; flex-shrink: 0;
+    }
+    .mosaic-card-tabs {
+      display: flex; align-items: center; gap: 3px;
+      overflow-x: auto; min-width: 0; flex: 1;
+      scrollbar-width: none;
+    }
+    .mosaic-card-tabs::-webkit-scrollbar { display: none; }
+    .mosaic-mini-tab {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: transparent; border: 1px solid transparent;
+      color: var(--text-tertiary); font-size: 11px;
+      padding: 2px 7px; border-radius: 5px; cursor: pointer;
+      white-space: nowrap; transition: all 110ms;
+    }
+    .mosaic-mini-tab:hover { background: var(--bg-3); color: var(--text-secondary); }
+    .mosaic-mini-tab.active { background: var(--bg-3); color: var(--text-primary); }
+    .mosaic-mini-tab .status-dot { width: 6px; height: 6px; }
+    .mosaic-mini-tab[data-unread="1"]::after {
+      content: ""; width: 5px; height: 5px; border-radius: 50%;
+      background: var(--status-attention, #3b82f6);
+    }
+    .mosaic-card-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: auto; }
+    .mosaic-card-btn {
+      background: transparent; border: none; color: var(--text-tertiary);
+      cursor: pointer; padding: 3px; border-radius: 5px; display: flex;
+      transition: all 110ms;
+    }
+    .mosaic-card-btn:hover { background: var(--bg-3); color: var(--text-primary); }
+    .mosaic-card-btn.open { background: var(--bg-3); color: var(--text-primary); }
+    .mosaic-card-btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .mosaic-card-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+
+    /* Terminal reparentado pra dentro de um card: abandona o absolute/inset:0 */
+    .terminal-instance.in-grid {
+      position: absolute; inset: 0;
+      display: block !important;
+      padding: 6px 4px 6px 8px;
+    }
+
+    /* Célula vazia — dropzone */
+    .mosaic-drop {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; text-align: center;
+      color: var(--text-tertiary); font-size: 12px;
+      border: 1px dashed var(--border-strong); border-radius: 10px;
+      margin: 0; height: 100%;
+      transition: all 130ms;
+    }
+    .mosaic-drop.drag-over {
+      border-color: var(--text-secondary); color: var(--text-primary);
+      background: var(--bg-2);
+    }
+    .mosaic-drop-plus {
+      width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+      border: 1px dashed var(--border-strong); border-radius: 10px;
+    }
+    .mosaic-drop-plus svg { width: 18px; height: 18px; stroke-width: 1.5; }
+    .mosaic-drop { cursor: pointer; }
+    .mosaic-drop:hover { border-color: var(--text-secondary); color: var(--text-primary); background: var(--bg-2); }
+    .mosaic-card.drag-over { border-color: var(--text-secondary); box-shadow: 0 0 0 1px var(--text-secondary); }
+
+    /* Picker de projeto ao clicar numa célula vazia (reusa .visibility-*) */
+    .mosaic-pick-list { overflow-y: auto; padding: 10px 12px 14px; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+    .mosaic-pick-row {
+      display: flex; align-items: center; gap: 11px;
+      padding: 9px 11px; border-radius: 8px; cursor: pointer;
+      border: 1px solid transparent; transition: all 110ms;
+    }
+    .mosaic-pick-row:hover { background: var(--bg-3); border-color: var(--border-default); }
+    .mosaic-pick-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--proj-color, var(--text-tertiary)); flex-shrink: 0; }
+    .mosaic-pick-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; background: color-mix(in srgb, var(--proj-color), transparent 88%); color: var(--proj-color); flex-shrink: 0; }
+    .mosaic-pick-icon svg { width: 13px; height: 13px; stroke-width: 1.5; }
+    .mosaic-pick-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .mosaic-pick-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mosaic-pick-path { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-term); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mosaic-pick-badge { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
+    .mosaic-pick-empty { padding: 28px 16px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
+    .mosaic-pick-group { margin-bottom: 12px; }
+    .mosaic-pick-group:last-child { margin-bottom: 0; }
+    .mosaic-pick-group-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-tertiary); padding: 4px 6px; }
+
+    /* Editor de layout (popover ancorado no botão Layout) */
+    .layout-editor-backdrop { position: fixed; inset: 0; z-index: 295; background: transparent; }
+    .layout-editor-pop {
+      position: fixed; z-index: 300; width: 264px;
+      background: var(--bg-2); border: 1px solid var(--border-strong);
+      border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      padding: 12px; font-family: var(--font-ui);
+      animation: palette-enter 150ms cubic-bezier(0.16,1,0.3,1);
+    }
+    .le-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .le-head span:first-child { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .le-close { cursor: pointer; color: var(--text-tertiary); font-size: 13px; padding: 2px 6px; border-radius: 5px; }
+    .le-close:hover { color: var(--text-primary); background: var(--bg-3); }
+    .le-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+    .le-preset {
+      background: var(--bg-1); border: 1px solid var(--border-default); color: var(--text-secondary);
+      font-size: 11px; font-weight: 600; padding: 5px 9px; border-radius: 6px; cursor: pointer; transition: all 120ms;
+    }
+    .le-preset:hover { background: var(--bg-3); color: var(--text-primary); }
+    .le-preset.active { background: var(--accent, #4a9eff); color: #fff; border-color: transparent; }
+    .le-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .le-row { display: flex; align-items: center; gap: 8px; }
+    .le-row-label { font-size: 12px; color: var(--text-secondary); flex: 1; }
+    .le-stepper { display: flex; align-items: center; gap: 6px; background: var(--bg-1); border: 1px solid var(--border-default); border-radius: 7px; padding: 2px; }
+    .le-step {
+      width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+      background: transparent; border: none; color: var(--text-secondary); cursor: pointer; border-radius: 5px; font-size: 15px; line-height: 1;
+    }
+    .le-step:hover:not(:disabled) { background: var(--bg-3); color: var(--text-primary); }
+    .le-step:disabled { opacity: .3; cursor: default; }
+    .le-count { font-size: 11px; color: var(--text-primary); min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
+    .le-row-del {
+      width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid transparent; color: var(--text-tertiary); cursor: pointer; border-radius: 6px;
+    }
+    .le-row-del:hover:not(:disabled) { color: #ff6b6b; background: color-mix(in srgb, #ff6b6b, transparent 88%); }
+    .le-row-del:disabled { opacity: .25; cursor: default; }
+    .le-row-del svg { width: 14px; height: 14px; }
+    .le-add {
+      width: 100%; padding: 7px; margin-top: 2px;
+      background: var(--bg-1); border: 1px dashed var(--border-strong); color: var(--text-secondary);
+      border-radius: 7px; cursor: pointer; font-size: 12px; transition: all 120ms;
+    }
+    .le-add:hover:not(:disabled) { color: var(--text-primary); border-color: var(--text-secondary); background: var(--bg-3); }
+    .le-add:disabled { opacity: .4; cursor: default; }
+    .le-hint { text-align: center; font-size: 10px; color: var(--text-tertiary); margin-top: 8px; text-transform: uppercase; letter-spacing: .06em; }
+
     /* FILES PANEL */
     .files-panel {
       width: 280px;
@@ -1073,6 +1281,77 @@
       font-weight: 400;
       margin-left: 4px;
     }
+    .file-search-shell {
+      height: 32px;
+      margin: 9px 10px 7px;
+      padding: 0 7px 0 8px;
+      border: 1px solid var(--border-default);
+      border-radius: 7px;
+      background: color-mix(in srgb, var(--bg-0) 82%, transparent);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-shrink: 0;
+      transition: border-color 130ms ease, box-shadow 130ms ease, background 130ms ease;
+    }
+    .file-search-shell:focus-within {
+      border-color: color-mix(in srgb, var(--proj-color, #5b8def) 72%, var(--border-default));
+      background: var(--bg-0);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--proj-color, #5b8def) 14%, transparent);
+    }
+    .file-search-icon {
+      width: 14px;
+      height: 14px;
+      color: var(--text-tertiary);
+      flex-shrink: 0;
+    }
+    .file-search-icon svg { width: 100%; height: 100%; stroke-width: 1.7; }
+    .file-search-input {
+      flex: 1;
+      width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text-primary);
+      font: 11.5px/1 var(--font-ui);
+      min-width: 0;
+    }
+    .file-search-input::placeholder { color: var(--text-tertiary); }
+    .file-search-input::-webkit-search-cancel-button { display: none; }
+    .file-search-kbd {
+      border: 1px solid var(--border-default);
+      border-bottom-color: var(--border-strong);
+      border-radius: 4px;
+      padding: 2px 4px;
+      color: var(--text-tertiary);
+      background: var(--bg-2);
+      font: 8.5px/1 var(--font-term);
+      letter-spacing: -0.02em;
+    }
+    .file-search-shell.has-query .file-search-kbd { display: none; }
+    .file-search-clear {
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 4px;
+      padding: 4px;
+      color: var(--text-tertiary);
+      background: transparent;
+      cursor: pointer;
+      display: none;
+    }
+    .file-search-shell.has-query .file-search-clear { display: flex; }
+    .file-search-clear:hover { color: var(--text-primary); background: var(--bg-3); }
+    .file-search-clear svg { width: 100%; height: 100%; stroke-width: 1.8; }
+    .file-search-status {
+      min-height: 18px;
+      padding: 0 12px 5px;
+      color: var(--text-tertiary);
+      font: 9.5px/1.3 var(--font-term);
+      letter-spacing: 0.01em;
+      flex-shrink: 0;
+    }
+    .file-search-status:empty { display: none; }
     .file-tree {
       flex: 1;
       overflow-y: auto;
@@ -1140,6 +1419,72 @@
       display: none;
     }
     .tree-children.expanded { display: block; }
+    .file-search-result {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      min-height: 42px;
+      padding: 5px 11px;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      color: var(--text-secondary);
+      transition: background 90ms ease, border-color 90ms ease;
+    }
+    .file-search-result:hover,
+    .file-search-result.selected {
+      background: var(--bg-2);
+      border-left-color: var(--proj-color, #5b8def);
+    }
+    .file-search-result .tree-icon { align-self: start; margin-top: 3px; }
+    .file-search-result-copy { min-width: 0; }
+    .file-search-result-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-primary);
+      font: 11.5px/1.35 var(--font-ui);
+    }
+    .file-search-result-path {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-tertiary);
+      font: 9.5px/1.35 var(--font-term);
+      direction: rtl;
+      text-align: left;
+    }
+    .file-search-result mark {
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--proj-color, #5b8def) 28%, transparent);
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+    .file-search-empty {
+      min-height: 170px;
+      padding: 30px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      color: var(--text-tertiary);
+      text-align: center;
+      font-size: 11px;
+    }
+    .file-search-empty strong { color: var(--text-secondary); font-weight: 500; }
+    .file-search-empty-icon {
+      width: 32px;
+      height: 32px;
+      padding: 8px;
+      border: 1px solid var(--border-default);
+      border-radius: 9px;
+      color: var(--text-tertiary);
+      background: var(--bg-2);
+    }
+    .file-search-empty-icon svg { width: 100%; height: 100%; stroke-width: 1.4; }
+    @keyframes file-search-pulse { 50% { opacity: .35; transform: scale(.92); } }
+    .file-search-empty.loading .file-search-empty-icon { animation: file-search-pulse 900ms ease-in-out infinite; }
 
     /* EDITOR PANE */
     .editor-pane {
@@ -3030,6 +3375,16 @@
         <span>· cabine de comando</span>
         <span class="title-version" id="titleVersion">…</span>
       </div>
+      <div class="mosaic-top-actions" id="mosaicTopActions">
+        <div class="mosaic-toolbar" id="mosaicToolbar"></div>
+        <span class="mosaic-top-sep"></span>
+        <button class="icon-btn" title="Configurações" id="btnSettingsTop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+        <button class="icon-btn" title="Sair do mosaico — voltar ao foco (⌘⇧M)" id="btnMosaicExit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
+        </button>
+      </div>
       <div class="window-buttons">
         <span class="window-button minimize" title="Minimizar">
           <svg viewBox="0 0 12 12"><path d="M3 6 L9 6"/></svg>
@@ -3082,20 +3437,6 @@
         </button>
       </div>
       <div class="project-list" id="projectList"></div>
-      <div class="sidebar-footer usage-foot" id="usageFoot">
-        <div class="sidebar-section usage-head">
-          <span>Consumo</span>
-          <button class="section-action" id="usageRefresh" title="Atualizar consumo das sessões">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-          </button>
-        </div>
-        <div class="usage-rows" id="usageRows">
-          <div class="usage-empty">carregando…</div>
-        </div>
-      </div>
     </aside>
     <div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
 
@@ -3122,6 +3463,14 @@
             <span class="agent-runtime" id="hdrRuntime">—</span>
           </div>
           <div class="header-actions">
+            <button class="icon-btn" title="Mosaico — vários projetos em grid (⌘⇧M)" id="btnMosaic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </button>
             <button class="icon-btn" title="Arquivos (⌘E)" id="btnFiles">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -3192,6 +3541,17 @@
               </svg>
             </button>
           </div>
+          <div class="file-search-shell" id="fileSearchShell">
+            <span class="file-search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input class="file-search-input" id="fileSearchInput" type="search" placeholder="Buscar arquivo…" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-label="Buscar arquivo por nome ou caminho" aria-controls="fileTree" />
+            <span class="file-search-kbd" aria-hidden="true">⌘P</span>
+            <button class="file-search-clear" id="fileSearchClear" type="button" title="Limpar busca (Esc)" aria-label="Limpar busca">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="file-search-status" id="fileSearchStatus" aria-live="polite"></div>
           <div class="file-tree" id="fileTree">
             <div class="git-empty">carregando…</div>
           </div>
@@ -3214,6 +3574,7 @@
           </div>
           <div class="font-size-badge" id="fontSizeBadge">13px</div>
           <div class="mic-pill" id="micPill"><span class="dot"></span><span id="micPillText">🎙 Ouvindo 0.0s</span></div>
+          <div class="mosaic-grid" id="mosaicGrid"></div>
           <div class="editor-pane" id="editorPane">
             <div class="editor-status">
               <span class="file-path" id="editorFilePath">—</span>
@@ -3262,6 +3623,7 @@
       <div class="shortcut"><span class="kbd">⌘1—6</span><span>projetos</span></div>
       <div class="shortcut"><span class="kbd">⌘B</span><span>terminal</span></div>
       <div class="shortcut"><span class="kbd">⌘E</span><span>arquivos</span></div>
+      <div class="shortcut"><span class="kbd">⌘P</span><span>buscar arquivo</span></div>
       <div class="shortcut"><span class="kbd">⌘G</span><span>git</span></div>
       <div class="shortcut"><span class="kbd">⌘S</span><span>salvar</span></div>
       <div class="shortcut"><span class="kbd">⌘F</span><span>buscar</span></div>
@@ -3364,6 +3726,7 @@
     const xtermInstances = new Map(); // `${projId}:${tid}` -> {term, fitAddon, container}
     let ws = null;
     let editingTabTid = null; // tid em renomeação — congela renderTabs durante edição
+    let renamingMosaicTab = null; // tid do mini-tab do mosaico em renomeação
     let gitPanelVisible = false;
     const gitState = new Map(); // projId -> { isGit, repos: [{ id, name, relPath, branch, ... files, error }] }
     const gitDiffCache = new Map(); // `${projId}:${repoPath}:${file}:${staged}` -> diff text
@@ -3373,7 +3736,9 @@
 
     // Files explorer + editor
     let filesPanelVisible = false;
-    const fileTreeState = new Map(); // projId -> { expanded: Set<path>, contents: Map<path, entries[]> }
+    const fileTreeState = new Map(); // projId -> { expanded, contents, search }
+    let fileSearchTimer = null;
+    let fileSearchRequestSeq = 0;
     const openFiles = new Map(); // projId -> [{ path, name, content, savedContent, mtime, dirty, language }]
     const activeFileByProj = new Map(); // projId -> file path
     const viewModeByProj = new Map(); // projId -> 'terminal' | 'file'
@@ -3383,8 +3748,71 @@
     let suspendDirtyTracking = false;
     let autoSaveTimer = null;
 
+    // ── Layout / Mosaico ─────────────────────────────────────────
+    // "focus": comportamento clássico (1 terminal ativo). "mosaic": grid com
+    // vários projetos lado a lado, cada card mostra o terminal ativo do projeto.
+    let layoutMode = localStorage.getItem("cockpit-layout-mode") || "focus";
+    // gridLayout: nº de colunas por linha, ex. [2,2] = 2 linhas de 2, [3,1] =
+    // linha de 3 + linha de 1. Layout totalmente customizável pelo usuário.
+    const GRID_MAX_ROWS = 6, GRID_MAX_COLS = 6;
+    // presets prontos (também servem de atalho no editor)
+    const GRID_PRESETS = [
+      { label: "1×1", layout: [1] },
+      { label: "1×2", layout: [2] },
+      { label: "2×2", layout: [2, 2] },
+      { label: "3 col", layout: [3] },
+      { label: "2×3", layout: [3, 3] },
+      { label: "3×3", layout: [3, 3, 3] },
+    ];
+    let gridLayout = (() => {
+      try {
+        const raw = localStorage.getItem("cockpit-grid-layout");
+        if (raw) { const a = JSON.parse(raw); if (Array.isArray(a) && a.length && a.every((n) => Number.isInteger(n) && n > 0)) return a; }
+      } catch {}
+      // migração do formato antigo (cockpit-grid-arrange)
+      const old = localStorage.getItem("cockpit-grid-arrange");
+      const map = { "1x1": [1], "1x2": [2], "2x2": [2, 2], "3col": [3] };
+      return map[old] || [2, 2];
+    })();
+    let gridSlots = (() => {
+      try { const a = JSON.parse(localStorage.getItem("cockpit-grid-slots") || "[]"); return Array.isArray(a) ? a : []; }
+      catch { return []; }
+    })(); // [projId | null, ...] — uma posição por célula (na ordem das linhas)
+    let mosaicFocusedProj = null; // projeto cujo card tem foco de digitação
+    const gridCellCount = () => gridLayout.reduce((a, b) => a + b, 0);
+    function saveGridState() {
+      localStorage.setItem("cockpit-layout-mode", layoutMode);
+      localStorage.setItem("cockpit-grid-layout", JSON.stringify(gridLayout));
+      localStorage.setItem("cockpit-grid-slots", JSON.stringify(gridSlots));
+      saveActiveTerms();
+    }
+    // Persiste qual terminal está selecionado em cada projeto ({projId: tid}).
+    // Os tids são recriados pelo backend a cada sessão; no boot validamos e
+    // caímos no 1º terminal se o tid salvo não existir mais.
+    function saveActiveTerms() {
+      const obj = {};
+      activeTerminalByProj.forEach((tid, projId) => { obj[projId] = tid; });
+      localStorage.setItem("cockpit-active-terms", JSON.stringify(obj));
+    }
+    function loadActiveTerms() {
+      let obj = {};
+      try { obj = JSON.parse(localStorage.getItem("cockpit-active-terms") || "{}"); } catch {}
+      Object.entries(obj).forEach(([projId, tid]) => {
+        const p = getProj(projId);
+        if (p && p.terminals.some((t) => t.id === tid) && !activeTerminalByProj.has(projId)) {
+          activeTerminalByProj.set(projId, tid);
+        }
+      });
+    }
+    function normalizeSlots() {
+      const n = gridCellCount();
+      gridSlots = gridSlots.map((id) => (id && getProj(id) ? id : null));
+      if (gridSlots.length > n) gridSlots = gridSlots.slice(0, n);
+      while (gridSlots.length < n) gridSlots.push(null);
+    }
+
     // Settings (persistidas no localStorage)
-    const DEFAULT_SETTINGS = { autoSave: false, webglFast: false };
+    const DEFAULT_SETTINGS = { autoSave: false, webglFast: false, idleReap: true };
     let cockpitSettings = (() => {
       try { return JSON.parse(localStorage.getItem("cockpit-settings") || "{}"); } catch { return {}; }
     })();
@@ -3610,6 +4038,10 @@
           requestCreateTerminal(proj.id);
           return false;
         }
+        if (isMod && !e.shiftKey && e.key.toLowerCase() === "p" && e.type === "keydown") {
+          focusFileSearch();
+          return false;
+        }
         if (isMod && !e.shiftKey && e.key.toLowerCase() === "f" && e.type === "keydown") {
           if (termSearchVisible) closeTermSearch(); else openTermSearch();
           return false;
@@ -3694,7 +4126,10 @@
         }
       });
 
-      const ro = new ResizeObserver(() => {
+      // Debounce curto: no mosaico vários terminais reflutuam ao mesmo tempo
+      // (trocar arranjo, entrar/sair do grid) — sem isso, cada frame de resize
+      // dispararia um ws "resize" por terminal.
+      const fitAndReport = debounce(() => {
         try {
           fit.fit();
           if (ws?.readyState === 1) {
@@ -3704,7 +4139,8 @@
             }));
           }
         } catch {}
-      });
+      }, 60);
+      const ro = new ResizeObserver(() => fitAndReport());
       ro.observe(container);
 
       // Drag de arquivo/imagem no terminal → cola o caminho
@@ -3715,6 +4151,8 @@
         }
       });
       container.addEventListener("drop", (e) => {
+        // drag de PROJETO (mosaico) não é caminho de arquivo — deixa o card tratar
+        if (draggingProjId) return;
         e.preventDefault();
         const paths = [];
         if (e.dataTransfer.files?.length) {
@@ -3776,12 +4214,14 @@
       btn.style.display = "";
     }
 
-    function openQcmdPopover(anchorEl) {
+    let qcmdAnchor = null;
+    function openQcmdPopover(anchorEl, projId = activeProjId) {
       document.querySelectorAll(".qcmd-popover").forEach((el) => el.remove());
-      const p = getActiveProj();
+      const p = getProj(projId);
       const cmds = p?.commands || [];
 
       qcmdPopoverOpen = true;
+      qcmdAnchor = anchorEl;
       anchorEl.classList.add("open");
 
       const pop = document.createElement("div");
@@ -3808,12 +4248,12 @@
 
         pill.addEventListener("click", (e) => {
           if (e.target.closest(".qcmd-remove")) return;
-          sendQuickCmd(c.cmd);
+          sendQuickCmd(c.cmd, projId);
           closeQcmdPopover();
         });
         pill.querySelector(".qcmd-remove").addEventListener("click", (e) => {
           e.stopPropagation();
-          removeQuickCmd(i);
+          removeQuickCmd(i, projId);
           closeQcmdPopover();
         });
         pill.addEventListener("dragstart", (e) => {
@@ -3839,7 +4279,7 @@
           if (dragSrcIdx === null || dragSrcIdx === i) return;
           const rect = pill.getBoundingClientRect();
           const left = (e.clientX - rect.left) < rect.width / 2;
-          const proj = getActiveProj();
+          const proj = getProj(projId);
           if (!proj) return;
           const newCmds = [...(proj.commands || [])];
           const [moved] = newCmds.splice(dragSrcIdx, 1);
@@ -3856,7 +4296,7 @@
       addBtn.className = "qcmd-add";
       addBtn.title = "Gerenciar comandos…";
       addBtn.innerHTML = ICONS.cog;
-      addBtn.addEventListener("click", (e) => { e.stopPropagation(); closeQcmdPopover(); showManageCmdsModal(); });
+      addBtn.addEventListener("click", (e) => { e.stopPropagation(); closeQcmdPopover(); showManageCmdsModal(projId); });
       pop.appendChild(addBtn);
 
       const rect = anchorEl.getBoundingClientRect();
@@ -3880,19 +4320,21 @@
       qcmdPopoverOpen = false;
       document.querySelectorAll(".qcmd-popover").forEach((el) => el.remove());
       document.getElementById("qcmdBtn")?.classList.remove("open");
+      qcmdAnchor?.classList.remove("open");
+      qcmdAnchor = null;
     }
 
-    function sendQuickCmd(cmd) {
-      const tid = getActiveTid();
+    function sendQuickCmd(cmd, projId = activeProjId) {
+      const tid = activeTerminalByProj.get(projId);
       if (!tid || ws?.readyState !== 1) return;
-      observeTerminalInput(activeProjId, tid, cmd + "\n");
-      ws.send(JSON.stringify({ type: "input", projectId: activeProjId, terminalId: tid, data: cmd + "\n" }));
-      const inst = xtermInstances.get(k(activeProjId, tid));
+      observeTerminalInput(projId, tid, cmd + "\n");
+      ws.send(JSON.stringify({ type: "input", projectId: projId, terminalId: tid, data: cmd + "\n" }));
+      const inst = xtermInstances.get(k(projId, tid));
       if (inst) inst.term.focus();
     }
 
-    function removeQuickCmd(idx) {
-      const p = getActiveProj();
+    function removeQuickCmd(idx, projId = activeProjId) {
+      const p = getProj(projId);
       if (!p) return;
       const cmds = [...(p.commands || [])];
       cmds.splice(idx, 1);
@@ -3912,8 +4354,8 @@
       { label: "git log",         cmd: "git log --oneline -10",color: "#BD93F9" },
     ];
 
-    function showManageCmdsModal() {
-      const p = getActiveProj();
+    function showManageCmdsModal(projId = activeProjId) {
+      const p = getProj(projId);
       if (!p) return;
 
       // mescla presets + comandos customizados do projeto
@@ -4493,6 +4935,9 @@
       for (const p of toRelist) {
         ws.send(JSON.stringify({ type: "list_files", projectId: projId, path: p }));
       }
+      if (state.search?.query?.trim()) {
+        scheduleFileSearch(projId, { refresh: true });
+      }
     }
 
     // aplica rename/delete em estado local (abas, modelos, LSP)
@@ -4815,6 +5260,9 @@
       bar.querySelectorAll(".tab").forEach((el) => {
         el.addEventListener("click", (e) => {
           if (e.target.closest(".tab-close")) return;
+          // enquanto renomeia, ignora clique da própria aba (ex.: o <button>
+          // ativa ao apertar Espaço e roubaria o foco do input, encerrando o rename)
+          if (editingTabTid) return;
           if (el.dataset.kind === "terminal") {
             const tabTid = el.dataset.tid;
             if (e.detail === 2) startRenameTab(tabTid);
@@ -4904,6 +5352,7 @@
     }
 
     function applyVisibility() {
+      if (layoutMode === "mosaic") { renderMosaic(); return; }
       const view = viewModeByProj.get(activeProjId) || "terminal";
       const editorPane = document.getElementById("editorPane");
 
@@ -4942,6 +5391,397 @@
         }
       }
       renderEmptyTerminal();
+      sendVisibleTerminals();
+    }
+
+    // ============================================================
+    // MOSAICO — vários projetos em grid no espaço central
+    // ============================================================
+    const MOSAIC_FOCUS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
+    const QCMD_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
+
+    function updateMosaicToggle() {
+      const btn = document.getElementById("btnMosaic");
+      if (btn) btn.classList.toggle("active", layoutMode === "mosaic");
+    }
+
+    // Instância xterm do terminal ativo de um projeto (garante um tid válido)
+    function activeInstFor(projId) {
+      const p = getProj(projId);
+      if (!p || p.terminals.length === 0) return null;
+      let tid = activeTerminalByProj.get(projId);
+      if (!tid || !p.terminals.find((t) => t.id === tid)) {
+        tid = p.terminals[0].id;
+        activeTerminalByProj.set(projId, tid);
+      }
+      return xtermInstances.get(k(projId, tid)) || null;
+    }
+
+    let savedGridCols = null; // grid-template-columns do .app antes de entrar no mosaico
+
+    function setLayoutMode(mode) {
+      if (mode !== "focus" && mode !== "mosaic") return;
+      layoutMode = mode;
+      const app = document.querySelector(".app");
+      if (mode === "mosaic") {
+        normalizeSlots();
+        // semeia o primeiro slot com o projeto ativo se o grid está vazio
+        if (gridSlots.every((s) => !s) && activeProjId) gridSlots[0] = activeProjId;
+        // esconde a sidebar: colapsa as colunas 1 e 2 do grid do .app
+        if (savedGridCols === null) savedGridCols = app.style.gridTemplateColumns || "";
+        app.style.gridTemplateColumns = "0px 0px 1fr";
+        app.classList.add("mosaic");
+        saveGridState();
+        renderMosaic();
+      } else {
+        // devolve os terminais reparentados pra área central e volta ao foco
+        const wrap = document.getElementById("terminalArea");
+        document.querySelectorAll(".terminal-instance.in-grid").forEach((el) => {
+          el.classList.remove("in-grid");
+          wrap.appendChild(el);
+        });
+        app.classList.remove("mosaic");
+        // restaura a largura da sidebar
+        if (savedGridCols !== null) { app.style.gridTemplateColumns = savedGridCols; savedGridCols = null; }
+        saveGridState();
+        applyVisibility();
+      }
+      updateMosaicToggle();
+      renderHeader();
+      renderTabs();
+    }
+
+    function toggleLayoutMode() {
+      setLayoutMode(layoutMode === "mosaic" ? "focus" : "mosaic");
+    }
+
+    // Coloca um projeto num slot do grid (movendo se já estava em outro)
+    function assignSlot(i, projId) {
+      if (!getProj(projId)) return;
+      const prev = gridSlots.indexOf(projId);
+      if (prev >= 0 && prev !== i) gridSlots[prev] = null;
+      gridSlots[i] = projId;
+      saveGridState();
+      renderMosaic();
+    }
+
+    function wireMosaicDrop(el, i) {
+      el.addEventListener("dragover", (e) => {
+        if (!draggingProjId) return; // só aceita drag de projeto vindo da sidebar
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = "move"; } catch {}
+        el.classList.add("drag-over");
+      });
+      el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
+      el.addEventListener("drop", (e) => {
+        el.classList.remove("drag-over");
+        const projId = draggingProjId || e.dataTransfer.getData("text/plain");
+        if (!projId || !getProj(projId)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        // um nó DOM só vive num lugar: se o projeto já está em outro slot, esvazia
+        const prev = gridSlots.indexOf(projId);
+        if (prev >= 0 && prev !== i) gridSlots[prev] = null;
+        gridSlots[i] = projId;
+        saveGridState();
+        renderMosaic();
+      });
+    }
+
+    function buildMosaicCell(projId, i) {
+      const p = projId ? getProj(projId) : null;
+
+      if (!p) {
+        const drop = document.createElement("div");
+        drop.className = "mosaic-drop";
+        drop.dataset.slot = i;
+        drop.innerHTML = `<div class="mosaic-drop-plus">${ICONS.plus}</div><div>clique para escolher um projeto</div>`;
+        drop.addEventListener("click", () => openMosaicProjectPicker(i));
+        wireMosaicDrop(drop, i);
+        return drop;
+      }
+
+      const cell = document.createElement("div");
+      cell.className = "mosaic-card";
+      cell.dataset.slot = i;
+      cell.dataset.projid = projId;
+      cell.style.setProperty("--proj-color", p.color);
+      if (mosaicFocusedProj === projId) cell.classList.add("focused");
+
+      const tid = activeTerminalByProj.get(projId);
+      const tabsHtml = p.terminals.map((t) => {
+        const active = t.id === tid;
+        const unread = !active && termUnread.has(k(projId, t.id));
+        return `<button class="mosaic-mini-tab ${active ? "active" : ""}" data-tid="${t.id}" data-unread="${unread ? 1 : ""}"><span class="status-dot ${t.status}"></span><span>${escapeHtml(t.name)}</span></button>`;
+      }).join("");
+
+      const head = document.createElement("div");
+      head.className = "mosaic-card-head";
+      head.innerHTML = `
+        <span class="mosaic-card-dot"></span>
+        <span class="mosaic-card-title">${escapeHtml(p.name)}</span>
+        <div class="mosaic-card-tabs">${tabsHtml}</div>
+        <div class="mosaic-card-actions">
+          <button class="mosaic-card-btn" data-act="qcmd" title="Comandos rápidos">${QCMD_ICON}</button>
+          <button class="mosaic-card-btn" data-act="new" title="Novo terminal">${ICONS.plus}</button>
+          <button class="mosaic-card-btn" data-act="focus" title="Abrir em foco">${MOSAIC_FOCUS_ICON}</button>
+          <button class="mosaic-card-btn" data-act="remove" title="Remover do mosaico">${ICONS.x}</button>
+        </div>`;
+      cell.appendChild(head);
+
+      const body = document.createElement("div");
+      body.className = "mosaic-card-body";
+      cell.appendChild(body);
+
+      if (p.terminals.length === 0) {
+        body.innerHTML = `<div class="mosaic-drop"><div class="mosaic-drop-plus">${ICONS.plus}</div><div>criar terminal</div></div>`;
+        body.querySelector(".mosaic-drop").addEventListener("click", () => requestCreateTerminal(projId));
+      } else {
+        const inst = activeInstFor(projId);
+        if (inst) {
+          inst.container.classList.add("in-grid");
+          body.appendChild(inst.container);
+        }
+      }
+
+      head.querySelectorAll(".mosaic-mini-tab").forEach((b) => {
+        b.addEventListener("click", (e) => {
+          if (renamingMosaicTab) return; // renomeando: ignora clique (Espaço ativaria o botão)
+          if (e.detail === 2) { startRenameMosaicTab(projId, b.dataset.tid, b); return; }
+          activeTerminalByProj.set(projId, b.dataset.tid);
+          termUnread.delete(k(projId, b.dataset.tid));
+          renderMosaic();
+        });
+        b.addEventListener("dblclick", (e) => e.preventDefault());
+      });
+      head.querySelector('[data-act="qcmd"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        openQcmdPopover(e.currentTarget, projId);
+      });
+      head.querySelector('[data-act="new"]').addEventListener("click", () => requestCreateTerminal(projId));
+      head.querySelector('[data-act="focus"]').addEventListener("click", () => {
+        selectProject(projId);
+        setLayoutMode("focus");
+      });
+      head.querySelector('[data-act="remove"]').addEventListener("click", () => {
+        gridSlots[i] = null;
+        saveGridState();
+        renderMosaic();
+      });
+      body.addEventListener("mousedown", () => {
+        mosaicFocusedProj = projId;
+        const inst = activeInstFor(projId);
+        try { inst?.term.focus(); } catch {}
+        document.querySelectorAll(".mosaic-card").forEach((c) =>
+          c.classList.toggle("focused", c.dataset.projid === projId));
+      });
+
+      wireMosaicDrop(cell, i);
+      return cell;
+    }
+
+    function renderMosaic() {
+      if (layoutMode !== "mosaic") return;
+      const app = document.querySelector(".app");
+      app.classList.add("mosaic");
+      document.getElementById("editorPane").classList.remove("visible");
+      const emptyEl = document.querySelector("#terminalArea .terminal-empty");
+      if (emptyEl) emptyEl.remove();
+
+      normalizeSlots();
+      saveGridState();
+
+      // botão de layout no topo (abre o editor de linhas/colunas)
+      const toolbar = document.getElementById("mosaicToolbar");
+      const cells = gridCellCount();
+      toolbar.innerHTML =
+        `<button class="mosaic-arrange-btn" id="mosaicLayoutBtn" title="Customizar layout do mosaico">` +
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;margin-right:5px;vertical-align:-2px"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="21"/></svg>` +
+        `Layout · ${gridLayout.join("×") || cells}</button>`;
+      toolbar.querySelector("#mosaicLayoutBtn").addEventListener("click", (e) => openLayoutEditor(e.currentTarget));
+
+      // devolve todos os terminais reparentados pro #terminalArea antes de limpar
+      // (evita destruir/órfãos ao esvaziar o grid) e limpa .active herdado do foco
+      const wrap = document.getElementById("terminalArea");
+      document.querySelectorAll(".terminal-instance.in-grid").forEach((el) => {
+        el.classList.remove("in-grid");
+        wrap.appendChild(el);
+      });
+      document.querySelectorAll(".terminal-instance").forEach((el) => el.classList.remove("active"));
+
+      // monta linhas (flex) com o nº de colunas de cada linha do gridLayout
+      const grid = document.getElementById("mosaicGrid");
+      grid.innerHTML = "";
+      let idx = 0;
+      gridLayout.forEach((cols) => {
+        const row = document.createElement("div");
+        row.className = "mosaic-row";
+        for (let c = 0; c < cols; c++) {
+          row.appendChild(buildMosaicCell(gridSlots[idx], idx));
+          idx++;
+        }
+        grid.appendChild(row);
+      });
+      sendVisibleTerminals();
+    }
+
+    // Editor de layout do mosaico — define quantas linhas e quantas colunas
+    // por linha. Popover ancorado no botão "Layout" do topo; aplica ao vivo.
+    function openLayoutEditor(anchor) {
+      document.querySelectorAll(".layout-editor-pop, .layout-editor-backdrop").forEach((el) => el.remove());
+      const backdrop = document.createElement("div");
+      backdrop.className = "layout-editor-backdrop";
+      const pop = document.createElement("div");
+      pop.className = "layout-editor-pop";
+
+      const trash = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>`;
+      const sameLayout = (l) => l.length === gridLayout.length && l.every((n, i) => n === gridLayout[i]);
+
+      const apply = (newLayout) => {
+        let l = newLayout.map((n) => Math.max(1, Math.min(GRID_MAX_COLS, n)));
+        if (l.length > GRID_MAX_ROWS) l = l.slice(0, GRID_MAX_ROWS);
+        if (!l.length) l = [1];
+        gridLayout = l;
+        normalizeSlots();
+        saveGridState();
+        renderMosaic();
+        render();
+      };
+
+      const render = () => {
+        pop.innerHTML = `
+          <div class="le-head">
+            <span>Layout do mosaico</span>
+            <span class="le-close" title="Fechar (Esc)">✕</span>
+          </div>
+          <div class="le-presets">
+            ${GRID_PRESETS.map((p, i) => `<button class="le-preset ${sameLayout(p.layout) ? "active" : ""}" data-preset="${i}">${p.label}</button>`).join("")}
+          </div>
+          <div class="le-rows">
+            ${gridLayout.map((cols, ri) => `
+              <div class="le-row">
+                <span class="le-row-label">Linha ${ri + 1}</span>
+                <div class="le-stepper">
+                  <button class="le-step" data-dec="${ri}" ${cols <= 1 ? "disabled" : ""}>−</button>
+                  <span class="le-count">${cols} col${cols > 1 ? "s" : ""}</span>
+                  <button class="le-step" data-inc="${ri}" ${cols >= GRID_MAX_COLS ? "disabled" : ""}>+</button>
+                </div>
+                <button class="le-row-del" data-del="${ri}" ${gridLayout.length <= 1 ? "disabled" : ""} title="Remover linha">${trash}</button>
+              </div>`).join("")}
+          </div>
+          <button class="le-add" ${gridLayout.length >= GRID_MAX_ROWS ? "disabled" : ""}>+ adicionar linha</button>
+          <div class="le-hint">${gridCellCount()} células no total</div>`;
+
+        pop.querySelectorAll(".le-preset").forEach((b) =>
+          b.addEventListener("click", () => apply(GRID_PRESETS[+b.dataset.preset].layout.slice())));
+        pop.querySelectorAll("[data-inc]").forEach((b) =>
+          b.addEventListener("click", () => { const l = gridLayout.slice(); l[+b.dataset.inc]++; apply(l); }));
+        pop.querySelectorAll("[data-dec]").forEach((b) =>
+          b.addEventListener("click", () => { const l = gridLayout.slice(); l[+b.dataset.dec]--; apply(l); }));
+        pop.querySelectorAll("[data-del]").forEach((b) =>
+          b.addEventListener("click", () => { const l = gridLayout.slice(); l.splice(+b.dataset.del, 1); apply(l); }));
+        pop.querySelector(".le-add").addEventListener("click", () => apply([...gridLayout, 2]));
+        pop.querySelector(".le-close").addEventListener("click", close);
+
+        // reposiciona sob o botão "Layout" atual (renderMosaic recria o botão)
+        const a = document.getElementById("mosaicLayoutBtn") || anchor;
+        const r = a.getBoundingClientRect();
+        pop.style.top = (r.bottom + 8) + "px";
+        pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 280)) + "px";
+      };
+
+      const close = () => { backdrop.remove(); pop.remove(); document.removeEventListener("keydown", onKey); };
+      const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+      backdrop.addEventListener("click", close);
+      document.addEventListener("keydown", onKey);
+
+      document.body.appendChild(backdrop);
+      document.body.appendChild(pop);
+      render();
+    }
+
+    // Modal centralizado com busca (mesmo visual do modal de visibilidade):
+    // escolhe um projeto pra preencher o slot `i` do grid. Clique atribui.
+    function openMosaicProjectPicker(i) {
+      document.querySelectorAll(".mosaic-pick-backdrop").forEach((el) => el.remove());
+
+      const backdrop = document.createElement("div");
+      backdrop.className = "visibility-backdrop mosaic-pick-backdrop";
+      const pop = document.createElement("div");
+      pop.className = "visibility-popover";
+      pop.style.width = "min(480px, 92vw)";
+
+      const closeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+
+      let pickQuery = "";
+      const inGrid = new Set(gridSlots.filter(Boolean));
+
+      pop.innerHTML = `
+        <div class="vp-head">
+          <div><h2>Escolher projeto</h2><span class="vp-counter">célula ${i + 1} do mosaico</span></div>
+          <div class="vp-actions"><span class="vp-close" title="Fechar (Esc)">${closeIcon}</span></div>
+        </div>
+        <div class="vp-search-bar">
+          <input type="text" class="vp-search-input" id="pickSearch" placeholder="Buscar por nome, grupo, id ou caminho…" autocomplete="off" spellcheck="false" />
+          <span class="vp-search-clear" id="pickSearchClear" title="Limpar (Esc)" style="visibility:hidden">${closeIcon}</span>
+        </div>
+        <div class="mosaic-pick-list" id="pickList"></div>`;
+
+      const renderList = () => {
+        const listEl = pop.querySelector("#pickList");
+        const q = pickQuery.trim().toLowerCase();
+        // disponíveis primeiro, já-no-grid depois; ocultos fora
+        let items = projects.filter((p) => !p.hidden);
+        if (q) items = items.filter((p) => [p.name, p.id, p.group, p.path].filter(Boolean).join(" ").toLowerCase().includes(q));
+        items.sort((a, b) => (inGrid.has(a.id) ? 1 : 0) - (inGrid.has(b.id) ? 1 : 0));
+
+        if (!items.length) {
+          listEl.innerHTML = `<div class="mosaic-pick-empty">${q ? `nenhum projeto para "${escapeHtml(pickQuery)}"` : "nenhum projeto disponível"}</div>`;
+          return;
+        }
+
+        // agrupa por grupo, preservando a ordem
+        const groups = new Map();
+        const order = [];
+        items.forEach((p) => { const g = p.group || "Sem grupo"; if (!groups.has(g)) { groups.set(g, []); order.push(g); } groups.get(g).push(p); });
+
+        listEl.innerHTML = order.map((g) => `
+          <div class="mosaic-pick-group">
+            <div class="mosaic-pick-group-label">${escapeHtml(g)}</div>
+            ${groups.get(g).map((p) => `
+              <div class="mosaic-pick-row" data-id="${escapeHtml(p.id)}" style="--proj-color:${p.color || "#5b8def"}">
+                <span class="mosaic-pick-icon">${ICONS[p.icon] || ICONS.cog}</span>
+                <span class="mosaic-pick-meta">
+                  <span class="mosaic-pick-name">${escapeHtml(p.name)}</span>
+                  <span class="mosaic-pick-path">${escapeHtml(p.path || "")}</span>
+                </span>
+                ${inGrid.has(p.id) ? '<span class="mosaic-pick-badge">no grid</span>' : ""}
+              </div>`).join("")}
+          </div>`).join("");
+
+        listEl.querySelectorAll(".mosaic-pick-row").forEach((row) =>
+          row.addEventListener("click", () => { assignSlot(i, row.dataset.id); close(); }));
+      };
+
+      const close = () => { backdrop.remove(); pop.remove(); document.removeEventListener("keydown", onKey); };
+      const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
+      backdrop.addEventListener("click", close);
+      pop.querySelector(".vp-close").addEventListener("click", close);
+      document.addEventListener("keydown", onKey);
+
+      const search = pop.querySelector("#pickSearch");
+      const clearBtn = pop.querySelector("#pickSearchClear");
+      search.addEventListener("input", () => {
+        pickQuery = search.value;
+        clearBtn.style.visibility = pickQuery ? "visible" : "hidden";
+        renderList();
+      });
+      clearBtn.addEventListener("click", () => { search.value = ""; pickQuery = ""; clearBtn.style.visibility = "hidden"; renderList(); search.focus(); });
+
+      document.body.appendChild(backdrop);
+      document.body.appendChild(pop);
+      renderList();
+      setTimeout(() => search.focus(), 30);
     }
 
     // ============================================================
@@ -4969,8 +5809,12 @@
       if (filesPanelVisible) {
         renderFilesRoot();
         const state = getTreeState(id);
-        if (!state.contents.has("")) fetchFiles(id, "");
-        else renderFileTree();
+        renderFileTree();
+        if (state.search.query.trim()) {
+          if (!state.search.entries.length && !state.search.loading) scheduleFileSearch(id);
+        } else if (!state.contents.has("")) {
+          fetchFiles(id, "");
+        }
       }
     }
 
@@ -4979,6 +5823,7 @@
       updateTabUnread(projId, tid);
       activeTerminalByProj.set(projId, tid);
       viewModeByProj.set(projId, "terminal");
+      saveActiveTerms();
       applyVisibility();
       renderHeader();
       renderTabs();
@@ -5081,6 +5926,40 @@
         else if (e.key === "Escape") { e.preventDefault(); finish(false); }
         e.stopPropagation();
       });
+      input.addEventListener("blur", () => finish(true));
+    }
+
+    // Renomeia o mini-tab dentro de um card do mosaico (duplo-clique).
+    function startRenameMosaicTab(projId, tid, btn) {
+      const proj = getProj(projId);
+      const term = proj?.terminals.find((t) => t.id === tid);
+      if (!term || !btn) return;
+      const nameSpan = btn.querySelector("span:last-child");
+      if (!nameSpan) return;
+      renamingMosaicTab = tid;
+      const input = document.createElement("input");
+      input.className = "tab-name-input mosaic-tab-input";
+      input.value = term.name;
+      nameSpan.replaceWith(input);
+      input.focus();
+      input.select();
+      let finished = false;
+      const finish = (commit) => {
+        if (finished) return;
+        finished = true;
+        renamingMosaicTab = null;
+        const v = input.value.trim();
+        if (commit && v && v !== term.name) requestRenameTerminal(projId, tid, v);
+        else renderMosaic();
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); finish(true); }
+        else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+        e.stopPropagation();
+      });
+      // não deixa clique/duplo-clique no input borbulhar pro botão (trocaria terminal)
+      input.addEventListener("click", (e) => e.stopPropagation());
+      input.addEventListener("dblclick", (e) => e.stopPropagation());
       input.addEventListener("blur", () => finish(true));
     }
 
@@ -5487,8 +6366,12 @@
       if (filesPanelVisible) {
         renderFilesRoot();
         const state = getTreeState(activeProjId);
-        if (!state.contents.has("")) fetchFiles(activeProjId, "");
-        else renderFileTree();
+        renderFileTree();
+        if (state.search.query.trim()) {
+          if (!state.search.entries.length && !state.search.loading) scheduleFileSearch(activeProjId);
+        } else if (!state.contents.has("")) {
+          fetchFiles(activeProjId, "");
+        }
       }
       setTimeout(fitActive, 60);
     }
@@ -5516,9 +6399,205 @@
 
     function getTreeState(projId) {
       if (!fileTreeState.has(projId)) {
-        fileTreeState.set(projId, { expanded: new Set(), contents: new Map() });
+        fileTreeState.set(projId, {
+          expanded: new Set(),
+          contents: new Map(),
+          search: {
+            query: "",
+            entries: [],
+            total: 0,
+            selected: 0,
+            loading: false,
+            error: "",
+            truncated: false,
+            requestId: 0,
+          },
+        });
       }
-      return fileTreeState.get(projId);
+      const state = fileTreeState.get(projId);
+      state.search ||= {
+        query: "", entries: [], total: 0, selected: 0,
+        loading: false, error: "", truncated: false, requestId: 0,
+      };
+      return state;
+    }
+
+    function getFileSearchState(projId = activeProjId) {
+      return getTreeState(projId).search;
+    }
+
+    function updateFileSearchChrome(projId = activeProjId) {
+      if (!projId) return;
+      const search = getFileSearchState(projId);
+      const input = document.getElementById("fileSearchInput");
+      const shell = document.getElementById("fileSearchShell");
+      const status = document.getElementById("fileSearchStatus");
+      if (!input || !shell || !status) return;
+      if (input.value !== search.query) input.value = search.query;
+      const hasQuery = search.query.trim().length > 0;
+      shell.classList.toggle("has-query", hasQuery);
+      input.setAttribute("aria-expanded", hasQuery ? "true" : "false");
+      if (!hasQuery || search.entries.length === 0) input.removeAttribute("aria-activedescendant");
+      if (!hasQuery) {
+        status.textContent = "";
+      } else if (search.loading) {
+        status.textContent = "procurando no projeto…";
+      } else if (search.error) {
+        status.textContent = search.error;
+      } else if (search.total === 0) {
+        status.textContent = "nenhum arquivo encontrado";
+      } else {
+        const shown = search.entries.length;
+        status.textContent = search.total > shown
+          ? `${search.total} arquivos · melhores ${shown}`
+          : `${search.total} arquivo${search.total === 1 ? "" : "s"}`;
+        if (search.truncated && search.total <= shown) status.textContent += " · busca limitada";
+      }
+    }
+
+    function requestFileSearch(projId = activeProjId, { refresh = false } = {}) {
+      if (!projId) return;
+      const search = getFileSearchState(projId);
+      const query = search.query.trim();
+      if (!query) {
+        Object.assign(search, {
+          entries: [], total: 0, selected: 0, loading: false,
+          error: "", truncated: false, requestId: ++fileSearchRequestSeq,
+        });
+        if (projId === activeProjId) renderFileTree();
+        return;
+      }
+      if (ws?.readyState !== 1) {
+        search.loading = false;
+        search.error = "busca indisponível sem conexão";
+        if (projId === activeProjId) renderFileTree();
+        return;
+      }
+      search.loading = true;
+      search.error = "";
+      search.requestId = ++fileSearchRequestSeq;
+      if (projId === activeProjId) renderFileTree();
+      ws.send(JSON.stringify({
+        type: "search_files",
+        projectId: projId,
+        query,
+        requestId: search.requestId,
+        refresh,
+      }));
+    }
+
+    function scheduleFileSearch(projId = activeProjId, options = {}) {
+      clearTimeout(fileSearchTimer);
+      fileSearchTimer = setTimeout(() => requestFileSearch(projId, options), 140);
+    }
+
+    function clearFileSearch({ focus = true } = {}) {
+      if (!activeProjId) return;
+      clearTimeout(fileSearchTimer);
+      const search = getFileSearchState(activeProjId);
+      Object.assign(search, {
+        query: "", entries: [], total: 0, selected: 0,
+        loading: false, error: "", truncated: false,
+        requestId: ++fileSearchRequestSeq,
+      });
+      renderFileTree();
+      if (focus) document.getElementById("fileSearchInput")?.focus();
+    }
+
+    function focusFileSearch() {
+      if (!activeProjId) return;
+      if (!filesPanelVisible) toggleFilesPanel();
+      requestAnimationFrame(() => {
+        const input = document.getElementById("fileSearchInput");
+        input?.focus();
+        input?.select();
+      });
+    }
+
+    function highlightFileSearchValue(value, query) {
+      const raw = String(value || "");
+      const tokens = String(query || "").trim().split(/\s+/).filter(Boolean)
+        .sort((left, right) => right.length - left.length);
+      const lower = raw.toLocaleLowerCase("pt-BR");
+      const token = tokens.find((item) => lower.includes(item.toLocaleLowerCase("pt-BR")));
+      if (!token) return escapeHtml(raw);
+      const index = lower.indexOf(token.toLocaleLowerCase("pt-BR"));
+      return `${escapeHtml(raw.slice(0, index))}<mark>${escapeHtml(raw.slice(index, index + token.length))}</mark>${escapeHtml(raw.slice(index + token.length))}`;
+    }
+
+    function renderFileSearchResults(tree, search) {
+      tree.setAttribute("role", "listbox");
+      tree.setAttribute("aria-label", "Resultados da busca de arquivos");
+      if (search.loading && search.entries.length === 0) {
+        tree.innerHTML = `<div class="file-search-empty loading">
+          <span class="file-search-empty-icon">${ICONS.folder}</span>
+          <strong>Indexando arquivos…</strong>
+          <span>pastas de dependências são ignoradas</span>
+        </div>`;
+        return;
+      }
+      if (search.error) {
+        tree.innerHTML = `<div class="file-search-empty">
+          <span class="file-search-empty-icon">${ICONS.alert}</span>
+          <strong>Não foi possível pesquisar</strong>
+          <span>${escapeHtml(search.error)}</span>
+        </div>`;
+        return;
+      }
+      if (search.entries.length === 0) {
+        tree.innerHTML = `<div class="file-search-empty">
+          <span class="file-search-empty-icon">${ICONS.file}</span>
+          <strong>Nenhum arquivo encontrado</strong>
+          <span>tente parte do nome ou do caminho</span>
+        </div>`;
+        return;
+      }
+
+      search.selected = Math.max(0, Math.min(search.selected, search.entries.length - 1));
+      tree.innerHTML = search.entries.map((entry, index) => {
+        const icon = window.MaterialIcons
+          ? window.MaterialIcons.iconHTML(entry.name, false, false)
+          : ICONS.file;
+        return `<div class="file-search-result${index === search.selected ? " selected" : ""}" id="file-search-option-${index}"
+          role="option" aria-selected="${index === search.selected ? "true" : "false"}"
+          data-index="${index}" data-path="${escapeHtml(entry.path)}">
+          <span class="tree-icon file">${icon}</span>
+          <span class="file-search-result-copy">
+            <span class="file-search-result-name">${highlightFileSearchValue(entry.name, search.query)}</span>
+            <span class="file-search-result-path">${highlightFileSearchValue(entry.directory || "raiz do projeto", search.query)}</span>
+          </span>
+        </div>`;
+      }).join("");
+      document.getElementById("fileSearchInput")?.setAttribute("aria-activedescendant", `file-search-option-${search.selected}`);
+
+      tree.querySelectorAll(".file-search-result").forEach((element) => {
+        element.addEventListener("mouseenter", () => {
+          search.selected = Number(element.dataset.index) || 0;
+          tree.querySelectorAll(".file-search-result").forEach((item, index) => {
+            const selected = index === search.selected;
+            item.classList.toggle("selected", selected);
+            item.setAttribute("aria-selected", selected ? "true" : "false");
+          });
+          document.getElementById("fileSearchInput")?.setAttribute("aria-activedescendant", element.id);
+        });
+        element.addEventListener("click", () => openFile(activeProjId, element.dataset.path));
+      });
+      requestAnimationFrame(() => {
+        tree.querySelector(".file-search-result.selected")?.scrollIntoView({ block: "nearest" });
+      });
+    }
+
+    function moveFileSearchSelection(delta) {
+      const search = getFileSearchState(activeProjId);
+      if (!search.query.trim() || search.entries.length === 0) return;
+      search.selected = Math.max(0, Math.min(search.entries.length - 1, search.selected + delta));
+      renderFileTree();
+    }
+
+    function openSelectedFileSearchResult() {
+      const search = getFileSearchState(activeProjId);
+      const entry = search.entries[search.selected];
+      if (entry) openFile(activeProjId, entry.path);
     }
 
     function handleFilesResult(msg) {
@@ -5530,6 +6609,24 @@
         } else if (msg.projectId === activeProjId) {
           showSimpleToast("Listar", msg.result?.error || "erro");
         }
+      } else if (msg.action === "search") {
+        const search = getFileSearchState(msg.projectId);
+        if (msg.requestId !== search.requestId) return;
+        if (String(msg.result?.query || "").trim() !== search.query.trim()) return;
+        search.loading = false;
+        if (msg.result?.ok) {
+          search.entries = msg.result.entries || [];
+          search.total = Number(msg.result.total) || 0;
+          search.truncated = !!msg.result.truncated;
+          search.error = "";
+          search.selected = Math.min(search.selected, Math.max(0, search.entries.length - 1));
+        } else {
+          search.entries = [];
+          search.total = 0;
+          search.truncated = false;
+          search.error = msg.result?.error || "busca indisponível";
+        }
+        if (msg.projectId === activeProjId && filesPanelVisible) renderFileTree();
       } else if (msg.action === "read") {
         const list = openFiles.get(msg.projectId) || [];
         const f = list.find((x) => x.path === msg.path);
@@ -5673,6 +6770,13 @@
     function renderFileTree() {
       const tree = document.getElementById("fileTree");
       const state = getTreeState(activeProjId);
+      updateFileSearchChrome(activeProjId);
+      if (state.search.query.trim()) {
+        renderFileSearchResults(tree, state.search);
+        return;
+      }
+      tree.removeAttribute("role");
+      tree.removeAttribute("aria-label");
       const rootEntries = state.contents.get("");
       if (!rootEntries) {
         tree.innerHTML = '<div class="git-empty">carregando…</div>';
@@ -6745,7 +7849,11 @@
     function connectWS() {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       ws = new WebSocket(`${proto}//${location.host}/ws`);
-      ws.addEventListener("open", () => setConn(true));
+      ws.addEventListener("open", () => {
+        setConn(true);
+        sendIdleReapConfig();
+        sendVisibleTerminals();
+      });
       ws.addEventListener("close", () => {
         setConn(false);
         setTimeout(connectWS, 2000);
@@ -6763,6 +7871,33 @@
       dot.classList.toggle("disconnected", !ok);
       text.textContent = ok ? "conectado" : "reconectando…";
     }
+
+    // ── Reaper: informa ao servidor quais terminais estão à vista (nunca
+    // encerrados) e a preferência de ligar/desligar o encerramento automático.
+    function computeVisibleTerminals() {
+      const ids = [];
+      if (layoutMode === "mosaic") {
+        gridSlots.forEach((projId) => {
+          if (!projId) return;
+          const tid = activeTerminalByProj.get(projId);
+          if (tid) ids.push([projId, tid]);
+        });
+      } else if ((viewModeByProj.get(activeProjId) || "terminal") === "terminal") {
+        const tid = getActiveTid();
+        if (activeProjId && tid) ids.push([activeProjId, tid]);
+      }
+      return ids;
+    }
+    function sendVisibleTerminals() {
+      if (ws?.readyState !== 1) return;
+      ws.send(JSON.stringify({ type: "visible_terminals", ids: computeVisibleTerminals() }));
+    }
+    function sendIdleReapConfig() {
+      if (ws?.readyState !== 1) return;
+      ws.send(JSON.stringify({ type: "idle_reap_config", enabled: getSetting("idleReap") }));
+    }
+    // renova a proteção do visível a cada 30s (menor que o grace de 90s do servidor)
+    setInterval(sendVisibleTerminals, 30000);
 
     function handleMessage(msg) {
       switch (msg.type) {
@@ -6815,12 +7950,15 @@
             activeTerminalByProj.set(activeProjId, msg.terminal.id);
           }
           renderSidebar(); renderTabs();
-          if (msg.projectId === activeProjId) { applyVisibility(); renderHeader(); }
+          if (layoutMode === "mosaic") { renderMosaic(); if (msg.projectId === activeProjId) renderHeader(); }
+          else if (msg.projectId === activeProjId) { applyVisibility(); renderHeader(); }
           break;
         }
         case "terminal_closed": {
           const p = getProj(msg.projectId);
           if (!p) return;
+          const closedTerm = p.terminals.find((t) => t.id === msg.terminalId);
+          dismissReapToast(msg.projectId, msg.terminalId);
           p.terminals = p.terminals.filter((t) => t.id !== msg.terminalId);
           destroyXterm(msg.projectId, msg.terminalId);
           if (activeTerminalByProj.get(msg.projectId) === msg.terminalId) {
@@ -6828,7 +7966,21 @@
             else activeTerminalByProj.delete(msg.projectId);
           }
           renderSidebar(); renderTabs();
-          if (msg.projectId === activeProjId) { applyVisibility(); renderHeader(); }
+          if (layoutMode === "mosaic") { renderMosaic(); if (msg.projectId === activeProjId) renderHeader(); }
+          else if (msg.projectId === activeProjId) { applyVisibility(); renderHeader(); }
+          if (msg.reason === "idle") {
+            showSimpleToast("Terminal encerrado por inatividade", `${p.name} · ${closedTerm?.name || msg.terminalId}`);
+          }
+          break;
+        }
+        case "terminal_reap_warning": {
+          const p = getProj(msg.projectId);
+          const t = p?.terminals.find((x) => x.id === msg.terminalId);
+          if (p && t) showReapWarning(p, t, msg.deadline);
+          break;
+        }
+        case "terminal_reap_cancel": {
+          dismissReapToast(msg.projectId, msg.terminalId);
           break;
         }
         case "terminal_renamed": {
@@ -6837,6 +7989,7 @@
           if (t) {
             t.name = msg.name;
             renderTabs();
+            if (layoutMode === "mosaic") renderMosaic();
             if (msg.projectId === activeProjId) renderHeader();
           }
           break;
@@ -6979,10 +8132,11 @@
       }
 
       renderSidebar();
+      if (layoutMode === "mosaic") { normalizeSlots(); renderMosaic(); }
       if (activeProjId) {
         renderHeader();
         renderTabs();
-        applyVisibility();
+        if (layoutMode !== "mosaic") applyVisibility();
       }
     }
 
@@ -7015,6 +8169,10 @@
         })),
       }));
 
+      // restaura o terminal selecionado de cada projeto (localStorage), validando
+      // que o tid ainda existe; senão o loop abaixo cai no 1º terminal
+      loadActiveTerms();
+
       msg.projects.forEach((p) => {
         const proj = getProj(p.id);
         p.terminals.forEach((t) => {
@@ -7040,6 +8198,15 @@
       renderSidebar();
       renderHeader();
       renderTabs();
+
+      // restaura o modo mosaico salvo (terminais já foram criados acima).
+      // Força focus->mosaic via setLayoutMode pra colapsar a sidebar corretamente.
+      if (layoutMode === "mosaic") {
+        layoutMode = "focus";
+        setLayoutMode("mosaic");
+      } else {
+        updateMosaicToggle();
+      }
     }
 
     // ============================================================
@@ -7050,6 +8217,7 @@
       { id: "act-edit-project", label: "Editar projeto atual…", hint: "", icon: "edit" },
       { id: "act-remove-project", label: "Remover projeto atual…", hint: "", icon: "trash" },
       { id: "act-files", label: "Abrir/fechar painel Arquivos", hint: "⌘E", icon: "folder" },
+      { id: "act-file-search", label: "Buscar arquivo no projeto…", hint: "⌘P", icon: "file" },
       { id: "act-save", label: "Salvar arquivo aberto", hint: "⌘S", icon: "save" },
       { id: "act-git", label: "Abrir/fechar painel Git", hint: "⌘G", icon: "edit" },
       { id: "act-git-refresh", label: "Atualizar status do Git", hint: "", icon: "restart" },
@@ -7175,6 +8343,7 @@
           break;
         }
         case "act-files": toggleFilesPanel(); break;
+        case "act-file-search": focusFileSearch(); break;
         case "act-save": saveCurrentFile(); break;
         case "act-git": toggleGitPanel(); break;
         case "act-git-refresh":
@@ -7230,6 +8399,45 @@
       if (!toast?.parentElement) return;
       toast.classList.add("exiting");
       setTimeout(() => toast.remove(), 220);
+    }
+
+    // Aviso (com contagem) de que um terminal ocioso vai ser encerrado. Persiste
+    // até o usuário clicar "Manter ativo", o terminal encerrar, ou o servidor
+    // cancelar (terminal voltou a ficar ativo/visível).
+    const reapToasts = new Map(); // "projId:tid" -> { toast, timer }
+    function showReapWarning(proj, term, deadline) {
+      dismissReapToast(proj.id, term.id);
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      if (proj.color) toast.style.setProperty("--toast-color", proj.color);
+      toast.innerHTML = `
+        <div class="toast-icon">${ICONS.bell}</div>
+        <div class="toast-content">
+          <div class="toast-title">Encerrando terminal ocioso</div>
+          <div class="toast-message">${escapeHtml(proj.name)} · ${escapeHtml(term.name)} — <span class="reap-count"></span></div>
+        </div>
+        <button class="toast-action">Manter ativo</button>`;
+      const countEl = toast.querySelector(".reap-count");
+      const tick = () => {
+        const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+        countEl.textContent = left > 0 ? `encerra em ${left}s` : "encerrando…";
+      };
+      tick();
+      const timer = setInterval(tick, 1000);
+      toast.querySelector(".toast-action").addEventListener("click", () => {
+        if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "keep_terminal", projectId: proj.id, terminalId: term.id }));
+        dismissReapToast(proj.id, term.id);
+      });
+      container.appendChild(toast);
+      reapToasts.set(k(proj.id, term.id), { toast, timer });
+    }
+    function dismissReapToast(projId, tid) {
+      const entry = reapToasts.get(k(projId, tid));
+      if (!entry) return;
+      clearInterval(entry.timer);
+      dismissToast(entry.toast);
+      reapToasts.delete(k(projId, tid));
     }
     // ============================================================
     // MODAL DE CONFIRMAÇÃO (substitui confirm() nativo)
@@ -8239,6 +9447,12 @@
               ],
             },
             {
+              title: "Terminais",
+              fields: [
+                { key: "idleReap", label: "Encerrar terminais ociosos (2h)", hint: "Libera memória fechando terminais sem uso há 2 horas. Nunca encerra terminais com processo rodando (dev server, agente…), aguardando você, ou visíveis. Avisa antes, com opção de manter.", type: "toggle", source: "local", default: true },
+              ],
+            },
+            {
               title: "Integrações",
               fields: [
                 { key: "api_key", label: "OpenAI API key", hint: "Chave usada pelo TTS (gpt-4o-mini-tts) e pelo Roteirizador (gpt-4o-mini). Permanece no servidor — o front nunca recebe a chave inteira, só os 4 primeiros e 4 últimos caracteres.", type: "password", source: "voice.summarize" },
@@ -8376,6 +9590,7 @@
     function svSetVal(field, val) {
       if (field.source === "local") {
         setSetting(field.key, val);
+        if (field.key === "idleReap") sendIdleReapConfig(); // avisa o servidor na hora
         return;
       }
       if (field.source === "voice") {
@@ -8446,7 +9661,7 @@
         return `<section class="team-hub is-connected" aria-label="DevNX Control conectado">
           <div class="team-hub-head">
             <div><div class="team-kicker">Pool central ativo</div><div class="team-heading">DevNX Control</div>
-            <div class="team-subtitle">Novos terminais usam exclusivamente as sessões baixadas do Laravel. Os perfis locais dos agentes não entram no runtime.</div></div>
+            <div class="team-subtitle">Terminais novos e sessões Claude já abertas usam exclusivamente as sessões baixadas do Laravel. Os perfis locais dos agentes não entram no runtime.</div></div>
             <span class="team-status online">conectado</span>
           </div>
           <div class="team-form">
@@ -8466,7 +9681,7 @@
         panel.innerHTML = hubMarkup(status) +
           `<div class="acc-head team-divider-label"><div class="acc-title">Sessões recebidas</div><span class="team-central-mark">definidas pelo Laravel</span></div>` +
           (connected ? runtime : '<div class="acc-msg">Conecte o DevNX Control para receber as sessões selecionadas pelo Laravel.</div>') +
-          `<div class="acc-foot-note">O gerenciamento completo, consumo, validade, renovação e disponibilidade ficam no painel DevNX Control. O Cockpit apenas recebe a seleção para novos terminais.</div>`;
+          `<div class="acc-foot-note">O gerenciamento completo, consumo, validade, renovação e disponibilidade ficam no painel DevNX Control. O broker local renova e repete automaticamente uma chamada Claude que receba 401, sem reiniciar a sessão.</div>`;
 
         const connectForm = panel.querySelector("#teamConnectForm");
         connectForm?.addEventListener("submit", async (event) => {
@@ -9168,6 +10383,20 @@
         return;
       }
 
+      // ⌘⇧M — alterna Foco ↔ Mosaico (Shift evita colidir com Ctrl+M = Enter no terminal)
+      if (isMod && e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        toggleLayoutMode();
+        return;
+      }
+
+      // ⌘P — localizar arquivo no projeto atual
+      if (isMod && !e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        focusFileSearch();
+        return;
+      }
+
       // ⌘E — toggle painel arquivos
       if (isMod && !e.shiftKey && e.key.toLowerCase() === "e") {
         e.preventDefault();
@@ -9349,16 +10578,57 @@
     })();
 
     // Files bindings
+    document.getElementById("btnMosaic").addEventListener("click", toggleLayoutMode);
+    document.getElementById("btnMosaicExit").addEventListener("click", () => setLayoutMode("focus"));
+    document.getElementById("btnSettingsTop").addEventListener("click", showSettingsModal);
     document.getElementById("btnFiles").addEventListener("click", toggleFilesPanel);
     document.getElementById("filesClose").addEventListener("click", toggleFilesPanel);
     document.getElementById("filesRefresh").addEventListener("click", () => {
       const state = getTreeState(activeProjId);
+      if (state.search.query.trim()) {
+        requestFileSearch(activeProjId, { refresh: true });
+        return;
+      }
       // limpa todo o cache e re-busca
       state.contents.clear();
       fetchFiles(activeProjId, "");
       // re-busca expansões abertas
       state.expanded.forEach((p) => fetchFiles(activeProjId, p));
     });
+    (() => {
+      const input = document.getElementById("fileSearchInput");
+      const clear = document.getElementById("fileSearchClear");
+      if (!input || !clear) return;
+      input.addEventListener("input", () => {
+        const search = getFileSearchState(activeProjId);
+        search.query = input.value.slice(0, 160);
+        search.entries = [];
+        search.total = 0;
+        search.selected = 0;
+        search.error = "";
+        search.truncated = false;
+        search.loading = search.query.trim().length > 0;
+        renderFileTree();
+        scheduleFileSearch(activeProjId);
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveFileSearchSelection(1);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveFileSearchSelection(-1);
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          openSelectedFileSearchResult();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          if (input.value) clearFileSearch();
+          else input.blur();
+        }
+      });
+      clear.addEventListener("click", () => clearFileSearch());
+    })();
 
     // Git bindings
     document.getElementById("btnGit").addEventListener("click", toggleGitPanel);
@@ -9968,105 +11238,6 @@
       });
     }
 
-    // ===================== BARRA DE USO DAS CONTAS =====================
-    // Mostra o consumo (5h/semanal) da conta ATIVA de cada plataforma no
-    // rodapé da sidebar. Claude atualiza sozinho (HTTP barato); Codex mostra
-    // o último valor conhecido (lido dos logs) — atualização real é sob demanda.
-    (function initUsageBar() {
-      const rowsEl = document.getElementById("usageRows");
-      const btnRefresh = document.getElementById("usageRefresh");
-      if (!rowsEl) return;
-
-      const TZBR = "America/Sao_Paulo";
-      function fmtReset(v) {
-        if (v == null) return null;
-        const d = new Date(v); // aceita ISO (Claude) ou epoch ms (Codex)
-        if (isNaN(d)) return null;
-        try {
-          const dateFmt = new Intl.DateTimeFormat("pt-BR", {
-            timeZone: TZBR, day: "2-digit", month: "2-digit",
-          });
-          const timeFmt = new Intl.DateTimeFormat("pt-BR", {
-            timeZone: TZBR, hour: "2-digit", minute: "2-digit",
-          });
-          const day = dateFmt.format(d);
-          const today = dateFmt.format(new Date());
-          return day === today ? timeFmt.format(d) : `${day} ${timeFmt.format(d)}`;
-        } catch { return null; }
-      }
-      function cls(p) { return p == null ? "low" : p >= 90 ? "high" : p >= 70 ? "mid" : "low"; }
-
-      function fmtPct(p) { return p == null ? "–" : Math.round(p) + "%"; }
-
-      // Barra compacta da janela de 5h; os dois períodos ficam identificados no topo.
-      function usageLine(acc) {
-        const w = Math.min(100, Math.max(0, acc.fiveHour || 0));
-        const r = fmtReset(acc.fiveHourReset);
-        return `<div class="usage-line">` +
-          `<span class="usage-track"><span class="usage-fill ${cls(acc.fiveHour)}" style="width:${w}%"></span></span>` +
-          (r ? `<span class="usage-reset" title="Reset da janela de 5 horas">↻ ${r}</span>` : "") +
-          `</div>`;
-      }
-
-      function accBlock(acc, platLabel) {
-        const plan = acc.plan ? escapeHtml(String(acc.plan)) : "";
-        const statusLabel = `${platLabel}${plan ? `, plano ${plan}` : ""}, uso em 5 horas ${fmtPct(acc.fiveHour)}, uso semanal ${fmtPct(acc.weekly)}`;
-        const head =
-          `<div class="usage-acc-head">` +
-          `<span class="usage-acc-plat ${acc.platform}">${platLabel}</span>` +
-          (plan ? `<span class="usage-acc-plan">${plan}</span>` : "") +
-          `<span class="usage-metrics">` +
-          `<span class="usage-metric"><span class="usage-metric-label">5H</span><span class="usage-metric-value">${fmtPct(acc.fiveHour)}</span></span>` +
-          `<span class="usage-metric"><span class="usage-metric-label">7D</span><span class="usage-metric-value">${fmtPct(acc.weekly)}</span></span>` +
-          `</span>` +
-          `</div>`;
-        if (acc.status === "expired") {
-          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">sessão expirada — relogar</div></div>`;
-        }
-        if (acc.status === "ratelimited") {
-          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">limite de consultas (429)</div></div>`;
-        }
-        if (acc.status === "error") {
-          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">indisponível agora</div></div>`;
-        }
-        if (acc.status === "nodata") {
-          return `<div class="usage-acc" aria-label="${statusLabel}">${head}<div class="usage-nodata">sem dados — clique ⟳</div></div>`;
-        }
-        return `<div class="usage-acc" aria-label="${statusLabel}">${head}${usageLine(acc)}</div>`;
-      }
-
-      function render(table) {
-        const claudeActive = (table.claude || []).find((a) => a.active) || (table.claude || [])[0];
-        const codexActive  = (table.codex  || []).find((a) => a.active) || (table.codex  || [])[0];
-        const parts = [];
-        if (claudeActive) parts.push(accBlock(claudeActive, "Ailiv C"));
-        if (codexActive)  parts.push(accBlock(codexActive, "Ailiv G"));
-        rowsEl.innerHTML = parts.length ? parts.join("") : `<div class="usage-empty">nenhuma conta gerenciada</div>`;
-        // guarda a tabela completa p/ a futura tela de configurações
-        window.__usageTable = table;
-      }
-
-      async function load(force) {
-        try {
-          const res = await fetch("/accounts/usage" + (force ? "?force=1" : ""));
-          const table = await res.json();
-          if (table && !table.error) render(table);
-          else rowsEl.innerHTML = `<div class="usage-empty">erro ao ler uso</div>`;
-        } catch {
-          rowsEl.innerHTML = `<div class="usage-empty">backend offline</div>`;
-        }
-      }
-
-      btnRefresh?.addEventListener("click", () => {
-        btnRefresh.classList.add("spinning");
-        load(true).finally(() => setTimeout(() => btnRefresh.classList.remove("spinning"), 400));
-      });
-
-      load();
-      // atualiza sozinho a cada 20 min (evita rate limit; é só monitoramento)
-      setInterval(load, 20 * 60 * 1000);
-      window.__loadUsageBar = load;
-    })();
   </script>
 </body>
 </html>

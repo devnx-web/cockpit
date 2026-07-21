@@ -13,6 +13,7 @@ import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
 import { createTeamAccountsClient } from "./lib/team-accounts.js";
 import { createTeamRouter } from "./lib/team-router.js";
 import { interactiveTerminalEnv } from "./lib/terminal-env.js";
+import { createFileSearchService } from "./lib/file-search.js";
 const { spawn } = pkg;
 
 // === config dinâmica — populada por startServer() ===
@@ -28,6 +29,13 @@ const teamRouter = createTeamRouter({
   client: teamAccounts,
   brokerUrl: () => SERVER_URL,
 });
+const fileSearch = createFileSearchService();
+const TEAM_SELECTION_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+const TEAM_AUTH_RECOVERY_COOLDOWN_MS = 30 * 1000;
+const TEAM_AUTH_ERROR_PATTERN = /(?:not logged in[\s\S]{0,120}please run \/login|sign in with chatgpt[\s\S]{0,360}provide your own api key|please run \/login[\s\S]{0,180}(?:api error:\s*)?401|(?:api error:\s*)?401[\s\S]{0,180}(?:invalid authentication credentials|authentication credentials))/i;
+let teamSelectionSyncTimer = null;
+let teamAuthRecoveryPromise = null;
+let lastTeamAuthRecoveryAt = 0;
 // Versão do app — lida uma vez do package.json e enviada ao cliente no hello.
 // Evita ter o número hardcoded em vários lugares e sair de sincronia.
 const APP_VERSION = (() => {
@@ -54,7 +62,62 @@ function defaultShell() {
 // =========================================================
 const sessions = new Map();
 
-function createTerminalIn(session, name = null) {
+async function syncTeamSelections(log = console) {
+  if (!teamRouter.status().connected) return;
+  try {
+    const result = await teamRouter.bootstrap({ syncUsage: true });
+    for (const warning of result.warnings || []) {
+      log.log(`  \x1b[33m⚠\x1b[0m ${warning}`);
+    }
+  } catch (error) {
+    log.log(`\x1b[33m▸ cockpit pool\x1b[0m sincronização indisponível: ${error.message}`);
+  }
+}
+
+function recoverTeamAuthAfterError(terminal, data, log = console) {
+  terminal.authErrorTail = `${terminal.authErrorTail || ""}${String(data || "")}`.slice(-512);
+  if (!TEAM_AUTH_ERROR_PATTERN.test(terminal.authErrorTail)) return;
+  terminal.authErrorTail = "";
+  if (!teamRouter.status().connected) return;
+  if (teamAuthRecoveryPromise) return;
+  if (Date.now() - lastTeamAuthRecoveryAt < TEAM_AUTH_RECOVERY_COOLDOWN_MS) return;
+
+  lastTeamAuthRecoveryAt = Date.now();
+  teamAuthRecoveryPromise = teamRouter.refreshSelectionsIfStale({
+    maxAgeMs: 0,
+    retryMissingProviders: 1,
+    syncUsage: true,
+  })
+    .then((result) => {
+      const openai = result.selections?.find((selection) => selection.provider === "openai");
+      if (openai) {
+        log.log(`\x1b[32m▸ cockpit pool\x1b[0m credencial Codex recuperada após falha de autenticação`);
+      }
+      const claude = result.selections?.find((selection) => selection.provider === "claude");
+      if (claude) {
+        log.log(`\x1b[32m▸ cockpit pool\x1b[0m credencial Claude atualizada após 401; a sessão aberta usará a nova seleção`);
+      }
+      for (const warning of result.warnings || []) {
+        log.log(`  \x1b[33m⚠\x1b[0m ${warning}`);
+      }
+    })
+    .catch((error) => {
+      log.log(`\x1b[33m▸ cockpit pool\x1b[0m recuperação de autenticação indisponível: ${error.message}`);
+    })
+    .finally(() => {
+      teamAuthRecoveryPromise = null;
+    });
+}
+
+function startTeamSelectionSync(log = console) {
+  if (teamSelectionSyncTimer) clearInterval(teamSelectionSyncTimer);
+  teamSelectionSyncTimer = setInterval(() => {
+    syncTeamSelections(log).catch(() => {});
+  }, TEAM_SELECTION_SYNC_INTERVAL_MS);
+  teamSelectionSyncTimer.unref?.();
+}
+
+async function createTerminalIn(session, name = null) {
   const tid = `t${session.nextId++}`;
   const projPath = session.proj.path;
   const pathOk = projPath && fs.existsSync(projPath);
@@ -64,6 +127,16 @@ function createTerminalIn(session, name = null) {
     console.warn(
       `[cockpit] projeto "${session.proj.id}" tem path inexistente: ${projPath} — usando ${cwd} como fallback`,
     );
+  }
+
+  // Provider access tokens are intentionally kept only in the Cockpit
+  // process. Refresh the central selection before creating a PTY so an app
+  // left open overnight cannot inject yesterday's token into a new shell.
+  if (teamRouter.status().connected) {
+    const refreshed = await teamRouter.refreshSelectionsIfStale();
+    for (const warning of refreshed.warnings || []) {
+      console.warn(`[cockpit/team] ${warning}`);
+    }
   }
 
   const baseEnv = interactiveTerminalEnv(process.env, session.proj.env, {
@@ -96,8 +169,13 @@ function createTerminalIn(session, name = null) {
     bufferSize: 0,
     maxBufferSize: 200 * 1024,
     lastOutputTime: Date.now(),
+    lastInputTime: Date.now(), // reaper: atividade = max(output, input)
+    lastSeenTime: Date.now(),  // reaper: última vez visível num cliente
+    reapWarned: false,         // reaper: já avisou que vai encerrar
+    exited: false,             // shell morreu (onExit) → reapável
     status: pathOk ? "idle" : "error",
     statusText: pathOk ? "iniciando…" : "path do projeto não existe",
+    authErrorTail: "",
   };
 
   if (!pathOk) {
@@ -109,6 +187,7 @@ function createTerminalIn(session, name = null) {
   }
 
   pty.onData((data) => {
+    recoverTeamAuthAfterError(terminal, data);
     terminal.lastOutputTime = Date.now();
     terminal.buffer.push(data);
     terminal.bufferSize += data.length;
@@ -125,6 +204,7 @@ function createTerminalIn(session, name = null) {
   });
 
   pty.onExit((evt) => {
+    terminal.exited = true;
     terminal.status = evt.exitCode === 0 ? "idle" : "error";
     terminal.statusText =
       evt.exitCode === 0 ? "shell encerrado" : `falhou (exit ${evt.exitCode})`;
@@ -135,7 +215,7 @@ function createTerminalIn(session, name = null) {
   return terminal;
 }
 
-function createSession(proj) {
+async function createSession(proj) {
   const session = {
     proj,
     terminals: new Map(),
@@ -144,7 +224,7 @@ function createSession(proj) {
   sessions.set(proj.id, session);
   // cada projeto começa com 1 terminal default
   try {
-    createTerminalIn(session, "Terminal 1");
+    await createTerminalIn(session, "Terminal 1");
   } catch (error) {
     // Um shell inválido em um projeto não pode derrubar o servidor inteiro
     // depois que ele já começou a escutar. O usuário ainda pode corrigir o
@@ -163,6 +243,25 @@ function killTerminal(session, tid) {
   } catch {}
   session.terminals.delete(tid);
   return true;
+}
+
+// Detecta se há um comando rodando em foreground no PTY (dev server, build,
+// agente…) lendo os processos-filho do shell via /proc (Linux). Usado pelo
+// reaper pra NUNCA encerrar um terminal ocupado. Conservador: em caso de dúvida
+// num PTY vivo, considera ocupado (não reapa). Shell já morto = não ocupado.
+function hasForegroundChild(terminal) {
+  if (terminal.exited) return false;
+  const pid = terminal.pty?.pid;
+  if (!pid) return true; // sem pid → não arrisca
+  try {
+    const raw = fs.readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8");
+    return raw.trim().length > 0;
+  } catch (e) {
+    // ENOENT = processo sumiu (shell morreu) → não ocupado; qualquer outro erro
+    // (permissão, kernel sem CONFIG_PROC_CHILDREN) → conservador: ocupado.
+    if (e && e.code === "ENOENT") return false;
+    return true;
+  }
 }
 
 // =========================================================
@@ -997,7 +1096,7 @@ wss.on("connection", (ws) => {
         PROJECTS.pop();
         return;
       }
-      createSession(newProj);
+      await createSession(newProj);
       broadcastProjectsChanged();
       ws.send(JSON.stringify({ type: "project_admin_ok", action: "add", id: newProj.id }));
       return;
@@ -1032,7 +1131,7 @@ wss.on("connection", (ws) => {
           for (const t of oldSession.terminals.values()) try { t.pty.kill(); } catch {}
           sessions.delete(before.id);
         }
-        createSession(merged);
+        await createSession(merged);
       } else {
         const s = sessions.get(merged.id);
         if (s) {
@@ -1040,7 +1139,7 @@ wss.on("connection", (ws) => {
           if (pathChanged) {
             for (const t of s.terminals.values()) try { t.pty.kill(); } catch {}
             s.terminals.clear();
-            createTerminalIn(s, "Terminal 1");
+            await createTerminalIn(s, "Terminal 1");
           }
         }
       }
@@ -1060,7 +1159,7 @@ wss.on("connection", (ws) => {
       PROJECTS.splice(idx, 1);
       try { await persistProjects(); } catch (e) {
         PROJECTS.splice(idx, 0, removed);
-        createSession(removed);
+        await createSession(removed);
         ws.send(JSON.stringify({ type: "project_admin_error", action: "remove", error: "falha ao salvar: " + e.message }));
         return;
       }
@@ -1083,6 +1182,29 @@ wss.on("connection", (ws) => {
       broadcastProjectsChanged();
       return;
     }
+    // ---- Reaper de terminais ociosos (podem abranger vários projetos) ----
+    if (msg.type === "visible_terminals") {
+      // cliente informa quais terminais estão à vista (aba ativa / cards do mosaico)
+      const now = Date.now();
+      if (Array.isArray(msg.ids)) {
+        for (const pair of msg.ids) {
+          const [pid, tid] = Array.isArray(pair) ? pair : [];
+          const t = sessions.get(pid)?.terminals.get(tid);
+          if (t) t.lastSeenTime = now;
+        }
+      }
+      return;
+    }
+    if (msg.type === "keep_terminal") {
+      // usuário clicou "Manter ativo" no aviso → reseta a ociosidade
+      const t = sessions.get(msg.projectId)?.terminals.get(msg.terminalId);
+      if (t) { t.lastInputTime = Date.now(); t.reapWarned = false; }
+      return;
+    }
+    if (msg.type === "idle_reap_config") {
+      idleReapEnabled = !!msg.enabled;
+      return;
+    }
 
     // ---- Ações com session ----
     const session = sessions.get(msg.projectId);
@@ -1091,7 +1213,7 @@ wss.on("connection", (ws) => {
     switch (msg.type) {
       case "input": {
         const t = session.terminals.get(msg.terminalId);
-        if (t) t.pty.write(msg.data);
+        if (t) { t.lastInputTime = Date.now(); t.pty.write(msg.data); }
         break;
       }
       case "resize": {
@@ -1104,7 +1226,7 @@ wss.on("connection", (ws) => {
         break;
       }
       case "create_terminal": {
-        const fresh = createTerminalIn(session, msg.name);
+        const fresh = await createTerminalIn(session, msg.name);
         broadcast({
           type: "terminal_added",
           projectId: session.proj.id,
@@ -1149,7 +1271,7 @@ wss.on("connection", (ws) => {
           projectId: session.proj.id,
           terminalId: msg.terminalId,
         });
-        const fresh = createTerminalIn(session, oldName);
+        const fresh = await createTerminalIn(session, oldName);
         broadcast({
           type: "terminal_added",
           projectId: session.proj.id,
@@ -1216,6 +1338,18 @@ wss.on("connection", (ws) => {
         }));
         break;
       }
+      case "search_files": {
+        const result = await fileSearch.search(session.proj.path, msg.query, {
+          refresh: msg.refresh === true,
+        });
+        ws.send(JSON.stringify({
+          type: "files_result", action: "search",
+          projectId: msg.projectId,
+          requestId: Number(msg.requestId) || 0,
+          result,
+        }));
+        break;
+      }
       case "read_file": {
         const result = await readFileContent(session.proj.path, msg.path);
         ws.send(JSON.stringify({
@@ -1242,6 +1376,7 @@ wss.on("connection", (ws) => {
       }
       case "rename_path": {
         const result = await renamePath(session.proj.path, msg.from, msg.to);
+        if (result.ok) fileSearch.invalidate(session.proj.path);
         ws.send(JSON.stringify({
           type: "files_result", action: "rename",
           projectId: msg.projectId, from: msg.from, to: msg.to, result,
@@ -1250,6 +1385,7 @@ wss.on("connection", (ws) => {
       }
       case "delete_path": {
         const result = await deletePath(session.proj.path, msg.path);
+        if (result.ok) fileSearch.invalidate(session.proj.path);
         ws.send(JSON.stringify({
           type: "files_result", action: "delete",
           projectId: msg.projectId, path: msg.path, result,
@@ -1258,6 +1394,7 @@ wss.on("connection", (ws) => {
       }
       case "create_file": {
         const result = await createFile(session.proj.path, msg.path, msg.content || "");
+        if (result.ok) fileSearch.invalidate(session.proj.path);
         ws.send(JSON.stringify({
           type: "files_result", action: "create_file",
           projectId: msg.projectId, path: msg.path, result,
@@ -1266,6 +1403,7 @@ wss.on("connection", (ws) => {
       }
       case "create_dir": {
         const result = await createDir(session.proj.path, msg.path);
+        if (result.ok) fileSearch.invalidate(session.proj.path);
         ws.send(JSON.stringify({
           type: "files_result", action: "create_dir",
           projectId: msg.projectId, path: msg.path, result,
@@ -1274,6 +1412,7 @@ wss.on("connection", (ws) => {
       }
       case "duplicate_path": {
         const result = await duplicatePath(session.proj.path, msg.from, msg.to);
+        if (result.ok) fileSearch.invalidate(session.proj.path);
         ws.send(JSON.stringify({
           type: "files_result", action: "duplicate",
           projectId: msg.projectId, from: msg.from, to: msg.to, result,
@@ -1282,6 +1421,7 @@ wss.on("connection", (ws) => {
       }
       case "import_external": {
         const result = await importExternal(session.proj.path, msg.src, msg.to, !!msg.overwrite);
+        if (result.ok) fileSearch.invalidate(session.proj.path);
         ws.send(JSON.stringify({
           type: "files_result", action: "import_external",
           projectId: msg.projectId, src: msg.src, to: msg.to, result,
@@ -1346,6 +1486,54 @@ setInterval(() => {
     for (const t of s.terminals.values()) updateTerminalStatus(s, t);
   }
 }, 2000);
+
+// =========================================================
+// REAPER — encerra terminais ociosos há muito tempo (economia de memória).
+// Nunca encerra terminais com processo rodando, "aguardando" (agente), ou
+// visíveis. Avisa ~2min antes; o usuário pode "Manter ativo".
+// =========================================================
+const IDLE_REAP_MS = (() => {
+  const v = parseInt(process.env.COCKPIT_IDLE_REAP_MS, 10);
+  return Number.isFinite(v) ? v : 2 * 60 * 60 * 1000; // 2h padrão; 0 desliga
+})();
+const envMs = (name, def) => { const v = parseInt(process.env[name], 10); return Number.isFinite(v) ? v : def; };
+const REAP_WARN_MS = envMs("COCKPIT_IDLE_REAP_WARN_MS", 2 * 60 * 1000);   // avisa 2 min antes
+const REAP_SEEN_GRACE = envMs("COCKPIT_IDLE_REAP_SEEN_MS", 90 * 1000);    // protege visto nos últimos 90s
+const REAP_TICK = envMs("COCKPIT_IDLE_REAP_TICK_MS", 20 * 1000);          // frequência da varredura
+let idleReapEnabled = IDLE_REAP_MS > 0; // toggle via ws idle_reap_config
+
+setInterval(() => {
+  if (!idleReapEnabled || IDLE_REAP_MS <= 0) return;
+  const now = Date.now();
+  for (const s of sessions.values()) {
+    for (const [tid, t] of s.terminals) {
+      const idle = now - Math.max(t.lastOutputTime, t.lastInputTime);
+      const seen = now - t.lastSeenTime;
+      const candidate =
+        idle >= IDLE_REAP_MS - REAP_WARN_MS &&
+        t.status !== "waiting" &&        // agente aguardando você — nunca matar
+        seen > REAP_SEEN_GRACE &&        // proteção do visível
+        !hasForegroundChild(t);          // processo rodando — nunca matar
+
+      if (!candidate) {
+        if (t.reapWarned) {
+          t.reapWarned = false;
+          broadcast({ type: "terminal_reap_cancel", projectId: s.proj.id, terminalId: tid });
+        }
+        continue;
+      }
+
+      if (idle >= IDLE_REAP_MS) {
+        killTerminal(s, tid);
+        broadcast({ type: "terminal_closed", projectId: s.proj.id, terminalId: tid, reason: "idle" });
+      } else if (!t.reapWarned) {
+        t.reapWarned = true;
+        const deadline = Math.max(t.lastOutputTime, t.lastInputTime) + IDLE_REAP_MS;
+        broadcast({ type: "terminal_reap_warning", projectId: s.proj.id, terminalId: tid, name: t.name, deadline });
+      }
+    }
+  }
+}, REAP_TICK);
 
 // =========================================================
 // HTTP
@@ -1511,6 +1699,10 @@ async function shutdown(opts = {}) {
       try { t.pty.kill(); } catch {}
     }
   }
+  if (teamSelectionSyncTimer) {
+    clearInterval(teamSelectionSyncTimer);
+    teamSelectionSyncTimer = null;
+  }
   teamAccounts.cleanupRuntime();
   try { dictation.stop(); } catch {}
   shutdownAllLsp();
@@ -1570,8 +1762,8 @@ export async function startServer({
   SERVER_URL = serverUrl;
   log.log(`\n\x1b[36m▸ cockpit\x1b[0m rodando em \x1b[1m${serverUrl}\x1b[0m\n`);
 
-  // Ao abrir o Cockpit, escolhe uma vez a conta de menor pressão de uso por
-  // provedor. As seleções ficam em memória e só afetam PTYs criados depois.
+  // Aquece a seleção central no boot. Novos PTYs revalidam esse cache com TTL,
+  // pois o processo Electron pode permanecer aberto por vários dias.
   if (teamRouter.status().connected) {
     log.log("\x1b[36m▸ cockpit\x1b[0m selecionando pool central…");
     const boot = await teamRouter.bootstrap();
@@ -1579,20 +1771,24 @@ export async function startServer({
       log.log(`  \x1b[33m⚠\x1b[0m ${warning}`);
     }
   }
+  // O Electron costuma permanecer aberto por dias. Rebaixe a seleção em
+  // memória periodicamente para que novos/reiniciados PTYs nunca dependam do
+  // token carregado no boot do aplicativo.
+  startTeamSelectionSync(log);
 
   // Só cria PTYs depois que a porta real é conhecida. Além de impedir PTYs
   // órfãos quando a porta fixa está ocupada, isso permite injetar nos novos
   // terminais o endpoint loopback usado pelo broker de autenticação.
   log.log("\x1b[36m▸ cockpit\x1b[0m criando sessões…");
-  PROJECTS.forEach((p) => {
+  for (const p of PROJECTS) {
     const exists = fs.existsSync(p.path);
     log.log(
       `  \x1b[2m·\x1b[0m ${p.id.padEnd(12)} ${
         exists ? "\x1b[32m✓\x1b[0m" : "\x1b[33m⚠\x1b[0m"
       } ${p.path}`
     );
-    createSession(p);
-  });
+    await createSession(p);
+  }
 
   // voz/ditado opt-in — não derrubam o boot se faltar binário
   if (voiceEnabled && process.platform === "linux") {

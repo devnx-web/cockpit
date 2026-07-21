@@ -46,12 +46,12 @@ function openAiSelection(id = OPENAI_ACCOUNT, suffix = "one") {
   };
 }
 
-function claudeSelection() {
+function claudeSelection(id = CLAUDE_ACCOUNT, suffix = "secret-token") {
   return {
-    account: { id: CLAUDE_ACCOUNT, provider: "claude", label: "Claude principal" },
+    account: { id, provider: "claude", label: `Claude ${suffix}` },
     client: {
       type: "claude_setup_token",
-      oauth_token: "claude-secret-token",
+      oauth_token: `claude-${suffix}`,
       expires_at: "2099-01-01T00:00:00Z",
     },
   };
@@ -238,9 +238,12 @@ test("selection keeps secrets in memory, writes an isolated Codex auth and enric
 
   const env = client.enrichPtyEnv({ TERM: "xterm-256color" }, {
     codexRefreshUrl: "http://127.0.0.1:47817/team/openai/oauth/token",
+    claudeProxyUrl: "http://127.0.0.1:47817/team/claude",
     claudeProjectPath,
   });
-  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, "claude-secret-token");
+  assert.match(env.CLAUDE_CODE_OAUTH_TOKEN, /^cockpit-claude:[A-Za-z0-9_-]{32}$/);
+  assert.notEqual(env.CLAUDE_CODE_OAUTH_TOKEN, "claude-secret-token");
+  assert.equal(env.ANTHROPIC_BASE_URL, "http://127.0.0.1:47817/team/claude");
   assert.equal(env.CLAUDE_CONFIG_DIR, path.join(homeDir, ".cockpit", "claude"));
   assert.equal(env.CODEX_HOME, path.dirname(materialized.path));
   assert.equal(env.CODEX_REFRESH_TOKEN_URL_OVERRIDE, "http://127.0.0.1:47817/team/openai/oauth/token");
@@ -251,6 +254,8 @@ test("selection keeps secrets in memory, writes an isolated Codex auth and enric
     hasTrustDialogAccepted: true,
     hasCompletedProjectOnboarding: true,
   });
+  const claudeAuthPath = path.join(homeDir, ".cockpit", "claude", ".credentials.json");
+  assert.equal(fs.existsSync(claudeAuthPath), false);
   assert.throws(
     () => client.materializeCodexAuth(path.join(homeDir, ".cockpit", "auth.json")),
     (error) => error.code === "UNSAFE_CODEX_AUTH_PATH",
@@ -260,7 +265,48 @@ test("selection keeps secrets in memory, writes an isolated Codex auth and enric
   fs.writeFileSync(rollout, "persist me\n");
   client.cleanupRuntime();
   assert.equal(fs.existsSync(materialized.path), false);
+  assert.equal(fs.existsSync(claudeAuthPath), false);
   assert.equal(fs.readFileSync(rollout, "utf8"), "persist me\n");
+});
+
+test("a fail-closed PTY is promoted when the central Codex selection recovers", async (t) => {
+  const { client, homeDir } = makeFixture(t, ({ url, body }) => {
+    if (url.pathname === "/api/login") return json({ access_token: "jwt" });
+    if (url.pathname === "/api/cockpit-ai/device-tokens") return json({ token: "device" });
+    if (url.pathname === "/api/cockpit-ai/select" && body.provider === "openai") {
+      return json(openAiSelection());
+    }
+    if (url.pathname === `/api/cockpit-ai/accounts/${OPENAI_ACCOUNT}/refresh`) {
+      return json(openAiSelection(OPENAI_ACCOUNT, "refreshed"));
+    }
+    throw new Error(`Unexpected path ${url.pathname}`);
+  });
+  await connect(client);
+
+  const pendingEnv = client.enrichPtyEnv({});
+  const pendingAuthPath = path.join(pendingEnv.CODEX_HOME, "auth.json");
+  assert.equal(fs.existsSync(pendingAuthPath), false);
+
+  await client.selectBest("openai");
+  const materialized = client.materializeCodexAuth();
+  const recoveredAuth = JSON.parse(fs.readFileSync(pendingAuthPath, "utf8"));
+  const freshEnv = client.enrichPtyEnv({}, {
+    codexRefreshUrl: "http://127.0.0.1:47817/team/openai/oauth/token",
+  });
+
+  assert.equal(recoveredAuth.tokens.access_token, "access-one");
+  assert.equal(fs.statSync(pendingAuthPath).mode & 0o777, 0o600);
+  assert.equal(freshEnv.CODEX_HOME, path.dirname(materialized.path));
+  assert.notEqual(freshEnv.CODEX_HOME, pendingEnv.CODEX_HOME);
+
+  await client.handleOpenAiRefreshRequest({
+    grant_type: "refresh_token",
+    refresh_token: recoveredAuth.tokens.refresh_token,
+  });
+  assert.equal(
+    JSON.parse(fs.readFileSync(pendingAuthPath, "utf8")).tokens.access_token,
+    "access-refreshed",
+  );
 });
 
 test("Codex refresh capabilities remain valid after another account becomes current", async (t) => {
@@ -312,6 +358,66 @@ test("Codex refresh capabilities remain valid after another account becomes curr
     client.handleOpenAiRefreshRequest({
       grant_type: "refresh_token",
       refresh_token: `cockpit:${OPENAI_ACCOUNT}:guessed-capability`,
+    }),
+    (error) => error.code === "INVALID_OAUTH_CAPABILITY",
+  );
+});
+
+test("Claude loopback broker refreshes a revoked token and retries without changing the PTY capability", async (t) => {
+  let selections = 0;
+  const upstreamAuthorizations = [];
+  const { client } = makeFixture(t, ({ url, init, body }) => {
+    if (url.pathname === "/api/login") return json({ access_token: "jwt" });
+    if (url.pathname === "/api/cockpit-ai/device-tokens") return json({ token: "device" });
+    if (url.pathname === "/api/cockpit-ai/select") {
+      selections += 1;
+      return json(claudeSelection());
+    }
+    if (url.pathname === `/api/cockpit-ai/accounts/${CLAUDE_ACCOUNT}/refresh`) {
+      return json(claudeSelection(CLAUDE_ACCOUNT, "rotated-token"));
+    }
+    if (url.origin === "https://api.anthropic.com") {
+      upstreamAuthorizations.push(init.headers.Authorization);
+      assert.equal(url.pathname, "/v1/messages");
+      assert.equal(init.headers["anthropic-version"], "2023-06-01");
+      return upstreamAuthorizations.length === 1
+        ? json({ error: { message: "revoked" } }, 401)
+        : json({ type: "message", content: [{ type: "text", text: "OK" }] });
+    }
+    throw new Error(`Unexpected path ${url.pathname}`);
+  });
+  await connect(client);
+  await client.selectBest("claude");
+  const env = client.enrichPtyEnv({ CLAUDE_CODE_OAUTH_TOKEN: "host-token" }, {
+    claudeProxyUrl: "http://127.0.0.1:47817/team/claude",
+  });
+  const capability = env.CLAUDE_CODE_OAUTH_TOKEN;
+  const response = await client.handleClaudeProxyRequest({
+    authorization: `Bearer ${capability}`,
+    method: "POST",
+    requestPath: "/v1/messages",
+    headers: {
+      "content-type": "application/json",
+      "anthropic-version": "2023-06-01",
+      authorization: "Bearer must-not-forward",
+      cookie: "must-not-forward",
+    },
+    body: Buffer.from('{"model":"claude-test"}'),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(selections, 1);
+  assert.deepEqual(upstreamAuthorizations, [
+    "Bearer claude-secret-token",
+    "Bearer claude-rotated-token",
+  ]);
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, capability);
+  assert.doesNotMatch(JSON.stringify(client.status()), /claude-secret-token|claude-rotated-token|cockpit-claude:/);
+  await assert.rejects(
+    client.handleClaudeProxyRequest({
+      authorization: "Bearer guessed",
+      method: "POST",
+      requestPath: "/v1/messages",
     }),
     (error) => error.code === "INVALID_OAUTH_CAPABILITY",
   );
