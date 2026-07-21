@@ -10,6 +10,13 @@ _(nada ainda)_
 
 ---
 
+## [0.12.4] — 2026-07-21
+
+### Alterado
+- Rebuild/republicação da 0.12.3 (mesmo conteúdo) sob novo número de versão.
+
+---
+
 ## [0.12.3] — 2026-07-21
 
 ### Corrigido / melhorado (discrição de tela)
