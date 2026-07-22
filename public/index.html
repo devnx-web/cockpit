@@ -1076,7 +1076,7 @@
     .mosaic-card {
       display: flex; flex-direction: column;
       min-width: 0; min-height: 0;
-      border: 1px solid var(--border-default);
+      border: 1px solid color-mix(in srgb, var(--proj-color, var(--border-default)) 55%, transparent);
       border-radius: 10px; overflow: hidden;
       background: var(--bg-1);
       transition: border-color 120ms, box-shadow 120ms;
@@ -1090,12 +1090,30 @@
       padding: 5px 6px 5px 9px;
       border-bottom: 1px solid var(--border-default);
       border-left: 3px solid var(--proj-color, transparent);
-      background: var(--bg-2);
+      background: color-mix(in srgb, var(--proj-color, var(--bg-2)) 14%, var(--bg-2));
       flex-shrink: 0; min-width: 0;
     }
     .mosaic-card-dot {
       width: 8px; height: 8px; border-radius: 50%;
       background: var(--proj-color, var(--text-tertiary)); flex-shrink: 0;
+    }
+    .mosaic-card-grip {
+      display: flex; align-items: center; flex-shrink: 0;
+      padding: 2px; margin: -2px 0 -2px -2px;
+      color: var(--text-tertiary); cursor: grab;
+    }
+    .mosaic-card-grip:hover { color: var(--text-secondary); }
+    .mosaic-card-grip:active { cursor: grabbing; }
+    .mosaic-card-grip svg { width: 13px; height: 13px; }
+    .mosaic-card.dragging { opacity: 0.45; }
+    .mosaic-card.needs-attention {
+      border-color: var(--status-attention, #f5a623);
+      animation: mosaic-attn-pulse 1.6s ease-in-out infinite;
+    }
+    .mosaic-card.needs-attention.focused { animation: none; }
+    @keyframes mosaic-attn-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-attention, #f5a623) 55%, transparent); }
+      50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-attention, #f5a623) 30%, transparent); }
     }
     .mosaic-card-title {
       font-size: 12px; font-weight: 600; color: var(--text-primary);
@@ -1116,8 +1134,22 @@
       white-space: nowrap; transition: all 110ms;
     }
     .mosaic-mini-tab:hover { background: var(--bg-3); color: var(--text-secondary); }
-    .mosaic-mini-tab.active { background: var(--bg-3); color: var(--text-primary); }
+    .mosaic-mini-tab.active {
+      background: color-mix(in srgb, var(--proj-color, var(--bg-3)) 20%, var(--bg-3));
+      color: var(--text-primary);
+      border-color: color-mix(in srgb, var(--proj-color, transparent) 45%, transparent);
+    }
     .mosaic-mini-tab .status-dot { width: 6px; height: 6px; }
+    .mosaic-mini-close {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; margin: -2px -3px -2px 1px; border-radius: 4px;
+      color: var(--text-tertiary); opacity: 0;
+      transition: opacity 110ms, background 110ms, color 110ms;
+    }
+    .mosaic-mini-close svg { width: 11px; height: 11px; stroke-width: 2; }
+    .mosaic-mini-tab:hover .mosaic-mini-close,
+    .mosaic-mini-tab.active .mosaic-mini-close { opacity: 0.75; }
+    .mosaic-mini-close:hover { opacity: 1 !important; background: var(--bg-1); color: #ff6b6b; }
     .mosaic-mini-tab[data-unread="1"]::after {
       content: ""; width: 5px; height: 5px; border-radius: 50%;
       background: var(--status-attention, #3b82f6);
@@ -2823,6 +2855,11 @@
       font-size: 10px; color: var(--text-tertiary);
       margin-right: 6px; flex-shrink: 0;
       text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .visibility-popover .vp-tag-attn {
+      font-size: 10px; color: var(--status-attention, #f5a623);
+      margin-right: 6px; flex-shrink: 0;
+      text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
     }
     .visibility-popover .vp-empty {
       padding: 32px 12px;
@@ -5412,6 +5449,36 @@
       return xtermInstances.get(k(projId, tid)) || null;
     }
 
+    // Um projeto "pede atenção" quando algum terminal seu está aguardando entrada
+    // (agente esperando você) ou tem output não lido (fora da aba ativa do card).
+    function projNeedsAttention(projId) {
+      const p = getProj(projId);
+      if (!p) return false;
+      const activeTid = activeTerminalByProj.get(projId);
+      return p.terminals.some((t) =>
+        t.status === "waiting" || (t.id !== activeTid && termUnread.has(k(projId, t.id)))
+      );
+    }
+
+    // Atualiza o card do mosaico de um projeto SEM reconstruir o DOM (preserva o
+    // xterm reparentado): realce de atenção + bolinhas de status + marca de não lido.
+    function refreshMosaicCardMeta(projId) {
+      if (layoutMode !== "mosaic") return;
+      const card = document.querySelector(`.mosaic-card[data-projid="${CSS.escape(projId)}"]`);
+      if (!card) return;
+      card.classList.toggle("needs-attention", projNeedsAttention(projId));
+      const p = getProj(projId);
+      if (!p) return;
+      const activeTid = activeTerminalByProj.get(projId);
+      p.terminals.forEach((t) => {
+        const tab = card.querySelector(`.mosaic-mini-tab[data-tid="${CSS.escape(t.id)}"]`);
+        if (!tab) return;
+        const dot = tab.querySelector(".status-dot");
+        if (dot) dot.className = `status-dot ${t.status}`;
+        tab.dataset.unread = (t.id !== activeTid && termUnread.has(k(projId, t.id))) ? "1" : "";
+      });
+    }
+
     let savedGridCols = null; // grid-template-columns do .app antes de entrar no mosaico
 
     function setLayoutMode(mode) {
@@ -5462,14 +5529,39 @@
 
     function wireMosaicDrop(el, i) {
       el.addEventListener("dragover", (e) => {
-        if (!draggingProjId) return; // só aceita drag de projeto vindo da sidebar
+        // aceita drag de projeto (sidebar) ou de card (reordenar entre células,
+        // inclusive a própria — pra "cancelar" o arraste sem remover o card)
+        const draggingCard = draggingSlotIdx !== null;
+        if (!draggingProjId && !draggingCard) return;
         e.preventDefault();
         try { e.dataTransfer.dropEffect = "move"; } catch {}
-        el.classList.add("drag-over");
+        // não pinta a própria célula de destino como alvo de troca
+        if (!(draggingCard && draggingSlotIdx === i)) el.classList.add("drag-over");
       });
       el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
       el.addEventListener("drop", (e) => {
         el.classList.remove("drag-over");
+        // soltou o card na própria célula: no-op, mas marca como "caiu em alvo válido"
+        // pra o dragend não interpretar como "soltou fora" e remover.
+        if (draggingSlotIdx !== null && draggingSlotIdx === i) {
+          e.preventDefault();
+          e.stopPropagation();
+          mosaicCardDropped = true;
+          return;
+        }
+        // reordenar cards: troca os projetos entre a célula de origem e esta
+        if (draggingSlotIdx !== null && draggingSlotIdx !== i) {
+          e.preventDefault();
+          e.stopPropagation();
+          mosaicCardDropped = true;
+          const from = draggingSlotIdx;
+          const tmp = gridSlots[i];
+          gridSlots[i] = gridSlots[from];
+          gridSlots[from] = tmp;
+          saveGridState();
+          renderMosaic();
+          return;
+        }
         const projId = draggingProjId || e.dataTransfer.getData("text/plain");
         if (!projId || !getProj(projId)) return;
         e.preventDefault();
@@ -5502,17 +5594,19 @@
       cell.dataset.projid = projId;
       cell.style.setProperty("--proj-color", p.color);
       if (mosaicFocusedProj === projId) cell.classList.add("focused");
+      if (projNeedsAttention(projId)) cell.classList.add("needs-attention");
 
       const tid = activeTerminalByProj.get(projId);
       const tabsHtml = p.terminals.map((t) => {
         const active = t.id === tid;
         const unread = !active && termUnread.has(k(projId, t.id));
-        return `<button class="mosaic-mini-tab ${active ? "active" : ""}" data-tid="${t.id}" data-unread="${unread ? 1 : ""}"><span class="status-dot ${t.status}"></span><span>${escapeHtml(t.name)}</span></button>`;
+        return `<button class="mosaic-mini-tab ${active ? "active" : ""}" data-tid="${t.id}" data-unread="${unread ? 1 : ""}"><span class="status-dot ${t.status}"></span><span class="mosaic-mini-name">${escapeHtml(t.name)}</span><span class="mosaic-mini-close" data-close="${t.id}" title="Fechar terminal">${ICONS.x}</span></button>`;
       }).join("");
 
       const head = document.createElement("div");
       head.className = "mosaic-card-head";
       head.innerHTML = `
+        <span class="mosaic-card-grip" draggable="true" title="Arraste para reordenar"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
         <span class="mosaic-card-dot"></span>
         <span class="mosaic-card-title">${escapeHtml(p.name)}</span>
         <div class="mosaic-card-tabs">${tabsHtml}</div>
@@ -5523,6 +5617,28 @@
           <button class="mosaic-card-btn" data-act="remove" title="Remover do mosaico">${ICONS.x}</button>
         </div>`;
       cell.appendChild(head);
+
+      // grip = handle de arraste do card (só ele inicia o drag; corpo/xterm segue interativo)
+      const grip = head.querySelector(".mosaic-card-grip");
+      grip.addEventListener("dragstart", (e) => {
+        draggingSlotIdx = i;
+        mosaicCardDropped = false;
+        try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); } catch {}
+        cell.classList.add("dragging");
+      });
+      grip.addEventListener("dragend", () => {
+        // soltou fora de qualquer célula do grid → remove o card do mosaico
+        const from = draggingSlotIdx;
+        draggingSlotIdx = null;
+        cell.classList.remove("dragging");
+        document.querySelectorAll(".mosaic-card.drag-over, .mosaic-drop.drag-over").forEach((el) => el.classList.remove("drag-over"));
+        if (from != null && !mosaicCardDropped) {
+          gridSlots[from] = null;
+          saveGridState();
+          renderMosaic();
+        }
+        mosaicCardDropped = false;
+      });
 
       const body = document.createElement("div");
       body.className = "mosaic-card-body";
@@ -5542,6 +5658,14 @@
       head.querySelectorAll(".mosaic-mini-tab").forEach((b) => {
         b.addEventListener("click", (e) => {
           if (renamingMosaicTab) return; // renomeando: ignora clique (Espaço ativaria o botão)
+          // clique no × fecha o terminal (não troca de aba)
+          const closeBtn = e.target.closest(".mosaic-mini-close");
+          if (closeBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            requestCloseTerminal(projId, closeBtn.dataset.close);
+            return;
+          }
           if (e.detail === 2) { startRenameMosaicTab(projId, b.dataset.tid, b); return; }
           activeTerminalByProj.set(projId, b.dataset.tid);
           termUnread.delete(k(projId, b.dataset.tid));
@@ -5742,21 +5866,43 @@
       const renderList = () => {
         const listEl = pop.querySelector("#pickList");
         const q = pickQuery.trim().toLowerCase();
+
+        // Seção "Terminais abertos" — todos os terminais já abertos, pra jogar um
+        // terminal específico na célula (fixa o projeto e deixa aquele terminal ativo).
+        let openTerms = projects.flatMap((p) => p.terminals.map((t) => ({ p, t })));
+        if (q) openTerms = openTerms.filter(({ p, t }) => [p.name, t.name, p.id].filter(Boolean).join(" ").toLowerCase().includes(q));
+        // terminais aguardando resposta vêm primeiro (mantém ordem original entre iguais)
+        openTerms = openTerms
+          .map((e, idx) => ({ e, idx, waiting: e.t.status === "waiting" }))
+          .sort((a, b) => (b.waiting - a.waiting) || (a.idx - b.idx))
+          .map((x) => x.e);
+
+        const termsHtml = openTerms.length ? `
+          <div class="vp-group" data-group="__terms__">
+            <div class="vp-group-head">
+              <span class="vp-group-name"><span>Terminais abertos</span><span class="vp-group-count">${openTerms.length}</span></span>
+            </div>
+            ${openTerms.map(({ p, t }) => `
+              <div class="vp-row is-visible" data-id="${escapeHtml(p.id)}" data-tid="${escapeHtml(t.id)}" title="jogar este terminal no card ${i + 1}">
+                <span class="vp-dot" style="--proj-color:${p.color || "#5b8def"}"></span>
+                <span class="status-dot ${t.status}"></span>
+                <span class="vp-name">${escapeHtml(p.name)} · ${escapeHtml(t.name)}</span>
+                ${t.status === "waiting" ? '<span class="vp-tag-attn">aguardando</span>' : ""}
+                ${inGrid.has(p.id) ? '<span class="vp-group-count" style="margin-right:8px">no grid</span>' : ""}
+                <span class="vp-add" title="jogar no card ${i + 1}">${addIcon}</span>
+              </div>`).join("")}
+          </div>` : "";
+
         // TODOS os projetos (inclusive ocultos). Ocultos vão pro fim.
         let items = projects.slice();
         if (q) items = items.filter((p) => [p.name, p.id, p.group, p.path].filter(Boolean).join(" ").toLowerCase().includes(q));
-
-        if (!items.length) {
-          listEl.innerHTML = `<div class="vp-empty">${q ? `nenhum projeto para "${escapeHtml(pickQuery)}"` : "sem projetos cadastrados"}</div>`;
-          return;
-        }
 
         // agrupa por grupo, preservando a ordem
         const groups = new Map();
         const order = [];
         items.forEach((p) => { const g = p.group || null; if (!groups.has(g)) { groups.set(g, []); order.push(g); } groups.get(g).push(p); });
 
-        listEl.innerHTML = order.map((g) => `
+        const projHtml = order.map((g) => `
           <div class="vp-group" data-group="${g ? escapeHtml(g) : ""}">
             <div class="vp-group-head">
               <span class="vp-group-name"><span>${escapeHtml(g || "Sem grupo")}</span><span class="vp-group-count">${groups.get(g).length}</span></span>
@@ -5771,10 +5917,19 @@
               </div>`).join("")}
           </div>`).join("");
 
+        if (!openTerms.length && !items.length) {
+          listEl.innerHTML = `<div class="vp-empty">${q ? `nada encontrado para "${escapeHtml(pickQuery)}"` : "sem projetos cadastrados"}</div>`;
+          return;
+        }
+
+        listEl.innerHTML = termsHtml + projHtml;
+
         listEl.querySelectorAll(".vp-row").forEach((row) => {
           // aqui a ação é fixar no card do mosaico — não mexe na visibilidade da
           // sidebar (o oculto continua oculto lá, mas o card renderiza normalmente).
+          // Linha de terminal (tem data-tid): fixa o projeto E deixa aquele terminal ativo.
           row.addEventListener("click", () => {
+            if (row.dataset.tid) activeTerminalByProj.set(row.dataset.id, row.dataset.tid);
             assignSlot(i, row.dataset.id);
             close();
           });
@@ -7934,6 +8089,7 @@
           if (!isActiveView) {
             termUnread.add(k(msg.projectId, msg.terminalId));
             updateTabUnread(msg.projectId, msg.terminalId);
+            refreshMosaicCardMeta(msg.projectId);
           }
           break;
         }
@@ -7953,6 +8109,7 @@
           }
           renderSidebar();
           renderTabs();
+          refreshMosaicCardMeta(msg.projectId);
           if (msg.projectId === activeProjId && msg.terminalId === getActiveTid()) renderHeader();
           break;
         }
@@ -10224,6 +10381,8 @@
 
     // === Drag and drop pra reordenar ===
     let draggingProjId = null;
+    let draggingSlotIdx = null; // índice da célula do mosaico sendo arrastada (reordenar cards)
+    let mosaicCardDropped = false; // um card arrastado caiu num alvo válido? (senão, soltar fora = remover)
     function bindDragDrop(itemEl, proj) {
       itemEl.addEventListener("dragstart", (e) => {
         draggingProjId = proj.id;

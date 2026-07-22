@@ -10,6 +10,37 @@ _(nada ainda)_
 
 ---
 
+## [0.13.0] — 2026-07-22
+
+### Adicionado / melhorado (mosaico)
+- **Escolher um terminal específico já aberto pro card** — o picker de célula vazia
+  ganhou a seção **"Terminais abertos"** no topo, listando todos os terminais ativos.
+  Clicar num deles fixa o projeto naquela célula **com aquele terminal ativo** (não só o
+  primeiro/ativo do projeto). A busca filtra também essa seção (nome do projeto, do
+  terminal ou id).
+- **Terminais aguardando aparecem primeiro no picker** — na seção "Terminais abertos", os
+  que estão `waiting` (agente aguardando resposta) sobem pro topo com o badge **AGUARDANDO**.
+- **Cor do projeto sempre visível no card** — a borda e o cabeçalho de cada card ganham um
+  tom da cor do projeto o tempo todo (antes a cor só destacava no card focado), tornando
+  cada projeto reconhecível de relance.
+- **Aba ativa do card na cor do projeto** — a mini-aba ativa usa a cor do projeto (fundo
+  tintado + borda), em vez do cinza genérico.
+- **Realce de atenção no card** — o card inteiro pulsa numa cor de atenção quando algum
+  terminal dele está aguardando resposta ou tem saída nova não lida; o pulso some ao abrir
+  o terminal (e não pulsa enquanto o card está focado).
+- **Fechar terminal pela mini-aba** — cada mini-aba do card ganhou um **×** (aparece no
+  hover e fica visível na aba ativa). Fecha só aquele terminal, sem trocar de aba, com a
+  mesma confirmação de segurança quando o terminal está rodando/aguardando.
+
+### Adicionado (reorganizar o grid)
+- **Arrastar cards pra reordenar** — cada card tem um **grip** (⠿) no cabeçalho; arraste-o
+  pra outra célula pra **trocar** os cards de lugar (ou mover pra uma célula vazia). O corpo
+  do terminal e as mini-abas seguem interativos — só o grip inicia o arraste.
+- **Arrastar pra fora remove** — soltar um card arrastado fora do grid remove ele do
+  mosaico (soltar na própria célula é no-op, não remove por engano).
+
+---
+
 ## [0.12.5] — 2026-07-22
 
 ### Adicionado / melhorado (mosaico)
