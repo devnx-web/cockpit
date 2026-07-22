@@ -1162,26 +1162,6 @@
     .mosaic-drop:hover { border-color: var(--text-secondary); color: var(--text-primary); background: var(--bg-2); }
     .mosaic-card.drag-over { border-color: var(--text-secondary); box-shadow: 0 0 0 1px var(--text-secondary); }
 
-    /* Picker de projeto ao clicar numa célula vazia (reusa .visibility-*) */
-    .mosaic-pick-list { overflow-y: auto; padding: 10px 12px 14px; flex: 1; display: flex; flex-direction: column; gap: 3px; }
-    .mosaic-pick-row {
-      display: flex; align-items: center; gap: 11px;
-      padding: 9px 11px; border-radius: 8px; cursor: pointer;
-      border: 1px solid transparent; transition: all 110ms;
-    }
-    .mosaic-pick-row:hover { background: var(--bg-3); border-color: var(--border-default); }
-    .mosaic-pick-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--proj-color, var(--text-tertiary)); flex-shrink: 0; }
-    .mosaic-pick-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; background: color-mix(in srgb, var(--proj-color), transparent 88%); color: var(--proj-color); flex-shrink: 0; }
-    .mosaic-pick-icon svg { width: 13px; height: 13px; stroke-width: 1.5; }
-    .mosaic-pick-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .mosaic-pick-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mosaic-pick-path { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-term); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mosaic-pick-badge { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
-    .mosaic-pick-empty { padding: 28px 16px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
-    .mosaic-pick-group { margin-bottom: 12px; }
-    .mosaic-pick-group:last-child { margin-bottom: 0; }
-    .mosaic-pick-group-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-tertiary); padding: 4px 6px; }
-
     /* Editor de layout (popover ancorado no botão Layout) */
     .layout-editor-backdrop { position: fixed; inset: 0; z-index: 295; background: transparent; }
     .layout-editor-pop {
@@ -2829,6 +2809,21 @@
     }
     .visibility-popover .vp-row .vp-eye svg { width: 15px; height: 15px; stroke-width: 1.7; }
     .visibility-popover .vp-row.is-visible .vp-eye { color: var(--text-primary); }
+    /* picker do grid: ＋ "adicionar ao card" (aparece no hover da linha) */
+    .visibility-popover .vp-row .vp-add {
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-tertiary); flex-shrink: 0;
+      opacity: 0; transition: opacity 80ms ease, color 80ms ease;
+    }
+    .visibility-popover .vp-row:hover .vp-add { opacity: 1; }
+    .visibility-popover .vp-row .vp-add:hover { color: var(--text-primary); }
+    .visibility-popover .vp-add svg { width: 15px; height: 15px; }
+    .visibility-popover .vp-tag-muted {
+      font-size: 10px; color: var(--text-tertiary);
+      margin-right: 6px; flex-shrink: 0;
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
     .visibility-popover .vp-empty {
       padding: 32px 12px;
       text-align: center;
@@ -5702,15 +5697,21 @@
 
     // Modal centralizado com busca (mesmo visual do modal de visibilidade):
     // escolhe um projeto pra preencher o slot `i` do grid. Clique atribui.
+    // Picker de célula do mosaico — reusa o MESMO popover de "Visibilidade &
+    // grupos" (classes .vp-*), mas a ação principal é FIXAR o projeto na célula
+    // `i`. Lista TODOS os projetos (inclusive ocultos), com o olho pra
+    // exibir/ocultar e um atalho pra criar projeto novo. Clicar na linha fixa
+    // o projeto no grid (e o exibe, se estava oculto).
     function openMosaicProjectPicker(i) {
-      document.querySelectorAll(".mosaic-pick-backdrop").forEach((el) => el.remove());
+      document.querySelectorAll(".mosaic-pick-backdrop, .visibility-popover").forEach((el) => el.remove());
 
       const backdrop = document.createElement("div");
       backdrop.className = "visibility-backdrop mosaic-pick-backdrop";
       const pop = document.createElement("div");
       pop.className = "visibility-popover";
-      pop.style.width = "min(480px, 92vw)";
 
+      // ícone "adicionar ao card" (＋) — aqui a ação é fixar no mosaico, não ver/ocultar
+      const addIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
       const closeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 
       let pickQuery = "";
@@ -5718,55 +5719,77 @@
 
       pop.innerHTML = `
         <div class="vp-head">
-          <div><h2>Escolher projeto</h2><span class="vp-counter">célula ${i + 1} do mosaico</span></div>
-          <div class="vp-actions"><span class="vp-close" title="Fechar (Esc)">${closeIcon}</span></div>
+          <div>
+            <h2>Fixar projeto na célula ${i + 1}</h2>
+            <span class="vp-counter" id="pickCounter"></span>
+          </div>
+          <div class="vp-actions">
+            <a data-action="new-project">＋ novo projeto</a>
+            <span class="vp-close" title="Fechar (Esc)">${closeIcon}</span>
+          </div>
         </div>
         <div class="vp-search-bar">
           <input type="text" class="vp-search-input" id="pickSearch" placeholder="Buscar por nome, grupo, id ou caminho…" autocomplete="off" spellcheck="false" />
           <span class="vp-search-clear" id="pickSearchClear" title="Limpar (Esc)" style="visibility:hidden">${closeIcon}</span>
         </div>
-        <div class="mosaic-pick-list" id="pickList"></div>`;
+        <div class="vp-list" id="pickList"></div>`;
+
+      const updateCounter = () => {
+        const c = pop.querySelector("#pickCounter");
+        if (c) c.textContent = `${projects.length} projetos · clique pra adicionar ao card`;
+      };
 
       const renderList = () => {
         const listEl = pop.querySelector("#pickList");
         const q = pickQuery.trim().toLowerCase();
-        // disponíveis primeiro, já-no-grid depois; ocultos fora
-        let items = projects.filter((p) => !p.hidden);
+        // TODOS os projetos (inclusive ocultos). Ocultos vão pro fim.
+        let items = projects.slice();
         if (q) items = items.filter((p) => [p.name, p.id, p.group, p.path].filter(Boolean).join(" ").toLowerCase().includes(q));
-        items.sort((a, b) => (inGrid.has(a.id) ? 1 : 0) - (inGrid.has(b.id) ? 1 : 0));
 
         if (!items.length) {
-          listEl.innerHTML = `<div class="mosaic-pick-empty">${q ? `nenhum projeto para "${escapeHtml(pickQuery)}"` : "nenhum projeto disponível"}</div>`;
+          listEl.innerHTML = `<div class="vp-empty">${q ? `nenhum projeto para "${escapeHtml(pickQuery)}"` : "sem projetos cadastrados"}</div>`;
           return;
         }
 
         // agrupa por grupo, preservando a ordem
         const groups = new Map();
         const order = [];
-        items.forEach((p) => { const g = p.group || "Sem grupo"; if (!groups.has(g)) { groups.set(g, []); order.push(g); } groups.get(g).push(p); });
+        items.forEach((p) => { const g = p.group || null; if (!groups.has(g)) { groups.set(g, []); order.push(g); } groups.get(g).push(p); });
 
         listEl.innerHTML = order.map((g) => `
-          <div class="mosaic-pick-group">
-            <div class="mosaic-pick-group-label">${escapeHtml(g)}</div>
+          <div class="vp-group" data-group="${g ? escapeHtml(g) : ""}">
+            <div class="vp-group-head">
+              <span class="vp-group-name"><span>${escapeHtml(g || "Sem grupo")}</span><span class="vp-group-count">${groups.get(g).length}</span></span>
+            </div>
             ${groups.get(g).map((p) => `
-              <div class="mosaic-pick-row" data-id="${escapeHtml(p.id)}" style="--proj-color:${p.color || "#5b8def"}">
-                <span class="mosaic-pick-icon">${ICONS[p.icon] || ICONS.cog}</span>
-                <span class="mosaic-pick-meta">
-                  <span class="mosaic-pick-name">${escapeHtml(p.name)}</span>
-                  <span class="mosaic-pick-path">${escapeHtml(p.path || "")}</span>
-                </span>
-                ${inGrid.has(p.id) ? '<span class="mosaic-pick-badge">no grid</span>' : ""}
+              <div class="vp-row ${p.hidden ? "is-hidden" : "is-visible"}" data-id="${escapeHtml(p.id)}" title="clique pra adicionar ao card ${i + 1}">
+                <span class="vp-dot" style="--proj-color:${p.color || "#5b8def"}"></span>
+                <span class="vp-name">${escapeHtml(p.name)}</span>
+                ${p.hidden ? '<span class="vp-tag-muted">oculto</span>' : ""}
+                ${inGrid.has(p.id) ? '<span class="vp-group-count" style="margin-right:8px">no grid</span>' : ""}
+                <span class="vp-add" title="adicionar ao card ${i + 1}">${addIcon}</span>
               </div>`).join("")}
           </div>`).join("");
 
-        listEl.querySelectorAll(".mosaic-pick-row").forEach((row) =>
-          row.addEventListener("click", () => { assignSlot(i, row.dataset.id); close(); }));
+        listEl.querySelectorAll(".vp-row").forEach((row) => {
+          // aqui a ação é fixar no card do mosaico — não mexe na visibilidade da
+          // sidebar (o oculto continua oculto lá, mas o card renderiza normalmente).
+          row.addEventListener("click", () => {
+            assignSlot(i, row.dataset.id);
+            close();
+          });
+        });
       };
 
       const close = () => { backdrop.remove(); pop.remove(); document.removeEventListener("keydown", onKey); };
       const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
       backdrop.addEventListener("click", close);
       pop.querySelector(".vp-close").addEventListener("click", close);
+      pop.querySelector('[data-action="new-project"]').addEventListener("click", async () => {
+        close();
+        const result = await showProjectModal({ mode: "add" });
+        if (result) sendAdmin({ type: "add_project", project: result });
+      });
       document.addEventListener("keydown", onKey);
 
       const search = pop.querySelector("#pickSearch");
@@ -5781,6 +5804,7 @@
       document.body.appendChild(backdrop);
       document.body.appendChild(pop);
       renderList();
+      updateCounter();
       setTimeout(() => search.focus(), 30);
     }
 

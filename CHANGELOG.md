@@ -10,6 +10,21 @@ _(nada ainda)_
 
 ---
 
+## [0.12.5] — 2026-07-22
+
+### Adicionado / melhorado (mosaico)
+- **Picker de projeto do grid reaproveita o modal de "Visibilidade & grupos"** — ao
+  clicar numa célula vazia do mosaico, abre a mesma lista rica (busca por nome/grupo/id/
+  caminho, agrupamento e a lista completa de projetos), em vez do seletor pobre anterior.
+- **Projetos ocultos aparecem no picker** (marcados com a tag **OCULTO**), então dá pra
+  fixá-los num card mesmo estando escondidos na sidebar.
+- **A ação no grid é "adicionar ao card", não ver/ocultar** — clicar numa linha fixa o
+  projeto naquela célula (ícone ＋ no hover) e **não altera a visibilidade da sidebar**
+  (o oculto continua oculto lá; ver/ocultar segue sendo função do modal de Visibilidade).
+- **Atalho "＋ novo projeto"** direto no cabeçalho do picker.
+
+---
+
 ## [0.12.4] — 2026-07-21
 
 ### Alterado
