@@ -10,6 +10,22 @@ _(nada ainda)_
 
 ---
 
+## [0.14.0] — 2026-07-23
+
+### Adicionado (navegar entre terminais que aguardam)
+- **Contador global de "aguardando" no topo** — um badge `⏳ N aguardando` aparece na barra
+  de título sempre que houver terminais esperando resposta do agente. Some quando não há
+  nenhum, atualiza ao vivo e é clicável (pula pro próximo pendente).
+- **Atalho pra pular pro próximo que aguarda** — `Alt+↓` foca o próximo terminal `waiting`
+  e `Alt+↑` o anterior, ciclando por todos os pendentes. Funciona tanto no modo foco quanto
+  no mosaico (se o projeto estiver no grid, foca o card; senão abre em foco).
+- **Command palette (Ctrl+K) agora lista terminais** — além de projetos e ações, a paleta
+  enumera os terminais abertos. Sem busca, mostra no topo a seção **"Terminais aguardando"**
+  (só os pendentes, pra Enter já cair no primeiro que espera). Com busca, filtra por nome do
+  projeto, do terminal ou path, sempre com os `waiting` priorizados.
+
+---
+
 ## [0.13.0] — 2026-07-22
 
 ### Adicionado / melhorado (mosaico)

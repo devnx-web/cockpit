@@ -178,6 +178,27 @@
       box-shadow: 0 0 6px var(--status-error);
       animation: blink-error 1.6s ease-in-out infinite;
     }
+    .waiting-counter {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 20px; padding: 0 8px; margin-left: 2px;
+      border: 1px solid color-mix(in srgb, var(--status-waiting) 45%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--status-waiting) 14%, transparent);
+      color: var(--status-waiting);
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: background 120ms, border-color 120ms;
+    }
+    .waiting-counter:hover { background: color-mix(in srgb, var(--status-waiting) 24%, transparent); }
+    .waiting-counter[hidden] { display: none; }
+    .waiting-counter .wc-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--status-waiting);
+      box-shadow: 0 0 6px var(--status-waiting);
+      animation: blink-waiting 1.1s ease-in-out infinite;
+    }
+    .waiting-counter .wc-num { font-variant-numeric: tabular-nums; }
     .title-clock {
       font-family: var(--font-term);
       font-size: 11px; letter-spacing: 0.1em;
@@ -3303,6 +3324,12 @@
         <span class="conn-dot" id="connDot"></span>
         <span id="connText">conectando…</span>
       </div>
+      <button class="waiting-counter" id="waitingCounter" type="button" hidden
+        title="Terminais aguardando resposta — clique pra ir ao próximo (Alt+↓)">
+        <span class="wc-dot"></span>
+        <span class="wc-num" id="waitingCounterNum">0</span>
+        <span>aguardando</span>
+      </button>
       <div class="voice-indicator" id="voiceIndicator" title="Járvis · módulo de áudio">
         <span class="voice-dot offline" id="voiceDot"></span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -6017,6 +6044,71 @@
       selectTerminal(activeProjId, p.terminals[next].id);
     }
 
+    // Foca um terminal específico venha de onde vier (pular-aguardando, contador,
+    // paleta). Em modo foco: seleciona projeto + terminal. No mosaico: se o projeto
+    // está no grid, foca aquele card; se não está, cai pro modo foco e abre nele.
+    function focusTerminal(projId, tid) {
+      const p = getProj(projId);
+      if (!p) return;
+      const realTid = tid && p.terminals.some((t) => t.id === tid)
+        ? tid
+        : activeTerminalByProj.get(projId) || (p.terminals[0] && p.terminals[0].id);
+      if (!realTid) { if (layoutMode !== "mosaic") selectProject(projId); return; }
+      const focusXterm = () => {
+        const inst = xtermInstances.get(k(projId, realTid));
+        if (inst) setTimeout(() => { try { inst.term.focus(); } catch {} }, 30);
+      };
+      if (layoutMode === "mosaic" && gridSlots.includes(projId)) {
+        activeTerminalByProj.set(projId, realTid);
+        termUnread.delete(k(projId, realTid));
+        projAttention.delete(projId);
+        mosaicFocusedProj = projId;
+        saveActiveTerms();
+        renderMosaic();
+        document.querySelectorAll(".mosaic-card").forEach((c) =>
+          c.classList.toggle("focused", c.dataset.projid === projId));
+        focusXterm();
+      } else {
+        if (layoutMode === "mosaic") setLayoutMode("focus");
+        selectProject(projId);
+        selectTerminal(projId, realTid);
+        focusXterm();
+      }
+    }
+
+    // Todos os terminais aguardando (waiting), em ordem estável de projeto→terminal.
+    function collectWaitingTerminals() {
+      const out = [];
+      projects.forEach((p) =>
+        p.terminals.forEach((t) => {
+          if (t.status === "waiting") out.push({ projId: p.id, tid: t.id });
+        }));
+      return out;
+    }
+
+    // Pula pro próximo (dir=1) ou anterior (dir=-1) terminal aguardando,
+    // ciclando a partir do foco atual.
+    function jumpToNextWaiting(dir = 1) {
+      const waiting = collectWaitingTerminals();
+      if (!waiting.length) { showSimpleToast("Nada aguardando", "Nenhum terminal esperando resposta agora"); return; }
+      const curProj = layoutMode === "mosaic" ? mosaicFocusedProj : activeProjId;
+      const curTid = layoutMode === "mosaic" ? activeTerminalByProj.get(curProj) : getActiveTid();
+      const cur = waiting.findIndex((w) => w.projId === curProj && w.tid === curTid);
+      const base = cur === -1 ? (dir === 1 ? -1 : 0) : cur;
+      const next = waiting[(base + dir + waiting.length) % waiting.length];
+      focusTerminal(next.projId, next.tid);
+    }
+
+    // Atualiza o contador global de "aguardando" no title-bar.
+    function updateWaitingCounter() {
+      const n = collectWaitingTerminals().length;
+      const el = document.getElementById("waitingCounter");
+      if (!el) return;
+      el.hidden = n === 0;
+      const num = document.getElementById("waitingCounterNum");
+      if (num) num.textContent = String(n);
+    }
+
     // Reordena abas de terminal in-place. Recoloca o `srcTid` antes ou depois
     // do `targetTid` no array `p.terminals`. Sem ida ao servidor — terminais
     // não persistem ordem entre sessões.
@@ -8110,6 +8202,7 @@
           renderSidebar();
           renderTabs();
           refreshMosaicCardMeta(msg.projectId);
+          updateWaitingCounter();
           if (msg.projectId === activeProjId && msg.terminalId === getActiveTid()) renderHeader();
           break;
         }
@@ -8131,6 +8224,7 @@
             activeTerminalByProj.set(activeProjId, msg.terminal.id);
           }
           renderSidebar(); renderTabs();
+          updateWaitingCounter();
           if (layoutMode === "mosaic") { renderMosaic(); if (msg.projectId === activeProjId) renderHeader(); }
           else if (msg.projectId === activeProjId) { applyVisibility(); renderHeader(); }
           break;
@@ -8147,6 +8241,7 @@
             else activeTerminalByProj.delete(msg.projectId);
           }
           renderSidebar(); renderTabs();
+          updateWaitingCounter();
           if (layoutMode === "mosaic") { renderMosaic(); if (msg.projectId === activeProjId) renderHeader(); }
           else if (msg.projectId === activeProjId) { applyVisibility(); renderHeader(); }
           if (msg.reason === "idle") {
@@ -8388,6 +8483,7 @@
       } else {
         updateMosaicToggle();
       }
+      updateWaitingCounter();
     }
 
     // ============================================================
@@ -8436,13 +8532,22 @@
     }
     function renderPalette(query) {
       const q = query.toLowerCase().trim();
+      // Terminais abertos: sem busca mostra só os que estão aguardando (evita
+      // lista gigante); com busca mostra os que casam. Aguardando sempre no topo.
+      const termAll = [];
+      projects.forEach((p) => p.terminals.forEach((t) => {
+        if (q && !(p.name.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q))) return;
+        termAll.push({ type: "terminal", proj: p, term: t, waiting: t.status === "waiting" });
+      }));
+      const termMatches = (q ? termAll : termAll.filter((x) => x.waiting))
+        .sort((a, b) => (b.waiting - a.waiting));
       const projMatches = projects
         .filter((p) => !q || p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q))
         .map((p) => ({ type: "project", proj: p }));
       const actMatches = PALETTE_ACTIONS.filter(
         (a) => !q || a.label.toLowerCase().includes(q)
       ).map((a) => ({ type: "action", act: a }));
-      paletteFiltered = [...projMatches, ...actMatches];
+      paletteFiltered = [...termMatches, ...projMatches, ...actMatches];
       paletteSelected = Math.min(Math.max(paletteSelected, 0), paletteFiltered.length - 1);
 
       const results = document.getElementById("paletteResults");
@@ -8451,6 +8556,18 @@
         return;
       }
       let html = "";
+      if (termMatches.length) {
+        html += `<div class="palette-section">${q ? "Ir para terminal" : "Terminais aguardando"}</div>`;
+        termMatches.forEach((m) => {
+          const idx = paletteFiltered.indexOf(m);
+          html += `
+            <div class="palette-item with-color ${idx === paletteSelected ? "selected" : ""}" data-idx="${idx}" style="--proj-color: ${m.proj.color}">
+              <div class="palette-icon"><span class="status-dot ${m.term.status}"></span></div>
+              <span class="palette-item-text">${escapeHtml(m.proj.name)} · ${escapeHtml(m.term.name)}</span>
+              ${m.waiting ? `<span class="palette-item-hint" style="color:var(--status-waiting)">aguardando</span>` : ""}
+            </div>`;
+        });
+      }
       if (projMatches.length) {
         html += `<div class="palette-section">Ir para projeto</div>`;
         projMatches.forEach((m) => {
@@ -8498,7 +8615,8 @@
       const item = paletteFiltered[paletteSelected];
       if (!item) return;
       closePalette();
-      if (item.type === "project") selectProject(item.proj.id);
+      if (item.type === "terminal") focusTerminal(item.proj.id, item.term.id);
+      else if (item.type === "project") selectProject(item.proj.id);
       else handleAction(item.act.id);
     }
     function handleAction(id) {
@@ -10522,6 +10640,15 @@
         return;
       }
 
+      // Alt+↓ / Alt+↑ — pula pro próximo/anterior terminal aguardando resposta.
+      // Funciona em foco e no mosaico; ignora se não houver nenhum aguardando.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+          (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        e.preventDefault();
+        jumpToNextWaiting(e.key === "ArrowUp" ? -1 : 1);
+        return;
+      }
+
       // F2 — renomear: arquivo ativo se em modo file, senão aba do terminal
       if (e.key === "F2") {
         const view = viewModeByProj.get(activeProjId);
@@ -10956,6 +11083,11 @@
         voicePopoverPollTimer = null;
       }
     }
+
+    document.getElementById("waitingCounter").addEventListener("click", (e) => {
+      e.stopPropagation();
+      jumpToNextWaiting();
+    });
 
     document.getElementById("voiceIndicator").addEventListener("click", (e) => {
       e.stopPropagation();
