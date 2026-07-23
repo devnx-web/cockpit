@@ -1117,7 +1117,30 @@
     .mosaic-card-dot {
       width: 8px; height: 8px; border-radius: 50%;
       background: var(--proj-color, var(--text-tertiary)); flex-shrink: 0;
+      cursor: pointer; transition: transform 110ms, box-shadow 110ms;
     }
+    .mosaic-card-dot:hover {
+      transform: scale(1.35);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--proj-color, #888) 25%, transparent);
+    }
+    .color-pop {
+      position: fixed; z-index: 4000;
+      background: var(--bg-2);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 10px 11px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.42);
+      animation: color-pop-in 120ms ease;
+    }
+    @keyframes color-pop-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: none; }
+    }
+    .color-pop-title {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-tertiary); margin-bottom: 9px; font-weight: 600;
+    }
+    .color-pop .color-swatches { padding-top: 0; width: 116px; }
     .mosaic-card-grip {
       display: flex; align-items: center; flex-shrink: 0;
       padding: 2px; margin: -2px 0 -2px -2px;
@@ -5667,6 +5690,17 @@
         mosaicCardDropped = false;
       });
 
+      // bolinha de cor: duplo-clique abre o seletor de cor do projeto
+      const colorDot = head.querySelector(".mosaic-card-dot");
+      if (colorDot) {
+        colorDot.title = "Duplo-clique pra trocar a cor do projeto";
+        colorDot.addEventListener("dblclick", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openColorPicker(colorDot, projId);
+        });
+      }
+
       const body = document.createElement("div");
       body.className = "mosaic-card-body";
       cell.appendChild(body);
@@ -6107,6 +6141,69 @@
       el.hidden = n === 0;
       const num = document.getElementById("waitingCounterNum");
       if (num) num.textContent = String(n);
+    }
+
+    // Popover de cor do projeto — duplo-clique na bolinha do card (mosaico) abre
+    // aqui pra trocar a cor rapidinho. Persiste via update_project (o servidor
+    // devolve projects_changed e re-renderiza); atualizamos otimista pra ser instantâneo.
+    let colorPopEl = null;
+    function closeColorPop() {
+      if (colorPopEl) { colorPopEl.remove(); colorPopEl = null; }
+      document.removeEventListener("mousedown", onColorPopOutside, true);
+      document.removeEventListener("keydown", onColorPopKey, true);
+    }
+    function onColorPopOutside(e) {
+      if (colorPopEl && !colorPopEl.contains(e.target)) closeColorPop();
+    }
+    function onColorPopKey(e) {
+      if (e.key === "Escape") { e.preventDefault(); closeColorPop(); }
+    }
+    function openColorPicker(anchorEl, projId) {
+      closeColorPop();
+      const p = getProj(projId);
+      if (!p) return;
+      const cur = (p.color || "").toLowerCase();
+      const pop = document.createElement("div");
+      pop.className = "color-pop";
+      pop.innerHTML =
+        `<div class="color-pop-title">Cor · ${escapeHtml(p.name)}</div>` +
+        `<div class="color-swatches">` +
+        COLOR_SWATCHES.map((c) =>
+          `<div class="color-swatch ${c.toLowerCase() === cur ? "selected" : ""}" data-color="${c}" style="background:${c}; --swatch-color:${c}"></div>`
+        ).join("") +
+        `</div>`;
+      document.body.appendChild(pop);
+      colorPopEl = pop;
+
+      // ancora abaixo da bolinha, sem estourar a tela
+      const r = anchorEl.getBoundingClientRect();
+      const pw = pop.offsetWidth, ph = pop.offsetHeight;
+      let left = r.left;
+      let top = r.bottom + 6;
+      if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+      if (left < 8) left = 8;
+      if (top + ph > window.innerHeight - 8) top = r.top - ph - 6;
+      pop.style.left = left + "px";
+      pop.style.top = Math.max(8, top) + "px";
+
+      pop.querySelectorAll(".color-swatch").forEach((sw) => {
+        sw.addEventListener("click", () => {
+          const c = sw.dataset.color;
+          closeColorPop();
+          if (!c || c === p.color) return;
+          p.color = c; // otimista → feedback instantâneo
+          if (layoutMode === "mosaic") renderMosaic();
+          renderSidebar();
+          if (projId === activeProjId) renderHeader();
+          sendAdmin({ type: "update_project", id: projId, changes: { color: c } });
+        });
+      });
+
+      // adia o "clicar fora" pra não fechar no próprio duplo-clique que abriu
+      setTimeout(() => {
+        document.addEventListener("mousedown", onColorPopOutside, true);
+        document.addEventListener("keydown", onColorPopKey, true);
+      }, 0);
     }
 
     // Reordena abas de terminal in-place. Recoloca o `srcTid` antes ou depois

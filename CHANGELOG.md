@@ -10,6 +10,17 @@ _(nada ainda)_
 
 ---
 
+## [0.15.0] — 2026-07-23
+
+### Adicionado (cor do projeto pelo card)
+- **Trocar a cor do projeto direto no mosaico** — dar **duplo-clique** na bolinha de cor do
+  cabeçalho do card abre um seletor rápido com a paleta padrão do Cockpit. A cor atual já
+  vem marcada; escolher outra aplica na hora (card, sidebar e header) e salva no projeto.
+  O duplo-clique evita conflito com o clique simples que foca o card. Fecha ao escolher, ao
+  clicar fora ou com `Esc`. A bolinha ganhou destaque no hover e um tooltip explicando.
+
+---
+
 ## [0.14.0] — 2026-07-23
 
 ### Adicionado (navegar entre terminais que aguardam)
