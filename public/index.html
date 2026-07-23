@@ -1405,10 +1405,15 @@
       display: inline-flex; align-items: center; gap: 5px;
       background: transparent; border: 1px solid transparent;
       color: var(--text-tertiary); font-size: 11px;
-      padding: 2px 7px; border-radius: 5px; cursor: pointer;
-      white-space: nowrap; transition: all 110ms;
+      padding: 2px 7px; border-radius: 5px; cursor: grab;
+      white-space: nowrap; transition: all 110ms; touch-action: none;
     }
     .mosaic-mini-tab:hover { background: var(--bg-3); color: var(--text-secondary); }
+    .mosaic-mini-tab.dragging {
+      opacity: 0.92; cursor: grabbing;
+      position: relative; z-index: 6; transition: none;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    }
     .mosaic-mini-tab.active {
       background: color-mix(in srgb, var(--proj-color, var(--bg-3)) 20%, var(--bg-3));
       color: var(--text-primary);
@@ -3024,9 +3029,12 @@
     .qcmd-pill.dragging { opacity: 0.35; cursor: grabbing; }
     .qcmd-pill.drag-over-left { box-shadow: -3px 0 0 var(--qcmd-color) !important; }
     .qcmd-pill.drag-over-right { box-shadow: 3px 0 0 var(--qcmd-color) !important; }
-    .tab.dragging { opacity: 0.4; cursor: grabbing; }
-    .tab.drag-over-left { box-shadow: inset 2px 0 0 var(--proj-color, #5b8def); }
-    .tab.drag-over-right { box-shadow: inset -2px 0 0 var(--proj-color, #5b8def); }
+    .tab.kind-terminal { cursor: grab; touch-action: none; }
+    .tab.dragging {
+      opacity: 0.92; cursor: grabbing;
+      position: relative; z-index: 6; transition: none;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    }
 
     /* Modal de visibilidade & grupos de projetos (botão olho na sidebar) */
     .visibility-backdrop {
@@ -3737,7 +3745,7 @@
       <div class="title-spacer"></div>
       <div class="title-bar-text">
         <strong>COCKPIT</strong>
-        <button class="help-btn" id="helpBtn" title="Atalhos de teclado" aria-label="Atalhos de teclado">
+        <button class="help-btn" id="helpBtn" title="Atalhos de teclado (F1)" aria-label="Atalhos de teclado">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </button>
         <span>· cabine de comando</span>
@@ -4119,6 +4127,7 @@
     let ws = null;
     let editingTabTid = null; // tid em renomeação — congela renderTabs durante edição
     let renamingMosaicTab = null; // tid do mini-tab do mosaico em renomeação
+    let lastTabDragEnd = 0; // timestamp do fim de um arraste de aba — engole o clique-fantasma seguinte
     let gitPanelVisible = false;
     const gitState = new Map(); // projId -> { isGit, repos: [{ id, name, relPath, branch, ... files, error }] }
     const gitDiffCache = new Map(); // `${projId}:${repoPath}:${file}:${staged}` -> diff text
@@ -4908,10 +4917,20 @@
     const SHORTCUT_GROUPS = [
       { title: "Geral", items: [
         ["Paleta de comandos", [SHORTCUT_MOD, "K"]],
+        ["Ver esta ajuda de atalhos", [SHORTCUT_MOD, "/"]],
         ["Novo terminal", [SHORTCUT_MOD, "B"]],
         ["Painel de arquivos", [SHORTCUT_MOD, "E"]],
         ["Painel Git", [SHORTCUT_MOD, "G"]],
+        ["Localizar arquivo no projeto", [SHORTCUT_MOD, "P"]],
+        ["Alternar Foco / Mosaico", [SHORTCUT_MOD, "Shift", "M"]],
         ["Fechar terminal/arquivo", [SHORTCUT_MOD, "W"]],
+      ]},
+      { title: "Navegação", items: [
+        ["Ir ao projeto 1–9", [SHORTCUT_MOD, "1–9"]],
+        ["Pular pro próximo / anterior aguardando", ["Alt", "↓ / ↑"]],
+        ["Ir à aba de terminal 1–9", [SHORTCUT_MOD, "Shift", "1–9"]],
+        ["Terminal anterior / próximo", [SHORTCUT_MOD, "Shift", "[ / ]"]],
+        ["Próximo / anterior (editor→terminal)", ["Ctrl", "Tab"]],
       ]},
       { title: "Terminal", items: [
         ["Copiar (com seleção) / interromper", [SHORTCUT_MOD, "C"]],
@@ -4927,9 +4946,6 @@
         ["Aumentar / diminuir fonte", [SHORTCUT_MOD, "+ / −"]],
         ["Resetar fonte", [SHORTCUT_MOD, "0"]],
         ["Reiniciar shell", [SHORTCUT_MOD, "Shift", "R"]],
-        ["Próximo / anterior terminal", ["Ctrl", "Tab"]],
-        ["Terminal anterior / próximo", [SHORTCUT_MOD, "Shift", "[ / ]"]],
-        ["Ir à aba de terminal 1–9", [SHORTCUT_MOD, "Shift", "1–9"]],
       ]},
       { title: "Editor de arquivos", items: [
         ["Salvar arquivo", [SHORTCUT_MOD, "S"]],
@@ -4964,7 +4980,7 @@
         <div class="modal modal-form" role="dialog" aria-modal="true" style="width:620px;max-width:92vw">
           <div class="modal-content" style="padding-bottom:10px">
             <div class="modal-title">Atalhos de teclado</div>
-            <div style="font-size:11.5px;color:var(--text-tertiary);text-align:center;margin-top:4px">${SHORTCUT_MOD === "⌘" ? "⌘ = Command" : "Ctrl ou ⌘"} · pressione Esc para fechar</div>
+            <div style="font-size:11.5px;color:var(--text-tertiary);text-align:center;margin-top:4px">${SHORTCUT_MOD === "⌘" ? "⌘ = Command" : "Ctrl ou ⌘"} · abra com ${SHORTCUT_MOD}/ ou F1 · Esc para fechar</div>
             <div class="shortcuts-grid">${groupsHtml}</div>
           </div>
           <div class="modal-buttons">
@@ -5641,6 +5657,123 @@
       });
     }
 
+    // Reordena p.terminals conforme a lista de tids dada (ordem final da DOM
+    // após o arraste). Mantém quaisquer terminais não citados no fim (segurança).
+    function applyTerminalOrder(projId, orderedTids) {
+      const p = getProj(projId);
+      if (!p) return;
+      const byId = new Map(p.terminals.map((t) => [t.id, t]));
+      const next = [];
+      orderedTids.forEach((id) => {
+        const t = byId.get(id);
+        if (t) { next.push(t); byId.delete(id); }
+      });
+      byId.forEach((t) => next.push(t));
+      p.terminals = next;
+    }
+
+    // Reordenar abas arrastando (pointer events). Regra: quando a aba arrastada
+    // passa do meio (50%) de uma vizinha, ela assume o lugar na hora — troca ao
+    // vivo, não só ao soltar. Usa pointer events (não HTML5 DnD) pra não conflitar
+    // com o grip do card no mosaico e pra poder mover a DOM sem cancelar o gesto.
+    function enableTabSort(container, opts) {
+      const { itemSelector, getId, onReorder, ignore } = opts;
+      const items = () => [...container.querySelectorAll(itemSelector)];
+      let dragEl = null, pointerId = null, startX = 0, moved = false;
+      let lastX = 0, edgeDir = 0, scrollRAF = null;
+
+      // centro da "casa" atual da aba, ignorando o translate de acompanhamento
+      const naturalCenter = (el) => {
+        const prev = el.style.transform;
+        el.style.transform = "none";
+        const r = el.getBoundingClientRect();
+        el.style.transform = prev;
+        return r.left + r.width / 2;
+      };
+
+      // regra dos 50%: se o cursor cruzou o meio de uma vizinha, a arrastada
+      // assume o lugar dela na hora (move na DOM ao vivo)
+      const reorderAt = (clientX) => {
+        const list = items();
+        const dragIdx = list.indexOf(dragEl);
+        for (let idx = 0; idx < list.length; idx++) {
+          const el = list[idx];
+          if (el === dragEl) continue;
+          const r = el.getBoundingClientRect();
+          const mid = r.left + r.width / 2;
+          if (clientX < mid && dragIdx > idx) { container.insertBefore(dragEl, el); break; }
+          if (clientX >= mid && dragIdx < idx) { container.insertBefore(dragEl, el.nextSibling); break; }
+        }
+      };
+
+      // a aba arrastada acompanha o cursor (visual tátil)
+      const updateAt = (clientX) => {
+        reorderAt(clientX);
+        dragEl.style.transform = `translateX(${clientX - naturalCenter(dragEl)}px)`;
+      };
+
+      // auto-scroll quando a lista transborda e o cursor chega perto da borda
+      const autoScroll = () => {
+        if (!dragEl || edgeDir === 0) { scrollRAF = null; return; }
+        const before = container.scrollLeft;
+        container.scrollLeft += edgeDir * 10;
+        if (container.scrollLeft !== before) updateAt(lastX);
+        scrollRAF = requestAnimationFrame(autoScroll);
+      };
+
+      const onMove = (e) => {
+        if (!dragEl) return;
+        lastX = e.clientX;
+        if (!moved) {
+          if (Math.abs(e.clientX - startX) < 4) return; // limiar: distingue clique de arraste
+          moved = true;
+          dragEl.classList.add("dragging");
+          try { dragEl.setPointerCapture(pointerId); } catch {}
+        }
+        updateAt(e.clientX);
+        const cr = container.getBoundingClientRect();
+        const EDGE = 36;
+        if (container.scrollWidth > container.clientWidth + 2) {
+          if (e.clientX > cr.right - EDGE) edgeDir = 1;
+          else if (e.clientX < cr.left + EDGE) edgeDir = -1;
+          else edgeDir = 0;
+        } else edgeDir = 0;
+        if (edgeDir !== 0 && scrollRAF == null) scrollRAF = requestAnimationFrame(autoScroll);
+      };
+
+      const finish = () => {
+        if (!dragEl) return;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        edgeDir = 0;
+        if (scrollRAF != null) { cancelAnimationFrame(scrollRAF); scrollRAF = null; }
+        try { dragEl.releasePointerCapture(pointerId); } catch {}
+        dragEl.style.transform = "";
+        if (moved) {
+          dragEl.classList.remove("dragging");
+          lastTabDragEnd = Date.now(); // engole o clique-fantasma pós-arraste
+          const order = items().map(getId);
+          dragEl = null; pointerId = null; moved = false;
+          onReorder(order);
+          return;
+        }
+        dragEl = null; pointerId = null; moved = false;
+      };
+
+      container.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        const item = e.target.closest(itemSelector);
+        if (!item || !container.contains(item)) return;
+        if (ignore && ignore(e)) return; // ex.: clicou no × ou renomeando
+        dragEl = item; pointerId = e.pointerId; startX = e.clientX; moved = false;
+        lastX = e.clientX;
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
+      });
+    }
+
     function renderTabs() {
       // se está renomeando, não destruir o input — só atualizar dots
       if (editingTabTid) {
@@ -5662,7 +5795,7 @@
         const active = view === "terminal" && t.id === tid;
         const unread = !active && termUnread.has(k(p.id, t.id));
         html += `
-          <button class="tab kind-terminal ${active ? "active" : ""}" data-kind="terminal" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" style="--proj-color: ${color}" draggable="true">
+          <button class="tab kind-terminal ${active ? "active" : ""}" data-kind="terminal" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" style="--proj-color: ${color}">
             <span class="status-dot ${t.status}"></span>
             <span class="tab-name">${escapeHtml(t.name)}</span>
             <span class="tab-close" data-close="${t.id}" data-kind="terminal" title="Fechar">${ICONS.x}</span>
@@ -5692,6 +5825,7 @@
       bar.querySelectorAll(".tab").forEach((el) => {
         el.addEventListener("click", (e) => {
           if (e.target.closest(".tab-close")) return;
+          if (Date.now() - lastTabDragEnd < 250) return; // acabou de arrastar: ignora o clique-fantasma
           // enquanto renomeia, ignora clique da própria aba (ex.: o <button>
           // ativa ao apertar Espaço e roubaria o foco do input, encerrando o rename)
           if (editingTabTid) return;
@@ -5725,34 +5859,13 @@
         });
       });
 
-      // Drag&drop pra reordenar abas de terminal. A ordem fica só client-side
-      // (terminais são criados sob demanda; não persiste entre sessões).
-      let dragSrcTid = null;
-      bar.querySelectorAll(".tab.kind-terminal").forEach((el) => {
-        el.addEventListener("dragstart", (e) => {
-          dragSrcTid = el.dataset.tid;
-          el.classList.add("dragging");
-          try { e.dataTransfer.effectAllowed = "move"; } catch {}
-        });
-        el.addEventListener("dragend", () => {
-          el.classList.remove("dragging");
-          bar.querySelectorAll(".tab").forEach((t) => t.classList.remove("drag-over-left", "drag-over-right"));
-          dragSrcTid = null;
-        });
-        el.addEventListener("dragover", (e) => {
-          if (!dragSrcTid || dragSrcTid === el.dataset.tid || el.dataset.kind !== "terminal") return;
-          e.preventDefault();
-          bar.querySelectorAll(".tab").forEach((t) => t.classList.remove("drag-over-left", "drag-over-right"));
-          const r = el.getBoundingClientRect();
-          el.classList.add(e.clientX < r.left + r.width / 2 ? "drag-over-left" : "drag-over-right");
-        });
-        el.addEventListener("drop", (e) => {
-          if (!dragSrcTid || dragSrcTid === el.dataset.tid || el.dataset.kind !== "terminal") return;
-          e.preventDefault();
-          const r = el.getBoundingClientRect();
-          const before = e.clientX < r.left + r.width / 2;
-          reorderTerminalTabs(activeProjId, dragSrcTid, el.dataset.tid, before);
-        });
+      // Reordenar abas de terminal por arraste (pointer events + regra dos 50%).
+      // A ordem fica só client-side (terminais são criados sob demanda).
+      enableTabSort(bar, {
+        itemSelector: ".tab.kind-terminal",
+        getId: (el) => el.dataset.tid,
+        ignore: (e) => !!e.target.closest(".tab-close") || !!editingTabTid,
+        onReorder: (order) => { applyTerminalOrder(activeProjId, order); renderTabs(); },
       });
       const addBtn = document.getElementById("tabAdd");
       if (addBtn) addBtn.addEventListener("click", () => requestCreateTerminal(activeProjId));
@@ -6069,6 +6182,7 @@
       head.querySelectorAll(".mosaic-mini-tab").forEach((b) => {
         b.addEventListener("click", (e) => {
           if (renamingMosaicTab) return; // renomeando: ignora clique (Espaço ativaria o botão)
+          if (Date.now() - lastTabDragEnd < 250) return; // acabou de arrastar: ignora o clique-fantasma
           // clique no × fecha o terminal (não troca de aba)
           const closeBtn = e.target.closest(".mosaic-mini-close");
           if (closeBtn) {
@@ -6084,6 +6198,16 @@
         });
         b.addEventListener("dblclick", (e) => e.preventDefault());
       });
+      // Reordenar as mini-tabs do card por arraste (mesma regra dos 50%)
+      const miniTabsWrap = head.querySelector(".mosaic-card-tabs");
+      if (miniTabsWrap) {
+        enableTabSort(miniTabsWrap, {
+          itemSelector: ".mosaic-mini-tab",
+          getId: (el) => el.dataset.tid,
+          ignore: (e) => !!e.target.closest(".mosaic-mini-close") || !!renamingMosaicTab,
+          onReorder: (order) => { applyTerminalOrder(projId, order); renderMosaic(); },
+        });
+      }
       head.querySelector('[data-act="qcmd"]').addEventListener("click", (e) => {
         e.stopPropagation();
         openQcmdPopover(e.currentTarget, projId);
@@ -6996,23 +7120,6 @@
     // Reordena abas de terminal in-place. Recoloca o `srcTid` antes ou depois
     // do `targetTid` no array `p.terminals`. Sem ida ao servidor — terminais
     // não persistem ordem entre sessões.
-    function reorderTerminalTabs(projId, srcTid, targetTid, before) {
-      const p = getProj(projId);
-      if (!p) return;
-      const arr = p.terminals;
-      const srcIdx = arr.findIndex((t) => t.id === srcTid);
-      if (srcIdx < 0) return;
-      const [moved] = arr.splice(srcIdx, 1);
-      // após o splice, o índice do alvo pode ter mudado — recalcula
-      let tgtIdx = arr.findIndex((t) => t.id === targetTid);
-      if (tgtIdx < 0) {
-        // alvo desapareceu — devolve no fim
-        arr.push(moved);
-      } else {
-        arr.splice(before ? tgtIdx : tgtIdx + 1, 0, moved);
-      }
-      renderTabs();
-    }
 
     // ============================================================
     // OPERAÇÕES SOBRE TERMINAIS
@@ -11514,6 +11621,13 @@
       if (isMod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         paletteOpen ? closePalette() : openPalette();
+        return;
+      }
+
+      // ⌘/ ou F1 — folha de atalhos
+      if ((isMod && e.key === "/") || e.key === "F1") {
+        e.preventDefault();
+        openShortcutsModal();
         return;
       }
       if (paletteOpen) {
