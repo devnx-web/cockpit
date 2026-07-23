@@ -1452,6 +1452,52 @@
       padding: 6px 4px 6px 8px;
     }
 
+    /* ── Split panes (modo Foco) ─────────────────────────────────── */
+    .split-root { position: absolute; inset: 0; display: flex; z-index: 1; }
+    .split-node { display: flex; min-width: 0; min-height: 0; flex: 1 1 0; }
+    .split-node.row { flex-direction: row; }
+    .split-node.col { flex-direction: column; }
+    .split-node.resizing { transition: none; }
+    .split-leaf {
+      position: relative; min-width: 0; min-height: 0; overflow: hidden; flex: 1 1 0;
+      border-radius: 8px; transition: box-shadow 120ms;
+    }
+    .split-leaf.focused { box-shadow: inset 0 0 0 2px var(--proj-color, #6ea8fe); }
+    /* Terminal reparentado pra dentro de um painel de split */
+    .terminal-instance.in-split {
+      position: absolute; inset: 0;
+      display: block !important;
+      padding: 6px 4px 6px 8px;
+    }
+    .split-leaf-close {
+      position: absolute; top: 4px; right: 4px; z-index: 3;
+      width: 20px; height: 20px; border-radius: 5px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-2); color: var(--text-tertiary);
+      opacity: 0; transition: opacity 120ms, background 120ms, color 120ms;
+    }
+    .split-leaf:hover .split-leaf-close { opacity: 0.75; }
+    .split-leaf-close:hover { opacity: 1; background: var(--bg-3); color: var(--text-primary); }
+    .split-leaf-close svg { width: 13px; height: 13px; }
+    .split-leaf-placeholder {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: var(--text-tertiary); font-size: 12px;
+    }
+    .split-resizer-x { flex: 0 0 6px; cursor: col-resize; align-self: stretch; }
+    .split-resizer-y { flex: 0 0 6px; cursor: row-resize; align-self: stretch; }
+    .split-resizer-x, .split-resizer-y { position: relative; }
+    .split-resizer-x::before {
+      content: ""; position: absolute; inset: 0 -3px; /* hit-area maior */
+    }
+    .split-resizer-y::before {
+      content: ""; position: absolute; inset: -3px 0;
+    }
+    .split-resizer-x:hover, .split-resizer-y:hover { background: var(--accent, #6ea8fe); opacity: 0.35; }
+    .split-resizer-x.dragging, .split-resizer-y.dragging { background: var(--accent, #6ea8fe); opacity: 0.55; }
+    /* aba cujo terminal já está visível num painel */
+    .tab.kind-terminal[data-inpane="1"] .status-dot { box-shadow: 0 0 0 2px var(--proj-color, #6ea8fe); }
+    .mosaic-mini-tab[data-inpane="1"] .status-dot { box-shadow: 0 0 0 2px var(--proj-color, #6ea8fe); }
+
     /* Célula vazia — dropzone */
     .mosaic-drop {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -4124,6 +4170,110 @@
     let activeProjId = null;
     const activeTerminalByProj = new Map(); // projId -> tid
     const xtermInstances = new Map(); // `${projId}:${tid}` -> {term, fitAddon, container}
+    // ── Split panes (modo Foco): vários terminais de um projeto visíveis ao
+    // mesmo tempo, em árvore binária aninhada (estilo tmux). Distinto do mosaico
+    // (que divide por projeto). Só existe no foco; no mosaico o card mostra o
+    // terminal em foco. Folha: {type:"leaf", id, tid|null}. Split:
+    // {type:"split", dir:"row"|"col", children:[a,b], weights:[wa,wb]}.
+    // dir "row" = lado a lado (dividir à direita); "col" = em cima/baixo (abaixo).
+    const splitTreeByProj = new Map();  // projId -> nó raiz (undefined = sem split)
+    const focusedLeafByProj = new Map(); // projId -> leafId do painel em foco
+    let pendingSplit = null;            // { projId, dir, srcLeafId } entre clique e terminal_added
+    let pendingSplitTimer = null;       // limpa pendingSplit órfão
+    let leafSeq = 0;                    // gerador de leafId estável (independente do tid volátil)
+    const newLeafId = () => `leaf-${++leafSeq}`;
+
+    // Percorre a árvore e retorna todas as folhas (em ordem de leitura).
+    function treeLeaves(node, out = []) {
+      if (!node) return out;
+      if (node.type === "leaf") out.push(node);
+      else node.children.forEach((c) => treeLeaves(c, out));
+      return out;
+    }
+    function findLeaf(node, leafId) {
+      if (!node) return null;
+      if (node.type === "leaf") return node.id === leafId ? node : null;
+      for (const c of node.children) { const r = findLeaf(c, leafId); if (r) return r; }
+      return null;
+    }
+    function leafOfTid(node, tid) {
+      for (const lf of treeLeaves(node)) if (lf.tid === tid) return lf;
+      return null;
+    }
+    function hasSplit(projId) {
+      const t = splitTreeByProj.get(projId);
+      return !!t && t.type === "split";
+    }
+    // Folha em foco de um projeto (fallback: 1ª folha da árvore).
+    function focusedLeaf(projId) {
+      const tree = splitTreeByProj.get(projId);
+      if (!tree) return null;
+      const id = focusedLeafByProj.get(projId);
+      return (id && findLeaf(tree, id)) || treeLeaves(tree)[0] || null;
+    }
+    // Garante que existe uma árvore (folha única do tid ativo) antes de dividir.
+    function ensureTree(projId) {
+      if (splitTreeByProj.has(projId)) return;
+      const leaf = { type: "leaf", id: newLeafId(), tid: activeTerminalByProj.get(projId) || null };
+      splitTreeByProj.set(projId, leaf);
+      focusedLeafByProj.set(projId, leaf.id);
+    }
+    // Localiza o nó split que é pai de `child` (ou null se child é a raiz).
+    function findParent(node, child) {
+      if (!node || node.type === "leaf") return null;
+      if (node.children.includes(child)) return node;
+      for (const c of node.children) { const r = findParent(c, child); if (r) return r; }
+      return null;
+    }
+    // Divide a folha `leafId` num split [folhaAntiga, novaFolha(newTid)] na direção dir.
+    function splitLeaf(projId, leafId, dir, newTid) {
+      const tree = splitTreeByProj.get(projId);
+      const old = tree && findLeaf(tree, leafId);
+      if (!old) return;
+      const novo = { type: "leaf", id: newLeafId(), tid: newTid };
+      const split = { type: "split", dir, weights: [1, 1], children: [{ ...old }, novo] };
+      if (tree === old) {
+        splitTreeByProj.set(projId, split);
+      } else {
+        const parent = findParent(tree, old);
+        if (!parent) return;
+        parent.children[parent.children.indexOf(old)] = split;
+      }
+      focusedLeafByProj.set(projId, novo.id);
+    }
+    // Remove a folha `leafId`, promovendo o irmão no lugar do split pai. Se
+    // killTerminal, encerra o processo; senão o terminal segue vivo (só sai do split).
+    function closeLeaf(projId, leafId, { killTerminal = false } = {}) {
+      const tree = splitTreeByProj.get(projId);
+      if (!tree) return;
+      const leaf = findLeaf(tree, leafId);
+      if (!leaf) return;
+      const tid = leaf.tid;
+      const parent = findParent(tree, leaf);
+      if (!parent) {
+        // folha é a raiz — desfaz o split inteiro (volta ao fluxo .active)
+        splitTreeByProj.delete(projId);
+        focusedLeafByProj.delete(projId);
+      } else {
+        const sibling = parent.children[1 - parent.children.indexOf(leaf)];
+        const grand = findParent(tree, parent);
+        if (!grand) splitTreeByProj.set(projId, sibling); // pai era raiz → irmão vira raiz
+        else grand.children[grand.children.indexOf(parent)] = sibling;
+        // foco vai pra 1ª folha do irmão promovido
+        const t = splitTreeByProj.get(projId);
+        if (t && t.type === "leaf") {
+          // colapsou pra folha única → desfaz o split e mostra esse terminal no fluxo normal
+          if (t.tid && projId === activeProjId) activeTerminalByProj.set(projId, t.tid);
+          splitTreeByProj.delete(projId); focusedLeafByProj.delete(projId);
+        } else {
+          focusedLeafByProj.set(projId, treeLeaves(sibling)[0]?.id);
+        }
+      }
+      if (killTerminal && tid) requestCloseTerminal(projId, tid);
+      saveSplitState(projId);
+      if (layoutMode === "mosaic") renderMosaic();
+      else if (projId === activeProjId) applyVisibility();
+    }
     let ws = null;
     let editingTabTid = null; // tid em renomeação — congela renderTabs durante edição
     let renamingMosaicTab = null; // tid do mini-tab do mosaico em renomeação
@@ -4223,6 +4373,62 @@
         }
       });
     }
+    // ── Persistência do split de terminais (por projeto) ──────────
+    // Chave separada do mosaico. Como os tids são recriados a cada sessão,
+    // serializamos a folha pelo ÍNDICE do terminal em p.terminals (não pelo tid).
+    function serializeTree(node, p) {
+      if (!node) return null;
+      if (node.type === "leaf") return { i: node.tid ? p.terminals.findIndex((t) => t.id === node.tid) : -1 };
+      return { dir: node.dir, weights: node.weights.slice(), children: node.children.map((c) => serializeTree(c, p)) };
+    }
+    function saveSplitState(projId) {
+      let obj = {};
+      try { obj = JSON.parse(localStorage.getItem("cockpit-term-splits") || "{}"); } catch {}
+      const tree = splitTreeByProj.get(projId);
+      const p = getProj(projId);
+      if (!tree || tree.type !== "split" || !p) delete obj[projId];
+      else obj[projId] = serializeTree(tree, p);
+      try { localStorage.setItem("cockpit-term-splits", JSON.stringify(obj)); } catch {}
+    }
+    // Reconstrói a árvore a partir do formato salvo, mapeando índice → tid atual.
+    function deserializeTree(node, p) {
+      if (!node) return null;
+      if ("i" in node) {
+        const t = node.i >= 0 ? p.terminals[node.i] : null;
+        return { type: "leaf", id: newLeafId(), tid: t ? t.id : null };
+      }
+      return { type: "split", dir: node.dir === "col" ? "col" : "row",
+        weights: Array.isArray(node.weights) && node.weights.length === 2 ? node.weights.slice() : [1, 1],
+        children: (node.children || []).map((c) => deserializeTree(c, p)) };
+    }
+    // Pós-ordem: remove folha órfã (sem tid) promovendo o irmão. Retorna o nó
+    // resultante (ou null se toda a subárvore ficou vazia).
+    function pruneTree(node) {
+      if (!node) return null;
+      if (node.type === "leaf") return node.tid ? node : null;
+      const kids = node.children.map(pruneTree);
+      const a = kids[0], b = kids[1];
+      if (a && b) { node.children = [a, b]; return node; }
+      return a || b || null; // promove o único sobrevivente
+    }
+    function loadSplitState(projId) {
+      try {
+        const obj = JSON.parse(localStorage.getItem("cockpit-term-splits") || "{}");
+        const saved = obj[projId];
+        const p = getProj(projId);
+        if (!saved || !p || saved.type === undefined && !("dir" in saved)) return;
+        let tree = deserializeTree(saved, p);
+        tree = pruneTree(tree);
+        // precisa restar ≥1 split (≥2 folhas com tid) pra valer a pena
+        if (!tree || tree.type !== "split" || treeLeaves(tree).filter((l) => l.tid).length < 2) {
+          splitTreeByProj.delete(projId); focusedLeafByProj.delete(projId);
+          return;
+        }
+        splitTreeByProj.set(projId, tree);
+        const first = treeLeaves(tree).find((l) => l.tid);
+        if (first) focusedLeafByProj.set(projId, first.id);
+      } catch {}
+    }
     // Ajusta comprimento dos arrays de peso pra bater com o layout (fill com 1).
     function syncGridWeights() {
       const n = gridCellCount();
@@ -4305,7 +4511,11 @@
 
     function getProj(id) { return projects.find((p) => p.id === id); }
     function getActiveProj() { return getProj(activeProjId); }
-    function getActiveTid() { return activeTerminalByProj.get(activeProjId); }
+    function getActiveTid() {
+      // com split, o "terminal ativo" é o do painel em foco
+      if (hasSplit(activeProjId)) return focusedLeaf(activeProjId)?.tid ?? activeTerminalByProj.get(activeProjId);
+      return activeTerminalByProj.get(activeProjId);
+    }
     function getActiveTerminal() {
       const p = getActiveProj();
       if (!p) return null;
@@ -5790,12 +6000,17 @@
       const activeFile = activeFileByProj.get(activeProjId);
       const files = openFiles.get(activeProjId) || [];
 
+      const paneTids = hasSplit(p.id)
+        ? new Set(treeLeaves(splitTreeByProj.get(p.id)).map((l) => l.tid).filter(Boolean))
+        : null;
+
       let html = "";
       p.terminals.forEach((t) => {
         const active = view === "terminal" && t.id === tid;
         const unread = !active && termUnread.has(k(p.id, t.id));
+        const inpane = paneTids && paneTids.has(t.id) ? 1 : "";
         html += `
-          <button class="tab kind-terminal ${active ? "active" : ""}" data-kind="terminal" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" style="--proj-color: ${color}">
+          <button class="tab kind-terminal ${active ? "active" : ""}" data-kind="terminal" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" data-inpane="${inpane}" style="--proj-color: ${color}">
             <span class="status-dot ${t.status}"></span>
             <span class="tab-name">${escapeHtml(t.name)}</span>
             <span class="tab-close" data-close="${t.id}" data-kind="terminal" title="Fechar">${ICONS.x}</span>
@@ -5868,7 +6083,7 @@
         onReorder: (order) => { applyTerminalOrder(activeProjId, order); renderTabs(); },
       });
       const addBtn = document.getElementById("tabAdd");
-      if (addBtn) addBtn.addEventListener("click", () => requestCreateTerminal(activeProjId));
+      if (addBtn) addBtn.addEventListener("click", () => showAddTerminalMenu(addBtn));
       const qBtn = document.getElementById("qcmdBtn");
       if (qBtn) qBtn.addEventListener("click", () => {
         if (qcmdPopoverOpen) closeQcmdPopover();
@@ -5896,12 +6111,141 @@
       }
     }
 
+    // ── Split panes: render recursivo ───────────────────────────────
+    // Devolve todas as instâncias reparentadas em painéis de volta ao
+    // #terminalArea e remove o .split-root (evita órfãos ao trocar de layout).
+    function detachSplit() {
+      const wrap = document.getElementById("terminalArea");
+      // varre o documento todo: no mosaico os painéis ficam dentro dos cards,
+      // não só no #terminalArea. Devolve as instâncias ao pool e remove os roots.
+      document.querySelectorAll(".terminal-instance.in-split").forEach((el) => {
+        el.classList.remove("in-split");
+        wrap.appendChild(el);
+      });
+      document.querySelectorAll(".split-root").forEach((r) => r.remove());
+    }
+    // Monta o DOM da árvore de splits do projeto dentro do #terminalArea.
+    // Retorna true se montou (há split real); false se não há split.
+    function renderSplit(projId) {
+      const wrap = document.getElementById("terminalArea");
+      detachSplit();
+      const tree = splitTreeByProj.get(projId);
+      if (!tree || tree.type !== "split") return false;
+      wrap.appendChild(buildSplitRoot(projId, tree));
+      markFocusedLeaf(projId);
+      return true;
+    }
+    // Cria o .split-root (com projid) da árvore — reusado no Foco e no mosaico.
+    function buildSplitRoot(projId, tree) {
+      const root = document.createElement("div");
+      root.className = "split-root";
+      root.dataset.projid = projId;
+      root.appendChild(buildSplitNode(projId, tree));
+      return root;
+    }
+    function buildSplitNode(projId, node) {
+      if (node.type === "leaf") {
+        const leafEl = document.createElement("div");
+        leafEl.className = "split-leaf";
+        leafEl.dataset.leafId = node.id;
+        if (focusedLeafByProj.get(projId) === node.id) leafEl.classList.add("focused");
+        const p = getProj(projId);
+        leafEl.style.setProperty("--proj-color", p?.color || "#6ea8fe");
+        const inst = node.tid ? xtermInstances.get(k(projId, node.tid)) : null;
+        if (inst) {
+          inst.container.classList.add("in-split");
+          leafEl.appendChild(inst.container);
+        } else {
+          const ph = document.createElement("div");
+          ph.className = "split-leaf-placeholder";
+          ph.textContent = "dividindo…";
+          leafEl.appendChild(ph);
+        }
+        const close = document.createElement("div");
+        close.className = "split-leaf-close";
+        close.title = "Fechar painel (mantém o terminal na aba)";
+        close.innerHTML = ICONS.x;
+        close.addEventListener("mousedown", (e) => e.stopPropagation());
+        close.addEventListener("click", (e) => { e.stopPropagation(); closeLeaf(projId, node.id, { killTerminal: false }); });
+        leafEl.appendChild(close);
+        leafEl.addEventListener("mousedown", () => setFocusedLeaf(projId, node.id));
+        return leafEl;
+      }
+      // split: dois filhos + divisória entre eles
+      const el = document.createElement("div");
+      el.className = "split-node " + node.dir;
+      const a = buildSplitNode(projId, node.children[0]);
+      const b = buildSplitNode(projId, node.children[1]);
+      a.style.flexGrow = String(node.weights[0] ?? 1);
+      b.style.flexGrow = String(node.weights[1] ?? 1);
+      el.appendChild(a);
+      el.appendChild(buildSplitResizer(projId, node, el));
+      el.appendChild(b);
+      return el;
+    }
+    function buildSplitResizer(projId, node, nodeEl) {
+      const el = document.createElement("div");
+      el.className = node.dir === "row" ? "split-resizer-x" : "split-resizer-y";
+      el.title = "Arraste para redimensionar · duplo-clique iguala";
+      attachResizer(el, {
+        axis: node.dir === "row" ? "x" : "y",
+        weights: node.weights, idxA: 0, idxB: 1,
+        getPair: () => [el.previousElementSibling, el.nextElementSibling],
+        resizingEl: nodeEl,
+        onCommit: () => saveSplitState(projId),
+        onReset: () => { node.weights[0] = 1; node.weights[1] = 1; saveSplitState(projId); renderSplit(projId); },
+      });
+      return el;
+    }
+    function setFocusedLeaf(projId, leafId) {
+      const inst = () => {
+        const leaf = findLeaf(splitTreeByProj.get(projId), leafId);
+        return leaf?.tid ? xtermInstances.get(k(projId, leaf.tid)) : null;
+      };
+      const mosaic = layoutMode === "mosaic";
+      if (mosaic) {
+        // no mosaico, focar um painel também dá foco de digitação ao card
+        mosaicFocusedProj = projId;
+        document.querySelectorAll(".mosaic-card").forEach((c) =>
+          c.classList.toggle("focused", c.dataset.projid === projId));
+      }
+      if (focusedLeafByProj.get(projId) === leafId) { try { inst()?.term.focus(); } catch {} return; }
+      focusedLeafByProj.set(projId, leafId);
+      markFocusedLeaf(projId);
+      const lf = findLeaf(splitTreeByProj.get(projId), leafId);
+      if (lf?.tid) activeTerminalByProj.set(projId, lf.tid); // aba/header seguem o painel
+      try { inst()?.term.focus(); } catch {}
+      if (mosaic) { saveSplitState(projId); renderMosaicMiniTabs(projId); }
+      else { renderHeader(); renderTabs(); }
+    }
+    // Atualiza só as mini-abas de um card (marca a ativa/visível) sem re-render total.
+    function renderMosaicMiniTabs(projId) {
+      const tid = activeTerminalByProj.get(projId);
+      const paneTids = hasSplit(projId)
+        ? new Set(treeLeaves(splitTreeByProj.get(projId)).map((l) => l.tid).filter(Boolean))
+        : null;
+      document.querySelectorAll(`.mosaic-card[data-projid="${window.CSS && CSS.escape ? CSS.escape(projId) : projId}"] .mosaic-mini-tab`).forEach((b) => {
+        b.classList.toggle("active", b.dataset.tid === tid);
+        b.dataset.inpane = paneTids && paneTids.has(b.dataset.tid) ? "1" : "";
+      });
+    }
+    function markFocusedLeaf(projId) {
+      const fid = focusedLeafByProj.get(projId);
+      // escopa ao root do projeto — no mosaico há vários splits simultâneos e
+      // os leafIds são globais; sem escopo, marcar um projeto apagaria os outros.
+      const sel = window.CSS && CSS.escape ? CSS.escape(projId) : projId;
+      document.querySelectorAll(`.split-root[data-projid="${sel}"] .split-leaf`).forEach((el) => {
+        el.classList.toggle("focused", el.dataset.leafId === fid);
+      });
+    }
+
     function applyVisibility() {
       if (layoutMode === "mosaic") { renderMosaic(); return; }
       const view = viewModeByProj.get(activeProjId) || "terminal";
       const editorPane = document.getElementById("editorPane");
 
       if (view === "file") {
+        detachSplit(); // some com o split atrás do editor
         document.querySelectorAll(".terminal-instance").forEach((el) => el.classList.remove("active"));
         editorPane.classList.add("visible");
         const filePath = activeFileByProj.get(activeProjId);
@@ -5915,8 +6259,18 @@
             loadInMonaco(f);
           }
         }
+      } else if (hasSplit(activeProjId)) {
+        // modo split: vários painéis visíveis; o esquema .active fica desligado.
+        editorPane.classList.remove("visible");
+        document.querySelectorAll(".terminal-instance").forEach((el) => el.classList.remove("active"));
+        renderSplit(activeProjId);
+        const tid = getActiveTid(); // tid do painel em foco
+        const inst = tid ? xtermInstances.get(k(activeProjId, tid)) : null;
+        try { inst?.fitAddon.fit(); inst?.term.focus(); } catch {}
+        // o resize WS de cada painel sai do próprio ResizeObserver (debounced)
       } else {
         editorPane.classList.remove("visible");
+        detachSplit(); // remove .split-root remanescente (ex.: após colapsar)
         const tid = getActiveTid();
         document.querySelectorAll(".terminal-instance").forEach((el) => {
           const isActive = el.dataset.projid === activeProjId && el.dataset.tid === tid;
@@ -6110,10 +6464,14 @@
       if (projNeedsAttention(projId)) cell.classList.add("needs-attention");
 
       const tid = activeTerminalByProj.get(projId);
+      const paneTids = hasSplit(projId)
+        ? new Set(treeLeaves(splitTreeByProj.get(projId)).map((l) => l.tid).filter(Boolean))
+        : null;
       const tabsHtml = p.terminals.map((t) => {
         const active = t.id === tid;
         const unread = !active && termUnread.has(k(projId, t.id));
-        return `<button class="mosaic-mini-tab ${active ? "active" : ""}" data-tid="${t.id}" data-unread="${unread ? 1 : ""}"><span class="status-dot ${t.status}"></span><span class="mosaic-mini-name">${escapeHtml(t.name)}</span><span class="mosaic-mini-close" data-close="${t.id}" title="Fechar terminal">${ICONS.x}</span></button>`;
+        const inpane = paneTids && paneTids.has(t.id) ? 1 : "";
+        return `<button class="mosaic-mini-tab ${active ? "active" : ""}" data-tid="${t.id}" data-unread="${unread ? 1 : ""}" data-inpane="${inpane}"><span class="status-dot ${t.status}"></span><span class="mosaic-mini-name">${escapeHtml(t.name)}</span><span class="mosaic-mini-close" data-close="${t.id}" title="Fechar terminal">${ICONS.x}</span></button>`;
       }).join("");
 
       const head = document.createElement("div");
@@ -6171,6 +6529,9 @@
       if (p.terminals.length === 0) {
         body.innerHTML = `<div class="mosaic-drop"><div class="mosaic-drop-plus">${ICONS.plus}</div><div>criar terminal</div></div>`;
         body.querySelector(".mosaic-drop").addEventListener("click", () => requestCreateTerminal(projId));
+      } else if (hasSplit(projId)) {
+        // projeto dividido: monta a mesma árvore de painéis dentro do card
+        body.appendChild(buildSplitRoot(projId, splitTreeByProj.get(projId)));
       } else {
         const inst = activeInstFor(projId);
         if (inst) {
@@ -6192,8 +6553,20 @@
             return;
           }
           if (e.detail === 2) { startRenameMosaicTab(projId, b.dataset.tid, b); return; }
-          activeTerminalByProj.set(projId, b.dataset.tid);
-          termUnread.delete(k(projId, b.dataset.tid));
+          const ntid = b.dataset.tid;
+          if (hasSplit(projId)) {
+            // com split, a mini-aba entra no painel EM FOCO do card (ou foca o
+            // painel que já mostra esse terminal) — espelha o modo Foco.
+            const tree = splitTreeByProj.get(projId);
+            const existing = leafOfTid(tree, ntid);
+            if (existing) focusedLeafByProj.set(projId, existing.id);
+            else { const lf = focusedLeaf(projId); if (lf) lf.tid = ntid; }
+            activeTerminalByProj.set(projId, ntid);
+            saveSplitState(projId);
+          } else {
+            activeTerminalByProj.set(projId, ntid);
+          }
+          termUnread.delete(k(projId, ntid));
           renderMosaic();
         });
         b.addEventListener("dblclick", (e) => e.preventDefault());
@@ -6212,7 +6585,7 @@
         e.stopPropagation();
         openQcmdPopover(e.currentTarget, projId);
       });
-      head.querySelector('[data-act="new"]').addEventListener("click", () => requestCreateTerminal(projId));
+      head.querySelector('[data-act="new"]').addEventListener("click", (e) => showAddTerminalMenu(e.currentTarget, projId));
       head.querySelector('[data-act="focus"]').addEventListener("click", () => {
         selectProject(projId);
         setLayoutMode("focus");
@@ -6224,7 +6597,11 @@
       });
       body.addEventListener("mousedown", () => {
         mosaicFocusedProj = projId;
-        const inst = activeInstFor(projId);
+        // com split, o foco do painel é tratado pelo mousedown da própria folha
+        // (setFocusedLeaf) — aqui só focamos o painel em foco se clicou fora deles.
+        const inst = hasSplit(projId)
+          ? xtermInstances.get(k(projId, focusedLeaf(projId)?.tid))
+          : activeInstFor(projId);
         try { inst?.term.focus(); } catch {}
         document.querySelectorAll(".mosaic-card").forEach((c) =>
           c.classList.toggle("focused", c.dataset.projid === projId));
@@ -6238,8 +6615,15 @@
     // Splitter clássico: arrastar mexe só no par vizinho, preservando a soma dos
     // pesos (o resto do grid fica fixo). Converte pixel→peso ao vivo; salva no fim.
     // Duplo-clique iguala o par (volta a 50/50 entre os dois).
+    // Divisória arrastável genérica (pointer events + pesos flex). Usada pelo
+    // mosaico (divide projetos) e pelos split panes (divide terminais de um
+    // projeto). opts.resizingEl / onCommit / onReset parametrizam o alvo da
+    // classe .resizing e o que salvar/re-renderizar; defaults = mosaico.
     function attachResizer(el, opts) {
       const MIN_PX = 60;
+      const resizingEl = opts.resizingEl || document.getElementById("mosaicGrid");
+      const onCommit = opts.onCommit || saveGridState;
+      const onReset = opts.onReset || (() => { saveGridState(); renderMosaic(); });
       el.addEventListener("pointerdown", (e) => {
         if (e.button !== 0) return;
         const [elA, elB] = opts.getPair();
@@ -6253,8 +6637,7 @@
         const wA0 = opts.weights[opts.idxA] ?? 1, wB0 = opts.weights[opts.idxB] ?? 1;
         const combinedW = wA0 + wB0;
         const start = horiz ? e.clientX : e.clientY;
-        const grid = document.getElementById("mosaicGrid");
-        grid.classList.add("resizing");
+        resizingEl?.classList.add("resizing");
         el.classList.add("dragging");
         try { el.setPointerCapture(e.pointerId); } catch {}
         const onMove = (ev) => {
@@ -6273,9 +6656,9 @@
           el.removeEventListener("pointermove", onMove);
           el.removeEventListener("pointerup", onUp);
           el.removeEventListener("pointercancel", onUp);
-          grid.classList.remove("resizing");
+          resizingEl?.classList.remove("resizing");
           el.classList.remove("dragging");
-          saveGridState();
+          onCommit();
         };
         el.addEventListener("pointermove", onMove);
         el.addEventListener("pointerup", onUp);
@@ -6287,8 +6670,7 @@
         const avg = (wA + wB) / 2;
         opts.weights[opts.idxA] = avg;
         opts.weights[opts.idxB] = avg;
-        saveGridState();
-        renderMosaic();
+        onReset();
       });
     }
     function buildColResizer(aIdx, bIdx) {
@@ -6331,6 +6713,7 @@
       // devolve todos os terminais reparentados pro #terminalArea antes de limpar
       // (evita destruir/órfãos ao esvaziar o grid) e limpa .active herdado do foco
       const wrap = document.getElementById("terminalArea");
+      detachSplit(); // devolve instâncias presas em painéis de split + remove .split-root
       document.querySelectorAll(".terminal-instance.in-grid").forEach((el) => {
         el.classList.remove("in-grid");
         wrap.appendChild(el);
@@ -6752,8 +7135,19 @@
     function selectTerminal(projId, tid) {
       termUnread.delete(k(projId, tid));
       updateTabUnread(projId, tid);
-      activeTerminalByProj.set(projId, tid);
       viewModeByProj.set(projId, "terminal");
+      if (hasSplit(projId)) {
+        // com split, a aba clicada entra no painel EM FOCO; se o terminal já
+        // está num painel, só move o foco pra ele (evita duplicar).
+        const tree = splitTreeByProj.get(projId);
+        const existing = leafOfTid(tree, tid);
+        if (existing) focusedLeafByProj.set(projId, existing.id);
+        else { const lf = focusedLeaf(projId); if (lf) lf.tid = tid; }
+        activeTerminalByProj.set(projId, tid);
+        saveSplitState(projId);
+      } else {
+        activeTerminalByProj.set(projId, tid);
+      }
       saveActiveTerms();
       applyVisibility();
       renderHeader();
@@ -7128,6 +7522,59 @@
       if (ws?.readyState === 1) {
         ws.send(JSON.stringify({ type: "create_terminal", projectId: projId, name }));
       }
+    }
+    // Cria um terminal e divide o painel em foco (à direita = "row", abaixo = "col").
+    // A folha nasce quando chega o terminal_added (assíncrono); guardamos a intenção
+    // em pendingSplit até lá, com timeout de segurança pra não "grudar" num split.
+    function requestSplit(projId, dir) {
+      const p = getProj(projId);
+      if (!p || p.terminals.length === 0) { requestCreateTerminal(projId); return; } // nada pra dividir
+      ensureTree(projId);
+      const leaf = focusedLeaf(projId);
+      pendingSplit = { projId, dir, srcLeafId: leaf?.id };
+      if (pendingSplitTimer) clearTimeout(pendingSplitTimer);
+      pendingSplitTimer = setTimeout(() => {
+        pendingSplit = null; pendingSplitTimer = null;
+        const t = splitTreeByProj.get(projId);
+        if (t && t.type === "leaf") { splitTreeByProj.delete(projId); focusedLeafByProj.delete(projId); }
+      }, 8000);
+      requestCreateTerminal(projId);
+    }
+    // Menu do botão "+": Nova aba / Dividir à direita / Dividir abaixo.
+    const SPLIT_ICON_RIGHT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="13" y1="4" x2="13" y2="20"/></svg>`;
+    const SPLIT_ICON_DOWN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="13" x2="21" y2="13"/></svg>`;
+    function showAddTerminalMenu(anchorEl, projId = activeProjId) {
+      const p = getProj(projId);
+      // sem terminal ainda: dividir não faz sentido, cria direto
+      if (!p || p.terminals.length === 0) { requestCreateTerminal(projId); return; }
+      document.querySelectorAll(".context-menu").forEach((m) => m.remove());
+      const r = anchorEl.getBoundingClientRect();
+      const menu = document.createElement("div");
+      menu.className = "context-menu";
+      menu.style.cssText = "position:fixed;z-index:300";
+      menu.innerHTML = `
+        <div class="context-item" data-a="tab">${ICONS.plus} Nova aba</div>
+        <div class="context-divider"></div>
+        <div class="context-item" data-a="right">${SPLIT_ICON_RIGHT} Dividir à direita</div>
+        <div class="context-item" data-a="down">${SPLIT_ICON_DOWN} Dividir abaixo</div>`;
+      document.body.appendChild(menu);
+      const mr = menu.getBoundingClientRect();
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - mr.width - 8));
+      let top = r.bottom + 4;
+      if (top + mr.height > window.innerHeight) top = Math.max(8, r.top - mr.height - 4);
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+      const remove = () => menu.remove();
+      menu.querySelectorAll(".context-item").forEach((item) => item.addEventListener("click", () => {
+        remove();
+        const a = item.dataset.a;
+        if (a === "tab") requestCreateTerminal(projId);
+        else requestSplit(projId, a === "right" ? "row" : "col");
+      }));
+      setTimeout(() => {
+        const close = (ev) => { if (!menu.contains(ev.target)) { remove(); document.removeEventListener("mousedown", close); } };
+        document.addEventListener("mousedown", close);
+      }, 0);
     }
     async function requestCloseTerminal(projId, tid) {
       const proj = getProj(projId);
@@ -9141,12 +9588,26 @@
       if (layoutMode === "mosaic") {
         gridSlots.forEach((projId) => {
           if (!projId) return;
-          const tid = activeTerminalByProj.get(projId);
-          if (tid) ids.push([projId, tid]);
+          if (hasSplit(projId)) {
+            // card dividido: protege todos os painéis à vista
+            treeLeaves(splitTreeByProj.get(projId)).forEach((lf) => {
+              if (lf.tid) ids.push([projId, lf.tid]);
+            });
+          } else {
+            const tid = activeTerminalByProj.get(projId);
+            if (tid) ids.push([projId, tid]);
+          }
         });
       } else if ((viewModeByProj.get(activeProjId) || "terminal") === "terminal") {
-        const tid = getActiveTid();
-        if (activeProjId && tid) ids.push([activeProjId, tid]);
+        if (hasSplit(activeProjId)) {
+          // com split, TODOS os painéis à vista precisam ser protegidos do reaper
+          treeLeaves(splitTreeByProj.get(activeProjId)).forEach((lf) => {
+            if (lf.tid) ids.push([activeProjId, lf.tid]);
+          });
+        } else {
+          const tid = getActiveTid();
+          if (activeProjId && tid) ids.push([activeProjId, tid]);
+        }
       }
       return ids;
     }
@@ -9210,8 +9671,20 @@
           if (msg.terminal.buffer) {
             writeTerminalOutput(msg.projectId, msg.terminal.id, msg.terminal.buffer);
           }
+          // split pendente: em vez de só virar aba, divide o painel em foco
+          let consumedSplit = false;
+          if (pendingSplit && pendingSplit.projId === msg.projectId) {
+            const { dir, srcLeafId } = pendingSplit;
+            pendingSplit = null;
+            if (pendingSplitTimer) { clearTimeout(pendingSplitTimer); pendingSplitTimer = null; }
+            splitLeaf(msg.projectId, srcLeafId, dir, msg.terminal.id);
+            // o novo painel vira o ativo do projeto (vale no Foco e no mosaico)
+            activeTerminalByProj.set(msg.projectId, msg.terminal.id);
+            saveSplitState(msg.projectId);
+            consumedSplit = true;
+          }
           // se for no projeto ativo, foca a nova
-          if (msg.projectId === activeProjId) {
+          if (!consumedSplit && msg.projectId === activeProjId) {
             activeTerminalByProj.set(activeProjId, msg.terminal.id);
           }
           renderSidebar(); renderTabs();
@@ -9230,6 +9703,12 @@
           if (activeTerminalByProj.get(msg.projectId) === msg.terminalId) {
             if (p.terminals.length > 0) activeTerminalByProj.set(msg.projectId, p.terminals[0].id);
             else activeTerminalByProj.delete(msg.projectId);
+          }
+          // se o terminal estava num painel de split, poda a folha (colapsa o
+          // split). Terminal já morreu → killTerminal:false. Cobre idle/crash tb.
+          if (hasSplit(msg.projectId)) {
+            const lf = leafOfTid(splitTreeByProj.get(msg.projectId), msg.terminalId);
+            if (lf) closeLeaf(msg.projectId, lf.id, { killTerminal: false });
           }
           renderSidebar(); renderTabs();
           updateWaitingCounter();
@@ -9453,6 +9932,8 @@
         }
         if (!viewModeByProj.has(p.id)) viewModeByProj.set(p.id, "terminal");
         if (!openFiles.has(p.id)) openFiles.set(p.id, []);
+        // restaura o arranjo de split (mapeado por índice do terminal)
+        if (!splitTreeByProj.has(p.id)) loadSplitState(p.id);
       });
 
       if (!activeProjId) {

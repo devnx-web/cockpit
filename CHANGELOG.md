@@ -10,6 +10,26 @@ _(nada ainda)_
 
 ---
 
+## [0.17.0] — 2026-07-23
+
+### Adicionado (split de terminais — dividir a tela como no tmux/iTerm)
+- **Dividir um terminal em painéis lado a lado ou empilhados.** No botão **+** (das abas ou do
+  card do mosaico) agora há um menu: **Nova aba**, **Dividir à direita ▐** (painéis lado a lado)
+  ou **Dividir abaixo ▄** (em cima/embaixo). Os splits são **aninhados** — qualquer painel pode
+  ser dividido de novo, recursivamente (árvore estilo tmux).
+- **Redimensionar e fechar painéis.** Arraste a divisória entre dois painéis pra mudar a
+  proporção (**duplo-clique** iguala); o **×** no canto do painel o fecha (o terminal continua
+  vivo e acessível pela aba). Fechar o terminal (⌘W / servidor) **colapsa** o split sozinho.
+- **Funciona no Foco E no mosaico.** Cada card do mosaico pode mostrar seu próprio split de
+  terminais. O arranjo é **por projeto** e **compartilhado entre os dois modos**: dividiu no
+  mosaico, aparece igual no Foco — e vice-versa.
+- **Abas coexistem com os painéis.** Clicar numa aba coloca aquele terminal no **painel em
+  foco**; as abas cujo terminal já está num painel ficam **marcadas** (anel na bolinha).
+- **Persistência por projeto.** O layout de split volta ao recarregar (mapeado pelo índice do
+  terminal, best-effort).
+
+---
+
 ## [0.16.1] — 2026-07-23
 
 ### Adicionado (mosaico — redimensionar células como um mosaico de verdade)
