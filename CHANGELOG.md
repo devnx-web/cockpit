@@ -12,13 +12,28 @@ _(nada ainda)_
 
 ## [0.16.1] — 2026-07-23
 
-### Corrigido (mosaico — espaço para o que está em uso)
-- **Cards vazios cedem espaço para os em uso.** Antes todas as células do mosaico dividiam o
-  espaço igualmente, então um terminal ativo ficava do mesmo tamanho de uma célula vazia. Agora
-  o card **em uso** (com projeto fixado) ocupa mais espaço e a célula **vazia** (o "clique para
-  escolher um projeto") encolhe — tanto na horizontal (dentro da linha) quanto na vertical
-  (linha só de vazios fica mais baixa). A mudança é animada com transição suave e o terminal se
-  re-ajusta sozinho ao novo tamanho.
+### Adicionado (mosaico — redimensionar células como um mosaico de verdade)
+- **Arrastar a borda entre células e linhas.** Por padrão o mosaico continua dividindo o espaço
+  igualmente (50/50, 33/33/33, 25/25/25/25), mas agora dá pra **customizar** a proporção
+  arrastando o divisor entre duas células (horizontal) ou entre duas linhas (vertical) — ex.:
+  60/40. Só o par vizinho muda e a soma do espaço é preservada; **duplo-clique** no divisor
+  reseta aquele par pra igual. As proporções são salvas e voltam ao reabrir.
+- **Ajuste fino por número no editor de layout.** O popover "Layout do mosaico" ganhou a seção
+  **Proporções (%)**: dá pra digitar a largura de cada coluna e a altura de cada linha em
+  porcentagem e clicar em **aplicar**, ou **resetar** pra voltar à divisão igual.
+
+### Corrigido (mosaico — reduzir células prioriza os vazios)
+- **Ao diminuir o nº de células, os vazios saem primeiro.** Antes, reduzir de 3 pra 2 células
+  descartava sempre a última — podendo remover um projeto **em uso** e manter uma célula vazia.
+  Agora as células **sem projeto** são removidas primeiro, preservando o que está em uso. Se
+  todas as células restantes tiverem projeto (não cabem todos), abre um **modal perguntando
+  qual projeto desafixar**.
+
+### Corrigido (barra do topo — revelar só pela faixa central)
+- **A barra oculta agora volta só pela faixa central** (~10% da largura, onde já aparece o
+  indicador). Antes, aproximar o mouse do topo em **qualquer** posição fazia a barra descer;
+  agora os cantos e as laterais não reagem mais. Com a barra visível, o mouse no topo continua
+  mantendo-a aberta pra usar os botões das pontas.
 
 ---
 

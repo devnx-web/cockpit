@@ -242,11 +242,11 @@
     .app.top-hidden .title-bar {
       transform: translateY(-100%); opacity: 0; pointer-events: none;
     }
-    /* faixa central bem no topo (~6% da largura) pra revelar a barra oculta */
+    /* faixa central bem no topo (~10% da largura) pra revelar a barra oculta */
     .top-reveal-strip {
       position: fixed;
       top: 0; left: 50%; transform: translateX(-50%);
-      width: 6vw; min-width: 70px; max-width: 150px; height: 8px;
+      width: 10vw; min-width: 90px; max-width: 220px; height: 8px;
       z-index: 61; cursor: pointer;
       border-radius: 0 0 8px 8px;
       background: transparent;
@@ -1278,15 +1278,15 @@
       position: absolute; inset: 0;
       display: none;
       flex-direction: column;
-      gap: 6px; padding: 6px;
+      gap: 0; padding: 6px;
     }
     .app.mosaic .mosaic-grid { display: flex; }
-    /* Distribuição de espaço: o que está EM USO (card com projeto) ocupa mais;
-       o que está VAZIO (drop, sem projeto) cede espaço — na horizontal (dentro
-       da linha) e na vertical (linha só de vazios encolhe). Ratios em vars pra
-       ajuste fácil. flex-basis 0 pra o grow mandar; transição suave no resize. */
+    /* Divisão do espaço: por padrão igual (flex-grow 1 em tudo). As proporções
+       customizadas entram via flex-grow inline (gridRowWeights/gridColWeights),
+       ajustável arrastando os divisores ou pelo modal. flex-basis 0 pra o grow
+       mandar; transição suave, desligada durante o arraste (.mosaic-grid.resizing). */
     .mosaic-row {
-      display: flex; flex: 1 1 0; gap: 6px; min-height: 0;
+      display: flex; flex: 1 1 0; min-height: 0;
       transition: flex-grow 220ms cubic-bezier(.4, 0, .2, 1);
     }
     .mosaic-row > .mosaic-card,
@@ -1294,8 +1294,36 @@
       flex: 1 1 0; min-width: 0;
       transition: flex-grow 220ms cubic-bezier(.4, 0, .2, 1);
     }
-    .mosaic-row > .mosaic-card { flex-grow: var(--mosaic-used-grow, 3); }
-    .mosaic-row > .mosaic-drop { flex-grow: var(--mosaic-empty-grow, 1); }
+    .mosaic-grid.resizing .mosaic-row,
+    .mosaic-grid.resizing .mosaic-row > .mosaic-card,
+    .mosaic-grid.resizing .mosaic-row > .mosaic-drop { transition: none; }
+
+    /* Divisores arrastáveis: ocupam o lugar do antigo gap (6px). Hit-area maior
+       via ::before pra facilitar pegar. */
+    .mosaic-col-resizer, .mosaic-row-resizer {
+      flex: 0 0 6px; position: relative; z-index: 5;
+      background: transparent; touch-action: none;
+    }
+    .mosaic-col-resizer { cursor: col-resize; align-self: stretch; }
+    .mosaic-row-resizer { cursor: row-resize; width: 100%; height: 6px; }
+    .mosaic-col-resizer::before {
+      content: ""; position: absolute; top: 0; bottom: 0; left: -3px; right: -3px;
+    }
+    .mosaic-row-resizer::before {
+      content: ""; position: absolute; left: 0; right: 0; top: -3px; bottom: -3px;
+    }
+    /* traço central que aparece no hover/arraste */
+    .mosaic-col-resizer::after, .mosaic-row-resizer::after {
+      content: ""; position: absolute; border-radius: 3px;
+      background: var(--border-strong); opacity: 0;
+      transition: opacity .12s;
+    }
+    .mosaic-col-resizer::after { top: 12px; bottom: 12px; left: 2px; width: 2px; }
+    .mosaic-row-resizer::after { left: 12px; right: 12px; top: 2px; height: 2px; }
+    .mosaic-col-resizer:hover::after, .mosaic-row-resizer:hover::after,
+    .mosaic-col-resizer.dragging::after, .mosaic-row-resizer.dragging::after {
+      opacity: 1; background: var(--accent, #4a9eff);
+    }
 
     .mosaic-card {
       display: flex; flex-direction: column;
@@ -1444,7 +1472,7 @@
     /* Editor de layout (popover ancorado no botão Layout) */
     .layout-editor-backdrop { position: fixed; inset: 0; z-index: 295; background: transparent; }
     .layout-editor-pop {
-      position: fixed; z-index: 300; width: 264px;
+      position: fixed; z-index: 300; width: 300px; max-height: 80vh; overflow-y: auto;
       background: var(--bg-2); border: 1px solid var(--border-strong);
       border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);
       padding: 12px; font-family: var(--font-ui);
@@ -1487,6 +1515,54 @@
     .le-add:hover:not(:disabled) { color: var(--text-primary); border-color: var(--text-secondary); background: var(--bg-3); }
     .le-add:disabled { opacity: .4; cursor: default; }
     .le-hint { text-align: center; font-size: 10px; color: var(--text-tertiary); margin-top: 8px; text-transform: uppercase; letter-spacing: .06em; }
+
+    /* Seção de proporções (%) do editor de layout */
+    .le-sep { height: 1px; background: var(--border-default); margin: 10px 0 8px; }
+    .le-prop-title { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .le-prop-rows { display: flex; flex-direction: column; gap: 7px; }
+    .le-prop-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .le-prop-tag { font-size: 11px; color: var(--text-secondary); min-width: 44px; }
+    .le-prop-fields { display: flex; align-items: center; gap: 4px; flex: 1; flex-wrap: wrap; }
+    .le-prop-in {
+      width: 42px; padding: 3px 4px; text-align: center; font-size: 11px;
+      background: var(--bg-1); border: 1px solid var(--border-default); color: var(--text-primary);
+      border-radius: 5px; font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+    }
+    .le-prop-in::-webkit-outer-spin-button, .le-prop-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .le-prop-in:focus { outline: none; border-color: var(--accent, #4a9eff); }
+    .le-prop-in.h { border-style: dashed; }
+    .le-prop-x { color: var(--text-tertiary); font-size: 10px; }
+    .le-prop-actions { display: flex; gap: 6px; margin-top: 9px; }
+    .le-prop-apply, .le-prop-reset {
+      flex: 1; padding: 7px; border-radius: 7px; cursor: pointer; font-size: 12px; transition: all 120ms; border: 1px solid transparent;
+    }
+    .le-prop-apply { background: var(--accent, #4a9eff); color: #fff; }
+    .le-prop-apply:hover { filter: brightness(1.08); }
+    .le-prop-reset { background: var(--bg-1); border-color: var(--border-default); color: var(--text-secondary); }
+    .le-prop-reset:hover { background: var(--bg-3); color: var(--text-primary); }
+    .le-prop-apply:disabled { opacity: .4; cursor: default; filter: none; }
+
+    /* Modal "reduzir mosaico" — escolher quais projetos desafixar */
+    .unpin-modal {
+      position: fixed; z-index: 300; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 340px; max-height: 80vh; overflow-y: auto;
+      background: var(--bg-2); border: 1px solid var(--border-strong);
+      border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      padding: 14px; font-family: var(--font-ui);
+      animation: palette-enter 150ms cubic-bezier(0.16,1,0.3,1);
+    }
+    .unpin-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 10px; }
+    .unpin-desc b { color: var(--text-primary); }
+    .unpin-list { display: flex; flex-direction: column; gap: 4px; }
+    .unpin-row {
+      display: flex; align-items: center; gap: 9px; padding: 8px 10px;
+      border: 1px solid var(--border-default); border-radius: 8px; cursor: pointer; transition: all 120ms;
+    }
+    .unpin-row:hover { background: var(--bg-3); }
+    .unpin-row.on { border-color: var(--accent, #4a9eff); background: color-mix(in srgb, var(--accent, #4a9eff), transparent 88%); }
+    .unpin-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--proj-color, #5b8def); flex-shrink: 0; }
+    .unpin-name { flex: 1; font-size: 13px; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .unpin-check { color: var(--accent, #4a9eff); font-weight: 700; font-size: 13px; width: 14px; text-align: center; }
 
     /* FILES PANEL */
     .files-panel {
@@ -4094,12 +4170,30 @@
       try { const a = JSON.parse(localStorage.getItem("cockpit-grid-slots") || "[]"); return Array.isArray(a) ? a : []; }
       catch { return []; }
     })(); // [projId | null, ...] — uma posição por célula (na ordem das linhas)
+    // Pesos de proporção (default 1 = divisão igual). Customizáveis arrastando os
+    // divisores ou pelo modal de layout. gridRowWeights: 1 por linha (altura);
+    // gridColWeights: 1 por célula (largura, na ordem das linhas — paralelo a gridSlots).
+    const loadWeights = (key) => {
+      try { const a = JSON.parse(localStorage.getItem(key) || "[]"); if (Array.isArray(a) && a.every((n) => typeof n === "number" && n > 0)) return a; }
+      catch {}
+      return [];
+    };
+    let gridRowWeights = loadWeights("cockpit-grid-rowweights");
+    let gridColWeights = loadWeights("cockpit-grid-colweights");
     let mosaicFocusedProj = null; // projeto cujo card tem foco de digitação
     const gridCellCount = () => gridLayout.reduce((a, b) => a + b, 0);
+    // índice da 1ª célula de cada linha (offset acumulado) — pra mapear célula→linha
+    function rowColOffset(rowIndex) {
+      let off = 0;
+      for (let r = 0; r < rowIndex; r++) off += gridLayout[r];
+      return off;
+    }
     function saveGridState() {
       localStorage.setItem("cockpit-layout-mode", layoutMode);
       localStorage.setItem("cockpit-grid-layout", JSON.stringify(gridLayout));
       localStorage.setItem("cockpit-grid-slots", JSON.stringify(gridSlots));
+      localStorage.setItem("cockpit-grid-rowweights", JSON.stringify(gridRowWeights));
+      localStorage.setItem("cockpit-grid-colweights", JSON.stringify(gridColWeights));
       saveActiveTerms();
     }
     // Persiste qual terminal está selecionado em cada projeto ({projId: tid}).
@@ -4120,11 +4214,33 @@
         }
       });
     }
+    // Ajusta comprimento dos arrays de peso pra bater com o layout (fill com 1).
+    function syncGridWeights() {
+      const n = gridCellCount();
+      if (gridColWeights.length > n) gridColWeights = gridColWeights.slice(0, n);
+      while (gridColWeights.length < n) gridColWeights.push(1);
+      if (gridRowWeights.length > gridLayout.length) gridRowWeights = gridRowWeights.slice(0, gridLayout.length);
+      while (gridRowWeights.length < gridLayout.length) gridRowWeights.push(1);
+    }
     function normalizeSlots() {
       const n = gridCellCount();
       gridSlots = gridSlots.map((id) => (id && getProj(id) ? id : null));
-      if (gridSlots.length > n) gridSlots = gridSlots.slice(0, n);
+      // encolher: remove os VAZIOS primeiro (preserva os em uso), varrendo do fim,
+      // tirando o peso da coluna correspondente junto pra manter paralelo. Só se
+      // ainda exceder (mais projetos que células) corta do fim como último recurso.
+      if (gridSlots.length > n) {
+        let excess = gridSlots.length - n;
+        for (let i = gridSlots.length - 1; i >= 0 && excess > 0; i--) {
+          if (gridSlots[i] === null) {
+            gridSlots.splice(i, 1);
+            if (i < gridColWeights.length) gridColWeights.splice(i, 1);
+            excess--;
+          }
+        }
+        if (gridSlots.length > n) gridSlots = gridSlots.slice(0, n);
+      }
       while (gridSlots.length < n) gridSlots.push(null);
+      syncGridWeights();
     }
 
     // Settings (persistidas no localStorage)
@@ -5994,6 +6110,80 @@
       return cell;
     }
 
+    // ── Divisores arrastáveis do mosaico ─────────────────────────
+    // Splitter clássico: arrastar mexe só no par vizinho, preservando a soma dos
+    // pesos (o resto do grid fica fixo). Converte pixel→peso ao vivo; salva no fim.
+    // Duplo-clique iguala o par (volta a 50/50 entre os dois).
+    function attachResizer(el, opts) {
+      const MIN_PX = 60;
+      el.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        const [elA, elB] = opts.getPair();
+        if (!elA || !elB) return;
+        e.preventDefault();
+        const horiz = opts.axis === "x";
+        const rA = elA.getBoundingClientRect(), rB = elB.getBoundingClientRect();
+        const pxA0 = horiz ? rA.width : rA.height;
+        const pxB0 = horiz ? rB.width : rB.height;
+        const combinedPx = pxA0 + pxB0;
+        const wA0 = opts.weights[opts.idxA] ?? 1, wB0 = opts.weights[opts.idxB] ?? 1;
+        const combinedW = wA0 + wB0;
+        const start = horiz ? e.clientX : e.clientY;
+        const grid = document.getElementById("mosaicGrid");
+        grid.classList.add("resizing");
+        el.classList.add("dragging");
+        try { el.setPointerCapture(e.pointerId); } catch {}
+        const onMove = (ev) => {
+          const cur = horiz ? ev.clientX : ev.clientY;
+          let pxA = pxA0 + (cur - start);
+          pxA = Math.max(MIN_PX, Math.min(combinedPx - MIN_PX, pxA));
+          const wA = combinedW * (pxA / combinedPx);
+          const wB = combinedW - wA;
+          opts.weights[opts.idxA] = wA;
+          opts.weights[opts.idxB] = wB;
+          elA.style.flexGrow = String(wA);
+          elB.style.flexGrow = String(wB);
+        };
+        const onUp = () => {
+          try { el.releasePointerCapture(e.pointerId); } catch {}
+          el.removeEventListener("pointermove", onMove);
+          el.removeEventListener("pointerup", onUp);
+          el.removeEventListener("pointercancel", onUp);
+          grid.classList.remove("resizing");
+          el.classList.remove("dragging");
+          saveGridState();
+        };
+        el.addEventListener("pointermove", onMove);
+        el.addEventListener("pointerup", onUp);
+        el.addEventListener("pointercancel", onUp);
+      });
+      el.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        const wA = opts.weights[opts.idxA] ?? 1, wB = opts.weights[opts.idxB] ?? 1;
+        const avg = (wA + wB) / 2;
+        opts.weights[opts.idxA] = avg;
+        opts.weights[opts.idxB] = avg;
+        saveGridState();
+        renderMosaic();
+      });
+    }
+    function buildColResizer(aIdx, bIdx) {
+      const el = document.createElement("div");
+      el.className = "mosaic-col-resizer";
+      el.title = "Arraste para redimensionar · duplo-clique iguala";
+      attachResizer(el, { axis: "x", weights: gridColWeights, idxA: aIdx, idxB: bIdx,
+        getPair: () => [el.previousElementSibling, el.nextElementSibling] });
+      return el;
+    }
+    function buildRowResizer(topRowIndex) {
+      const el = document.createElement("div");
+      el.className = "mosaic-row-resizer";
+      el.title = "Arraste para redimensionar · duplo-clique iguala";
+      attachResizer(el, { axis: "y", weights: gridRowWeights, idxA: topRowIndex, idxB: topRowIndex + 1,
+        getPair: () => [el.previousElementSibling, el.nextElementSibling] });
+      return el;
+    }
+
     function renderMosaic() {
       if (layoutMode !== "mosaic") return;
       const app = document.querySelector(".app");
@@ -6023,22 +6213,25 @@
       });
       document.querySelectorAll(".terminal-instance").forEach((el) => el.classList.remove("active"));
 
-      // monta linhas (flex) com o nº de colunas de cada linha do gridLayout
+      // monta linhas (flex) com o nº de colunas de cada linha do gridLayout.
+      // Entre células adjacentes vai um divisor de coluna; entre linhas, um de linha.
+      // As proporções vêm de gridColWeights (largura) e gridRowWeights (altura).
       const grid = document.getElementById("mosaicGrid");
       grid.innerHTML = "";
       let idx = 0;
-      gridLayout.forEach((cols) => {
+      gridLayout.forEach((cols, r) => {
+        if (r > 0) grid.appendChild(buildRowResizer(r - 1)); // divisor entre linha r-1 e r
         const row = document.createElement("div");
         row.className = "mosaic-row";
-        let rowHasUsed = false;
+        row.style.flexGrow = String(gridRowWeights[r] ?? 1);
         for (let c = 0; c < cols; c++) {
+          if (c > 0) row.appendChild(buildColResizer(idx - 1, idx)); // divisor entre col c-1 e c
           const slot = gridSlots[idx];
-          if (slot && getProj(slot)) rowHasUsed = true;
-          row.appendChild(buildMosaicCell(slot, idx));
+          const cell = buildMosaicCell(slot, idx);
+          cell.style.flexGrow = String(gridColWeights[idx] ?? 1);
+          row.appendChild(cell);
           idx++;
         }
-        // linha com card em uso ocupa mais altura; linha só de vazios encolhe
-        row.style.flexGrow = rowHasUsed ? "3" : "1";
         grid.appendChild(row);
       });
       sendVisibleTerminals();
@@ -6046,6 +6239,72 @@
 
     // Editor de layout do mosaico — define quantas linhas e quantas colunas
     // por linha. Popover ancorado no botão "Layout" do topo; aplica ao vivo.
+    // modal de escolha: quando reduzir o mosaico deixa projetos fixados sem célula,
+    // pergunta qual(is) desafixar. onConfirm recebe o array de ids escolhidos.
+    function openUnpinChooser(usedProjIds, needToRemove, onConfirm) {
+      document.querySelectorAll(".unpin-modal, .unpin-backdrop").forEach((el) => el.remove());
+      const backdrop = document.createElement("div");
+      backdrop.className = "visibility-backdrop unpin-backdrop";
+      const modal = document.createElement("div");
+      modal.className = "unpin-modal";
+      const selected = new Set();
+
+      const close = () => { backdrop.remove(); modal.remove(); document.removeEventListener("keydown", onKey); };
+      const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+
+      const render = () => {
+        const plural = needToRemove > 1;
+        modal.innerHTML = `
+          <p class="unpin-desc">O novo layout tem menos células do que projetos fixados.
+          Escolha <b>${needToRemove}</b> projeto${plural ? "s" : ""} para <b>desafixar</b>.</p>
+          <div class="unpin-list">
+            ${usedProjIds.map((id) => {
+              const p = getProj(id);
+              if (!p) return "";
+              const on = selected.has(id) ? " on" : "";
+              return `<div class="unpin-row${on}" data-id="${escapeHtml(id)}">
+                <span class="unpin-dot" style="--proj-color:${p.color || "#5b8def"}"></span>
+                <span class="unpin-name">${escapeHtml(p.name)}</span>
+                <span class="unpin-check">${selected.has(id) ? "✓" : ""}</span>
+              </div>`;
+            }).join("")}
+          </div>
+          <div class="le-prop-actions">
+            <button class="le-prop-reset" data-cancel>Cancelar</button>
+            <button class="le-prop-apply" data-confirm ${selected.size === needToRemove ? "" : "disabled"}>Desafixar e aplicar</button>
+          </div>`;
+
+        modal.querySelectorAll(".unpin-row").forEach((row) => {
+          row.addEventListener("click", () => {
+            const id = row.dataset.id;
+            if (selected.has(id)) selected.delete(id);
+            else {
+              if (selected.size >= needToRemove) {
+                // substitui a seleção mais antiga quando só falta desafixar N
+                if (needToRemove === 1) selected.clear();
+                else return;
+              }
+              selected.add(id);
+            }
+            render();
+          });
+        });
+        modal.querySelector("[data-cancel]").addEventListener("click", close);
+        modal.querySelector("[data-confirm]").addEventListener("click", () => {
+          if (selected.size !== needToRemove) return;
+          const chosen = [...selected];
+          close();
+          onConfirm(chosen);
+        });
+      };
+
+      backdrop.addEventListener("click", close);
+      document.addEventListener("keydown", onKey);
+      render();
+      document.body.appendChild(backdrop);
+      document.body.appendChild(modal);
+    }
+
     function openLayoutEditor(anchor) {
       document.querySelectorAll(".layout-editor-pop, .layout-editor-backdrop").forEach((el) => el.remove());
       const backdrop = document.createElement("div");
@@ -6056,15 +6315,28 @@
       const trash = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>`;
       const sameLayout = (l) => l.length === gridLayout.length && l.every((n, i) => n === gridLayout[i]);
 
-      const apply = (newLayout) => {
-        let l = newLayout.map((n) => Math.max(1, Math.min(GRID_MAX_COLS, n)));
-        if (l.length > GRID_MAX_ROWS) l = l.slice(0, GRID_MAX_ROWS);
-        if (!l.length) l = [1];
+      const commit = (l) => {
         gridLayout = l;
         normalizeSlots();
         saveGridState();
         renderMosaic();
         render();
+      };
+      const apply = (newLayout) => {
+        let l = newLayout.map((n) => Math.max(1, Math.min(GRID_MAX_COLS, n)));
+        if (l.length > GRID_MAX_ROWS) l = l.slice(0, GRID_MAX_ROWS);
+        if (!l.length) l = [1];
+        const newCells = l.reduce((a, b) => a + b, 0);
+        const used = gridSlots.filter((id) => id && getProj(id));
+        // se os projetos fixados não cabem no novo nº de células, pergunta quais desafixar
+        if (used.length > newCells) {
+          openUnpinChooser(used, used.length - newCells, (toRemove) => {
+            toRemove.forEach((pid) => { const i = gridSlots.indexOf(pid); if (i >= 0) gridSlots[i] = null; });
+            commit(l);
+          });
+          return;
+        }
+        commit(l);
       };
 
       const render = () => {
@@ -6089,7 +6361,63 @@
               </div>`).join("")}
           </div>
           <button class="le-add" ${gridLayout.length >= GRID_MAX_ROWS ? "disabled" : ""}>+ adicionar linha</button>
-          <div class="le-hint">${gridCellCount()} células no total</div>`;
+          <div class="le-hint">${gridCellCount()} células no total</div>
+          <div class="le-sep"></div>
+          <div class="le-prop-title">Proporções (%)</div>
+          <div class="le-prop-rows">
+            ${gridLayout.map((cols, ri) => {
+              const off = rowColOffset(ri);
+              const rowSumH = gridRowWeights.reduce((a, w) => a + (w || 1), 0) || 1;
+              const hPct = Math.round(((gridRowWeights[ri] || 1) / rowSumH) * 100);
+              let colSum = 0;
+              for (let c = 0; c < cols; c++) colSum += (gridColWeights[off + c] || 1);
+              colSum = colSum || 1;
+              const colInputs = [];
+              for (let c = 0; c < cols; c++) {
+                const pct = Math.round(((gridColWeights[off + c] || 1) / colSum) * 100);
+                colInputs.push(`<input class="le-prop-in" data-col="${off + c}" type="number" min="5" max="95" value="${pct}">`);
+              }
+              const colsField = cols > 1
+                ? colInputs.join(`<span class="le-prop-x">·</span>`)
+                : `<span class="le-prop-x" style="font-size:11px">1 coluna</span>`;
+              return `
+                <div class="le-prop-row">
+                  <span class="le-prop-tag">Linha ${ri + 1}</span>
+                  <div class="le-prop-fields">
+                    <input class="le-prop-in h" data-rowh="${ri}" type="number" min="5" max="95" value="${hPct}" title="altura da linha (%)">
+                    <span class="le-prop-x">alt ·</span>
+                    ${colsField}
+                  </div>
+                </div>`;
+            }).join("")}
+          </div>
+          <div class="le-prop-actions">
+            <button class="le-prop-reset">resetar</button>
+            <button class="le-prop-apply">aplicar proporções</button>
+          </div>`;
+
+        pop.querySelector(".le-prop-apply").addEventListener("click", () => {
+          // colunas: peso = valor digitado (ratios; cada linha é seu próprio flex)
+          pop.querySelectorAll("[data-col]").forEach((inp) => {
+            const v = Math.max(1, Number(inp.value) || 1);
+            gridColWeights[+inp.dataset.col] = v;
+          });
+          // alturas: peso relativo entre as linhas
+          pop.querySelectorAll("[data-rowh]").forEach((inp) => {
+            const v = Math.max(1, Number(inp.value) || 1);
+            gridRowWeights[+inp.dataset.rowh] = v;
+          });
+          saveGridState();
+          renderMosaic();
+          render();
+        });
+        pop.querySelector(".le-prop-reset").addEventListener("click", () => {
+          gridColWeights = gridColWeights.map(() => 1);
+          gridRowWeights = gridRowWeights.map(() => 1);
+          saveGridState();
+          renderMosaic();
+          render();
+        });
 
         pop.querySelectorAll(".le-preset").forEach((b) =>
           b.addEventListener("click", () => apply(GRID_PRESETS[+b.dataset.preset].layout.slice())));
@@ -6106,7 +6434,7 @@
         const a = document.getElementById("mosaicLayoutBtn") || anchor;
         const r = a.getBoundingClientRect();
         pop.style.top = (r.bottom + 8) + "px";
-        pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 280)) + "px";
+        pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 308)) + "px";
       };
 
       const close = () => { backdrop.remove(); pop.remove(); document.removeEventListener("keydown", onKey); };
@@ -6569,11 +6897,26 @@
       const strip = document.getElementById("topRevealStrip");
       const toggle = document.getElementById("topAutoHideToggle");
 
-      // rastreia o mouse: perto do topo → mostra e cancela; longe → agenda esconder
+      // só a faixa central (~10%) revela a barra oculta; os lados não reagem
+      const inTopRevealZone = (x) => {
+        const r = strip?.getBoundingClientRect();
+        if (!r) return false;
+        const pad = 14; // folga lateral pra facilitar acertar a faixa
+        return x >= r.left - pad && x <= r.right + pad;
+      };
+      // rastreia o mouse:
+      //  - barra OCULTA: só revela no topo E dentro da faixa central
+      //  - barra VISÍVEL: mantém enquanto o mouse está no topo (qualquer x); senão agenda esconder
       document.addEventListener("mousemove", (e) => {
         if (!topAutoHide) return;
-        if (e.clientY <= TOP_HOVER_ZONE) showTopBar();
-        else if (!topBarHidden && !topHideTimer) scheduleHideTopBar();
+        const nearTop = e.clientY <= TOP_HOVER_ZONE;
+        if (topBarHidden) {
+          if (nearTop && inTopRevealZone(e.clientX)) showTopBar();
+        } else if (nearTop) {
+          showTopBar();
+        } else if (!topHideTimer) {
+          scheduleHideTopBar();
+        }
       });
       // passar o mouse na faixa central revela na hora
       strip?.addEventListener("mouseenter", showTopBar);
