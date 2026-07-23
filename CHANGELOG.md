@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.16.1] — 2026-07-23
+
+### Corrigido (mosaico — espaço para o que está em uso)
+- **Cards vazios cedem espaço para os em uso.** Antes todas as células do mosaico dividiam o
+  espaço igualmente, então um terminal ativo ficava do mesmo tamanho de uma célula vazia. Agora
+  o card **em uso** (com projeto fixado) ocupa mais espaço e a célula **vazia** (o "clique para
+  escolher um projeto") encolhe — tanto na horizontal (dentro da linha) quanto na vertical
+  (linha só de vazios fica mais baixa). A mudança é animada com transição suave e o terminal se
+  re-ajusta sozinho ao novo tamanho.
+
+---
+
 ## [0.16.0] — 2026-07-23
 
 ### Adicionado (visão geral do topo + auto-ocultar a barra)

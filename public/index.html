@@ -1281,9 +1281,21 @@
       gap: 6px; padding: 6px;
     }
     .app.mosaic .mosaic-grid { display: flex; }
-    .mosaic-row { display: flex; flex: 1; gap: 6px; min-height: 0; }
+    /* Distribuição de espaço: o que está EM USO (card com projeto) ocupa mais;
+       o que está VAZIO (drop, sem projeto) cede espaço — na horizontal (dentro
+       da linha) e na vertical (linha só de vazios encolhe). Ratios em vars pra
+       ajuste fácil. flex-basis 0 pra o grow mandar; transição suave no resize. */
+    .mosaic-row {
+      display: flex; flex: 1 1 0; gap: 6px; min-height: 0;
+      transition: flex-grow 220ms cubic-bezier(.4, 0, .2, 1);
+    }
     .mosaic-row > .mosaic-card,
-    .mosaic-row > .mosaic-drop { flex: 1; min-width: 0; }
+    .mosaic-row > .mosaic-drop {
+      flex: 1 1 0; min-width: 0;
+      transition: flex-grow 220ms cubic-bezier(.4, 0, .2, 1);
+    }
+    .mosaic-row > .mosaic-card { flex-grow: var(--mosaic-used-grow, 3); }
+    .mosaic-row > .mosaic-drop { flex-grow: var(--mosaic-empty-grow, 1); }
 
     .mosaic-card {
       display: flex; flex-direction: column;
@@ -6018,10 +6030,15 @@
       gridLayout.forEach((cols) => {
         const row = document.createElement("div");
         row.className = "mosaic-row";
+        let rowHasUsed = false;
         for (let c = 0; c < cols; c++) {
-          row.appendChild(buildMosaicCell(gridSlots[idx], idx));
+          const slot = gridSlots[idx];
+          if (slot && getProj(slot)) rowHasUsed = true;
+          row.appendChild(buildMosaicCell(slot, idx));
           idx++;
         }
+        // linha com card em uso ocupa mais altura; linha só de vazios encolhe
+        row.style.flexGrow = rowHasUsed ? "3" : "1";
         grid.appendChild(row);
       });
       sendVisibleTerminals();
