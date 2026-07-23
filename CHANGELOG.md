@@ -10,6 +10,24 @@ _(nada ainda)_
 
 ---
 
+## [0.16.0] — 2026-07-23
+
+### Adicionado (visão geral do topo + auto-ocultar a barra)
+- **Painel "Aberto agora"** — um botão novo na barra de título (ao lado do contador de
+  _aguardando_) abre, ao **clique**, um dropdown listando todos os projetos que têm terminais
+  abertos e seus terminais, com o estado de cada um (rodando / aguardando / ocioso / erro).
+  Cada terminal tem um **X sempre visível** pra encerrar dali mesmo, sem precisar entrar na
+  aba (pede confirmação se estiver ativo). Clique no terminal foca nele. O botão ganha um
+  **badge laranja** quando há algo aguardando. Fecha com `Esc`, no X do cabeçalho ou clicando
+  fora.
+- **Auto-ocultar a barra do topo** — a barra de título recolhe sozinha **5s** depois que o
+  mouse sai da região do topo, com transição suave (a linha do grid colapsa e a barra desliza
+  pra cima, liberando espaço pro terminal/mosaico). Pra trazer de volta, é só levar o mouse
+  ao topo (ou à faixa central bem no topo). Um **toggle no rodapé do painel** liga/desliga o
+  comportamento (salvo entre sessões, ligado por padrão). Funciona no modo foco e no mosaico.
+
+---
+
 ## [0.15.0] — 2026-07-23
 
 ### Adicionado (cor do projeto pelo card)
