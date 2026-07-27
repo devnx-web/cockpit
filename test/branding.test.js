@@ -35,3 +35,27 @@ test("consumption panel removed — never renders managed account identities", (
   assert.doesNotMatch(html, /usage-acc-name/);
   assert.doesNotMatch(html, /title="\$\{acc\.email\}"/);
 });
+
+test("license provisioning and team settings expose only the Ailiv brand", () => {
+  const html = fs.readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
+  const server = fs.readFileSync(path.join(ROOT, "server.js"), "utf8");
+  const license = fs.readFileSync(path.join(ROOT, "lib", "team-terminal-license.js"), "utf8");
+
+  assert.match(server, /solicitando licenças Ailiv ao backend/);
+  assert.match(server, /Licenças Ailiv recebidas do backend/);
+  assert.doesNotMatch(server, /solicitando licenças Claude e Codex ao backend/);
+  assert.doesNotMatch(server, /Licenças Claude e Codex recebidas do backend/);
+  assert.match(license, /backend não retornou todas as licenças Ailiv/);
+  assert.match(html, /sessões Ailiv já abertas/);
+  assert.match(html, /uma chamada Ailiv que receba 401/);
+  assert.match(html, /Voz \(Ailiv\)/);
+  assert.match(html, /label: "Ailiv API key"/);
+  assert.match(html, /title: "Ailiv TTS"/);
+  assert.match(html, /Remover a chave Ailiv\?/);
+  assert.doesNotMatch(html, /sessões Claude já abertas/);
+  assert.doesNotMatch(html, /uma chamada Claude que receba 401/);
+  assert.doesNotMatch(html, /Voz \(OpenAI\)/);
+  assert.doesNotMatch(html, /label: "OpenAI API key"/);
+  assert.doesNotMatch(html, /title: "OpenAI TTS"/);
+  assert.doesNotMatch(html, /Remover a chave OpenAI\?/);
+});

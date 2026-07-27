@@ -1,0 +1,9 @@
+# Adicione este bloco a %USERPROFILE%\.codex\config.toml.
+# setup-windows.ps1 faz a inclusão idempotente sem gravar o token no arquivo.
+[mcp_servers.cockpit_linux]
+url = "http://127.0.0.1:3740/mcp"
+bearer_token_env_var = "COCKPIT_MCP_TOKEN"
+startup_timeout_sec = 15
+tool_timeout_sec = 45
+required = false
+default_tools_approval_mode = "writes"

@@ -1,0 +1,26 @@
+{
+  "name": "@cockpit/integration-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP STDIO and Streamable HTTP adapter for the Cockpit loopback control API",
+  "bin": {
+    "cockpit-mcp": "src/index.js",
+    "cockpit-mcp-ssh": "bin/cockpit-mcp-ssh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js --stdio",
+    "start:http": "node src/index.js --http",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "3.25.76"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.11"
+  }
+}

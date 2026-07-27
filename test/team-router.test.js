@@ -131,6 +131,30 @@ test("stale PTY selections are refreshed once and concurrent refreshes are dedup
   assert.equal(materializations, 2);
 });
 
+test("maxAgeMs zero forces a fresh backend selection for every terminal", async () => {
+  const selected = {};
+  let selections = 0;
+  const client = fakeClient({
+    status: () => ({
+      connected: true,
+      baseUrl: "https://control.example",
+      selected,
+    }),
+    selectBest: async (provider) => {
+      selections += 1;
+      const account = { id: `${provider}-${selections}`, provider, label: provider };
+      selected[provider] = account;
+      return { account };
+    },
+  });
+  const router = createTeamRouter({ client, brokerUrl: () => BROKER_URL });
+
+  await router.refreshSelectionsIfStale({ maxAgeMs: 0, retryMissingProviders: 0 });
+  await router.refreshSelectionsIfStale({ maxAgeMs: 0, retryMissingProviders: 0 });
+
+  assert.equal(selections, 4);
+});
+
 test("PTY preparation retries a transient missing provider selection", async () => {
   const selected = {};
   let openAiAttempts = 0;

@@ -1,0 +1,33 @@
+PONTE WINDOWS -> COCKPIT LINUX
+================================
+
+1. No Linux, execute:
+
+   ./integrations/windows-voice/bridge/start-enrollment.sh
+
+2. Na VM, abra PowerShell neste disco compartilhado e execute:
+
+   powershell -ExecutionPolicy Bypass -File .\bridge\setup-windows.ps1
+
+   Cole o token de uso único mostrado no terminal Linux. As duas chaves
+   privadas são criadas no Windows e nunca saem da VM.
+
+3. Reinicie o Windows para que o app herde a variável de autenticação. Em
+   Settings > MCP servers, confirme que cockpit_linux aparece. O túnel inicia
+   em cada login e reconecta sozinho após quedas.
+
+4. Para trabalhar diretamente no repositório Linux, abra
+   Settings > Connections, habilite o host cockpit-linux-dev e selecione:
+
+   /home/ftgk/cockpit
+
+   Essa é uma conexão de desenvolvimento com shell. Ela é deliberadamente
+   separada da chave cockpit-linux-mcp, que só pode encaminhar a porta 3740.
+
+Diagnóstico no PowerShell:
+
+   ssh cockpit-linux-dev "cd /home/ftgk/cockpit && git status --short"
+   Test-NetConnection 127.0.0.1 -Port 3740
+
+O SSH Linux escuta somente em 127.0.0.1:22222. Na rede NAT da VM ele é
+alcançado como 10.0.2.2:22222; não há listener SSH nem MCP na Wi-Fi.

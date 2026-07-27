@@ -234,7 +234,7 @@ class App:
     def __init__(self) -> None:
         self.cfg = load_config()
         self.root = tk.Tk()
-        self.root.title("J.A.R.V.I.S. — Claude Voice")
+        self.root.title("J.A.R.V.I.S. — Ailiv Voice")
         self.root.geometry("900x940")
         self.root.configure(bg=BG)
         self.root.minsize(820, 880)
@@ -260,7 +260,7 @@ class App:
         title = tk.Label(header, text="J.A.R.V.I.S.", bg=BG, fg=CYAN,
                          font=("Sans", 24, "bold"))
         title.pack(side="left")
-        sub = tk.Label(header, text="  Claude Voice Interface", bg=BG, fg=TXT_DIM,
+        sub = tk.Label(header, text="  Ailiv Voice Interface", bg=BG, fg=TXT_DIM,
                        font=("Sans", 11))
         sub.pack(side="left", pady=(8, 0))
 
@@ -288,7 +288,7 @@ class App:
 
         en_row = tk.Frame(c_voice.body, bg=CARD)
         en_row.pack(fill="x", pady=4)
-        tk.Checkbutton(en_row, text="Falar quando o Claude terminar",
+        tk.Checkbutton(en_row, text="Falar quando o Ailiv terminar",
                        variable=self.enabled, bg=CARD, fg=TXT, selectcolor=CARD_HI,
                        activebackground=CARD, activeforeground=CYAN,
                        font=("Sans", 10), bd=0, highlightthickness=0).pack(side="left")

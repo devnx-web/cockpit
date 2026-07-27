@@ -110,7 +110,7 @@ class OpenAITtsEngine:
         self._stop_flag = threading.Event()
         api_key = get_api_key(cfg)
         if not api_key:
-            log("[openai] API key não encontrada — defina openai_api_key no config ou OPENAI_API_KEY no env", cfg)
+            log("[Ailiv] API key não encontrada — configure a chave Ailiv nas Configurações", cfg)
         self._api_key = api_key
         # Pool de conexões persistentes — uma pro chat (mini), outra pro TTS.
         # Mantém HTTPS keep-alive aberto entre chamadas, elimina TLS handshake
@@ -129,7 +129,7 @@ class OpenAITtsEngine:
         self._pcm_cache_hits = 0
         self._pcm_cache_misses = 0
         log(
-            f"engine OpenAI TTS pronto (voice={cfg.get('openai_voice', 'nova')}, "
+            f"engine Ailiv TTS pronto (voice={cfg.get('openai_voice', 'nova')}, "
             f"tts_model={cfg.get('openai_model', 'gpt-4o-mini-tts')}, "
             f"speech_mode={cfg.get('speech_mode', 'verbatim')}, "
             f"summarize_model={(cfg.get('summarize') or {}).get('model', 'gpt-4o-mini')})",

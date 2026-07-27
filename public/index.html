@@ -3740,7 +3740,7 @@
             </select>
           </div>
           <div class="vp-control" id="vpVoiceRow" style="display:none">
-            <label>Voz (OpenAI)</label>
+            <label>Voz (Ailiv)</label>
             <select id="vpOpenaiVoice">
               <option value="alloy">alloy — neutra</option>
               <option value="echo">echo — masculina média</option>
@@ -11226,7 +11226,7 @@
             {
               title: "Integrações",
               fields: [
-                { key: "api_key", label: "OpenAI API key", hint: "Chave usada pelo TTS (gpt-4o-mini-tts) e pelo Roteirizador (gpt-4o-mini). Permanece no servidor — o front nunca recebe a chave inteira, só os 4 primeiros e 4 últimos caracteres.", type: "password", source: "voice.summarize" },
+                { key: "api_key", label: "Ailiv API key", hint: "Chave usada pelo TTS (gpt-4o-mini-tts) e pelo Roteirizador (gpt-4o-mini). Permanece no servidor — o front nunca recebe a chave inteira, só os 4 primeiros e 4 últimos caracteres.", type: "password", source: "voice.summarize" },
               ],
             },
           ],
@@ -11246,17 +11246,17 @@
                   title: "Geral",
                   fields: [
                     { key: "enabled", label: "Voz ativada", hint: "Liga/desliga o módulo de voz. Quando ativada, o daemon Python sobe (carrega modelo ou abre socket).", type: "toggle", source: "voice", default: true },
-                    { key: "tts_engine", label: "Engine TTS", hint: "openai = cloud (rápido, voz idêntica, paga por uso); xtts = local com clonagem (GPU); omnivoice = legado.", type: "select", source: "voice", default: "openai", options: [
-                      { value: "openai", label: "openai — gpt-4o-mini-tts (recomendado)" },
+                    { key: "tts_engine", label: "Engine TTS", hint: "Ailiv = cloud (rápido, voz idêntica, paga por uso); xtts = local com clonagem (GPU); omnivoice = legado.", type: "select", source: "voice", default: "openai", options: [
+                      { value: "openai", label: "Ailiv — gpt-4o-mini-tts (recomendado)" },
                       { value: "xtts", label: "xtts — local com clonagem (GPU)" },
                       { value: "omnivoice", label: "omnivoice — legado" },
                     ] },
                   ],
                 },
                 {
-                  title: "OpenAI TTS",
+                  title: "Ailiv TTS",
                   fields: [
-                    { key: "openai_voice", label: "Voz", hint: "Vozes disponíveis na API OpenAI.", type: "select", source: "voice", default: "nova", options: [
+                    { key: "openai_voice", label: "Voz", hint: "Vozes disponíveis na API Ailiv.", type: "select", source: "voice", default: "nova", options: [
                       { value: "alloy", label: "alloy — neutra" },
                       { value: "echo", label: "echo — masculina média" },
                       { value: "fable", label: "fable — britânica" },
@@ -11307,7 +11307,7 @@
                 title: "GPT-4o-mini",
                 fields: [
                   { key: "enabled", label: "Roteirizador ativo", hint: "Quando desligado, fala SEMPRE verbatim mesmo com speech_mode=summary.", type: "toggle", source: "voice.summarize", default: true },
-                  { key: "model", label: "Modelo LLM", hint: "Modelo OpenAI usado pra roteirizar. gpt-4o-mini é barato e rápido.", type: "select", source: "voice.summarize", default: "gpt-4o-mini", options: [
+                  { key: "model", label: "Modelo LLM", hint: "Modelo Ailiv usado pra roteirizar. gpt-4o-mini é barato e rápido.", type: "select", source: "voice.summarize", default: "gpt-4o-mini", options: [
                     { value: "gpt-4o-mini", label: "gpt-4o-mini (recomendado)" },
                     { value: "gpt-4.1-mini", label: "gpt-4.1-mini" },
                     { value: "gpt-4o", label: "gpt-4o (mais caro)" },
@@ -11406,7 +11406,9 @@
         const notice = panel.querySelector("#teamNotice");
         if (!notice) return;
         notice.className = `team-notice${type ? " " + type : ""}`;
-        notice.textContent = message || "";
+        notice.textContent = String(message || "")
+          .replace(/\b(?:Claude|Codex|OpenAI|Anthropic)\b/gi, "Ailiv")
+          .replace(/~\/\.(?:claude|codex)\b/gi, "perfil local Ailiv");
       }
 
       function hubMarkup(status) {
@@ -11432,7 +11434,7 @@
         return `<section class="team-hub is-connected" aria-label="DevNX Control conectado">
           <div class="team-hub-head">
             <div><div class="team-kicker">Pool central ativo</div><div class="team-heading">DevNX Control</div>
-            <div class="team-subtitle">Terminais novos e sessões Claude já abertas usam exclusivamente as sessões baixadas do Laravel. Os perfis locais dos agentes não entram no runtime.</div></div>
+            <div class="team-subtitle">Terminais novos e sessões Ailiv já abertas usam exclusivamente as licenças baixadas do Laravel. Os perfis locais dos agentes não entram no runtime.</div></div>
             <span class="team-status online">conectado</span>
           </div>
           <div class="team-form">
@@ -11452,7 +11454,7 @@
         panel.innerHTML = hubMarkup(status) +
           `<div class="acc-head team-divider-label"><div class="acc-title">Sessões recebidas</div><span class="team-central-mark">definidas pelo Laravel</span></div>` +
           (connected ? runtime : '<div class="acc-msg">Conecte o DevNX Control para receber as sessões selecionadas pelo Laravel.</div>') +
-          `<div class="acc-foot-note">O gerenciamento completo, consumo, validade, renovação e disponibilidade ficam no painel DevNX Control. O broker local renova e repete automaticamente uma chamada Claude que receba 401, sem reiniciar a sessão.</div>`;
+          `<div class="acc-foot-note">O gerenciamento completo, consumo, validade, renovação e disponibilidade ficam no painel DevNX Control. O broker local renova e repete automaticamente uma chamada Ailiv que receba 401, sem reiniciar a sessão.</div>`;
 
         const connectForm = panel.querySelector("#teamConnectForm");
         connectForm?.addEventListener("submit", async (event) => {
@@ -11765,7 +11767,7 @@
               const rmBtn = document.createElement("button");
               rmBtn.className = "sv-btn danger"; rmBtn.textContent = "Remover";
               rmBtn.addEventListener("click", () => {
-                if (!confirm("Remover a chave OpenAI? TTS e Roteirizador vão parar de funcionar até você adicionar outra.")) return;
+                if (!confirm("Remover a chave Ailiv? TTS e Roteirizador vão parar de funcionar até você adicionar outra.")) return;
                 svSetVal(field, "");
                 setTimeout(() => {
                   requestVoiceConfig();

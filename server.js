@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import url from "url";
 import os from "os";
+import { randomUUID } from "node:crypto";
 import { execFile } from "child_process";
 import { WebSocketServer } from "ws";
 import pkg from "node-pty";
@@ -13,7 +14,21 @@ import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
 import { createTeamAccountsClient } from "./lib/team-accounts.js";
 import { createTeamRouter } from "./lib/team-router.js";
 import { interactiveTerminalEnv } from "./lib/terminal-env.js";
+import {
+  createTerminalLicenseRetry,
+  formatTerminalLicenseDelay,
+  requireFreshTerminalSelections,
+} from "./lib/team-terminal-license.js";
 import { createFileSearchService } from "./lib/file-search.js";
+import {
+  appendControlOutputEvent,
+  CONTROL_API_PREFIX,
+  createControlApi,
+  loadControlPolicy,
+  normalizeControlPolicy,
+  removeControlDescriptor,
+  writeControlDescriptor,
+} from "./lib/control-api.js";
 const { spawn } = pkg;
 
 // === config dinâmica — populada por startServer() ===
@@ -24,6 +39,8 @@ let PUBLIC_DIR = path.join(DEFAULT_ROOT, "public");
 let PROJECTS_PATH = path.join(DEFAULT_ROOT, "projects.json");
 let PROJECTS = []; // populado em startServer()
 let SERVER_URL = null;
+let controlApi = null;
+let controlDescriptorPath = null;
 const teamAccounts = createTeamAccountsClient();
 const teamRouter = createTeamRouter({
   client: teamAccounts,
@@ -36,6 +53,7 @@ const TEAM_AUTH_ERROR_PATTERN = /(?:not logged in[\s\S]{0,120}please run \/login
 let teamSelectionSyncTimer = null;
 let teamAuthRecoveryPromise = null;
 let lastTeamAuthRecoveryAt = 0;
+let terminalSelectionQueue = Promise.resolve();
 // Versão do app — lida uma vez do package.json e enviada ao cliente no hello.
 // Evita ter o número hardcoded em vários lugares e sair de sincronia.
 const APP_VERSION = (() => {
@@ -67,10 +85,10 @@ async function syncTeamSelections(log = console) {
   try {
     const result = await teamRouter.bootstrap({ syncUsage: true });
     for (const warning of result.warnings || []) {
-      log.log(`  \x1b[33m⚠\x1b[0m ${warning}`);
+      log.log(`  \x1b[33m⚠\x1b[0m ${safeVisibleAilivMessage(warning)}`);
     }
   } catch (error) {
-    log.log(`\x1b[33m▸ cockpit pool\x1b[0m sincronização indisponível: ${error.message}`);
+    log.log(`\x1b[33m▸ cockpit pool\x1b[0m sincronização indisponível: ${safeVisibleAilivMessage(error)}`);
   }
 }
 
@@ -91,18 +109,18 @@ function recoverTeamAuthAfterError(terminal, data, log = console) {
     .then((result) => {
       const openai = result.selections?.find((selection) => selection.provider === "openai");
       if (openai) {
-        log.log(`\x1b[32m▸ cockpit pool\x1b[0m credencial Codex recuperada após falha de autenticação`);
+        log.log(`\x1b[32m▸ cockpit pool\x1b[0m credencial Ailiv recuperada após falha de autenticação`);
       }
       const claude = result.selections?.find((selection) => selection.provider === "claude");
       if (claude) {
-        log.log(`\x1b[32m▸ cockpit pool\x1b[0m credencial Claude atualizada após 401; a sessão aberta usará a nova seleção`);
+        log.log(`\x1b[32m▸ cockpit pool\x1b[0m credencial Ailiv atualizada após 401; a sessão aberta usará a nova seleção`);
       }
       for (const warning of result.warnings || []) {
-        log.log(`  \x1b[33m⚠\x1b[0m ${warning}`);
+        log.log(`  \x1b[33m⚠\x1b[0m ${safeVisibleAilivMessage(warning)}`);
       }
     })
     .catch((error) => {
-      log.log(`\x1b[33m▸ cockpit pool\x1b[0m recuperação de autenticação indisponível: ${error.message}`);
+      log.log(`\x1b[33m▸ cockpit pool\x1b[0m recuperação de autenticação indisponível: ${safeVisibleAilivMessage(error)}`);
     })
     .finally(() => {
       teamAuthRecoveryPromise = null;
@@ -117,7 +135,147 @@ function startTeamSelectionSync(log = console) {
   teamSelectionSyncTimer.unref?.();
 }
 
-async function createTerminalIn(session, name = null) {
+function appendTerminalOutput(session, terminal, data) {
+  const output = String(data || "");
+  if (!output) return;
+  terminal.lastOutputTime = Date.now();
+  appendControlOutputEvent(terminal, output);
+  terminal.buffer.push(output);
+  terminal.bufferSize += output.length;
+  while (terminal.bufferSize > terminal.maxBufferSize && terminal.buffer.length > 1) {
+    terminal.bufferSize -= terminal.buffer.shift().length;
+  }
+  broadcast({
+    type: "output",
+    projectId: session.proj.id,
+    terminalId: terminal.id,
+    data: output,
+  });
+}
+
+function setTerminalStatus(session, terminal, status, statusText) {
+  terminal.status = status;
+  terminal.statusText = statusText;
+  broadcastTerminalStatus(session, terminal);
+}
+
+function safeVisibleAilivMessage(value) {
+  const message = typeof value === "string" ? value : value?.message;
+  return String(message || "serviço central indisponível")
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/(token|password|authorization|credential)(\s*[:=]\s*)\S+/gi, "$1$2[redacted]")
+    .replace(/\b(?:Claude|Codex|OpenAI|Anthropic)\b/gi, "Ailiv")
+    .replace(/~\/\.(?:claude|codex)\b/gi, "perfil local Ailiv")
+    .slice(0, 240);
+}
+
+function safeTerminalAuthError(error) {
+  return safeVisibleAilivMessage(error);
+}
+
+function serializeTerminalSelection(task) {
+  const queued = terminalSelectionQueue.then(task);
+  terminalSelectionQueue = queued.catch(() => {});
+  return queued;
+}
+
+function attachTerminalPty(session, terminal, { cwd, pathOk }) {
+  if (terminal.authCancelled || session.terminals.get(terminal.id) !== terminal) return;
+
+  const baseEnv = interactiveTerminalEnv(process.env, session.proj.env, {
+    COCKPIT_PROJECT: session.proj.id,
+    COCKPIT_TERMINAL: terminal.id,
+    COCKPIT: "1",
+  });
+  // This call is intentionally strict. If broker environment preparation
+  // fails, no host shell is spawned and the online retry loop remains active.
+  const terminalEnv = teamRouter.enrichPtyEnv(baseEnv, {
+    claudeProjectPath: pathOk ? cwd : undefined,
+  });
+  const pty = spawn(session.proj.shell || defaultShell(), [], {
+    name: "xterm-256color",
+    cols: terminal.cols,
+    rows: terminal.rows,
+    cwd,
+    env: terminalEnv,
+  });
+
+  terminal.pty = pty;
+  terminal.exited = false;
+  terminal.exitCode = null;
+  terminal.exitSignal = null;
+
+  pty.onData((data) => {
+    recoverTeamAuthAfterError(terminal, data);
+    appendTerminalOutput(session, terminal, data);
+    updateTerminalStatus(session, terminal);
+  });
+
+  pty.onExit((evt) => {
+    terminal.exited = true;
+    terminal.exitCode = Number.isInteger(evt.exitCode) ? evt.exitCode : null;
+    terminal.exitSignal = evt.signal ?? null;
+    terminal.status = evt.exitCode === 0 ? "idle" : "error";
+    terminal.statusText =
+      evt.exitCode === 0 ? "shell encerrado" : `falhou (exit ${evt.exitCode})`;
+    broadcastTerminalStatus(session, terminal);
+  });
+
+  appendTerminalOutput(
+    session,
+    terminal,
+    "\x1b[32m[cockpit] Licenças Ailiv recebidas do backend. Iniciando terminal…\x1b[0m\r\n",
+  );
+  setTerminalStatus(
+    session,
+    terminal,
+    pathOk ? "idle" : "error",
+    pathOk ? "iniciando…" : "path do projeto não existe",
+  );
+}
+
+function startTerminalLicenseProvisioning(session, terminal, context) {
+  const retry = createTerminalLicenseRetry({
+    attempt: () => serializeTerminalSelection(async () => {
+      const result = await teamRouter.refreshSelectionsIfStale({
+        maxAgeMs: 0,
+        retryMissingProviders: 0,
+      });
+      requireFreshTerminalSelections(result);
+      if (terminal.authCancelled || session.terminals.get(terminal.id) !== terminal) return result;
+      attachTerminalPty(session, terminal, context);
+      return result;
+    }),
+    onAttempt: ({ attempt }) => {
+      if (terminal.authCancelled) return;
+      appendTerminalOutput(
+        session,
+        terminal,
+        `\x1b[36m[cockpit] Tentativa ${attempt}: solicitando licenças Ailiv ao backend…\x1b[0m\r\n`,
+      );
+      setTerminalStatus(session, terminal, "waiting", `buscando licença online · tentativa ${attempt}`);
+    },
+    onFailure: (error, { delayMs }) => {
+      if (terminal.authCancelled) return;
+      const delay = formatTerminalLicenseDelay(delayMs);
+      appendTerminalOutput(
+        session,
+        terminal,
+        `\x1b[31m[cockpit] Licenças online indisponíveis: ${safeTerminalAuthError(error)}\x1b[0m\r\n`
+          + `\x1b[33m[cockpit] Nova tentativa em ${delay}. Nenhuma licença local será usada.\x1b[0m\r\n`,
+      );
+      setTerminalStatus(session, terminal, "waiting", `licença online · nova tentativa em ${delay}`);
+    },
+    onSuccess: () => {
+      terminal.authRetry = null;
+    },
+  });
+  terminal.authRetry = retry;
+  const startTimer = setTimeout(() => retry.start(), 0);
+  startTimer.unref?.();
+}
+
+async function createTerminalIn(session, name = null, meta = {}) {
   const tid = `t${session.nextId++}`;
   const projPath = session.proj.path;
   const pathOk = projPath && fs.existsSync(projPath);
@@ -129,99 +287,55 @@ async function createTerminalIn(session, name = null) {
     );
   }
 
-  // Provider access tokens are intentionally kept only in the Cockpit
-  // process. Refresh the central selection before creating a PTY so an app
-  // left open overnight cannot inject yesterday's token into a new shell.
-  if (teamRouter.status().connected) {
-    const refreshed = await teamRouter.refreshSelectionsIfStale();
-    for (const warning of refreshed.warnings || []) {
-      console.warn(`[cockpit/team] ${warning}`);
-    }
-  }
-
-  const baseEnv = interactiveTerminalEnv(process.env, session.proj.env, {
-    COCKPIT_PROJECT: session.proj.id,
-    COCKPIT_TERMINAL: tid,
-    COCKPIT: "1",
-  });
-  let terminalEnv = baseEnv;
-  try {
-    terminalEnv = teamRouter.enrichPtyEnv(baseEnv, {
-      claudeProjectPath: pathOk ? cwd : undefined,
-    });
-  } catch (error) {
-    console.warn(`[cockpit/team] terminal sem pool central: ${error.message}`);
-  }
-
-  const pty = spawn(session.proj.shell || defaultShell(), [], {
-    name: "xterm-256color",
-    cols: 120,
-    rows: 30,
-    cwd,
-    env: terminalEnv,
-  });
-
   const terminal = {
     id: tid,
     name: name || `Terminal ${session.terminals.size + 1}`,
-    pty,
+    pty: null,
+    cols: 120,
+    rows: 30,
     buffer: [],
     bufferSize: 0,
     maxBufferSize: 200 * 1024,
+    owner: meta.owner === "mcp" ? "mcp" : "ui",
+    controlGeneration: randomUUID(),
+    outputSequence: 0,
+    outputEvents: [],
+    outputEventBytes: 0,
     lastOutputTime: Date.now(),
     lastInputTime: Date.now(), // reaper: atividade = max(output, input)
     lastSeenTime: Date.now(),  // reaper: última vez visível num cliente
     reapWarned: false,         // reaper: já avisou que vai encerrar
     exited: false,             // shell morreu (onExit) → reapável
-    status: pathOk ? "idle" : "error",
-    statusText: pathOk ? "iniciando…" : "path do projeto não existe",
+    exitCode: null,
+    exitSignal: null,
+    status: "waiting",
+    statusText: "aguardando licença online…",
     authErrorTail: "",
+    authRetry: null,
+    authCancelled: false,
   };
+
+  session.terminals.set(tid, terminal);
 
   if (!pathOk) {
     const warn =
       `\x1b[33m[cockpit] Path do projeto não existe: ${projPath}\r\n` +
       `[cockpit] Abrindo em ${cwd} (fallback)\x1b[0m\r\n`;
-    terminal.buffer.push(warn);
-    terminal.bufferSize += warn.length;
+    appendTerminalOutput(session, terminal, warn);
   }
 
-  pty.onData((data) => {
-    recoverTeamAuthAfterError(terminal, data);
-    terminal.lastOutputTime = Date.now();
-    terminal.buffer.push(data);
-    terminal.bufferSize += data.length;
-    while (terminal.bufferSize > terminal.maxBufferSize && terminal.buffer.length > 1) {
-      terminal.bufferSize -= terminal.buffer.shift().length;
-    }
-    broadcast({
-      type: "output",
-      projectId: session.proj.id,
-      terminalId: tid,
-      data,
-    });
-    updateTerminalStatus(session, terminal);
-  });
-
-  pty.onExit((evt) => {
-    terminal.exited = true;
-    terminal.status = evt.exitCode === 0 ? "idle" : "error";
-    terminal.statusText =
-      evt.exitCode === 0 ? "shell encerrado" : `falhou (exit ${evt.exitCode})`;
-    broadcastTerminalStatus(session, terminal);
-  });
-
-  session.terminals.set(tid, terminal);
+  startTerminalLicenseProvisioning(session, terminal, { cwd, pathOk });
   return terminal;
 }
 
-async function createSession(proj) {
+async function createSession(proj, { autoTerminal = true } = {}) {
   const session = {
     proj,
     terminals: new Map(),
     nextId: 1,
   };
   sessions.set(proj.id, session);
+  if (!autoTerminal) return session;
   // cada projeto começa com 1 terminal default
   try {
     await createTerminalIn(session, "Terminal 1");
@@ -238,11 +352,16 @@ async function createSession(proj) {
 function killTerminal(session, tid) {
   const t = session.terminals.get(tid);
   if (!t) return false;
-  try {
-    t.pty.kill();
-  } catch {}
+  t.authCancelled = true;
+  t.authRetry?.cancel();
+  t.authRetry = null;
+  try { t.pty?.kill(); } catch {}
   session.terminals.delete(tid);
   return true;
+}
+
+function killAllTerminals(session) {
+  for (const tid of [...session.terminals.keys()]) killTerminal(session, tid);
 }
 
 // Detecta se há um comando rodando em foreground no PTY (dev server, build,
@@ -320,6 +439,8 @@ function fmtElapsed(ms) {
 }
 
 function updateTerminalStatus(session, terminal) {
+  if (terminal.exited) return;
+  if (!terminal.pty && terminal.status === "waiting") return;
   const tail = recentText(terminal, 2000);
   const lastLines = tail.split("\n").slice(-8).join("\n");
   const sinceOutput = Date.now() - terminal.lastOutputTime;
@@ -858,6 +979,44 @@ function terminalSummary(t) {
   return { id: t.id, name: t.name, status: t.status, statusText: t.statusText };
 }
 
+function createControlAdapter() {
+  return {
+    listProjects: () => PROJECTS,
+    getProject: (projectId) => PROJECTS.find((project) => project.id === projectId),
+    listTerminals: (projectId) =>
+      Array.from(sessions.get(projectId)?.terminals.values() || []),
+    getTerminal: (projectId, terminalId) =>
+      sessions.get(projectId)?.terminals.get(terminalId) || null,
+    createTerminal: async (projectId, name) => {
+      const session = sessions.get(projectId);
+      if (!session) throw new Error("sessão do projeto indisponível");
+      const terminal = await createTerminalIn(session, name, { owner: "mcp" });
+      broadcast({
+        type: "terminal_added",
+        projectId,
+        terminal: { ...terminalSummary(terminal), buffer: terminal.buffer.join("") },
+      });
+      return terminal;
+    },
+    writeInput: async (projectId, terminalId, data) => {
+      const terminal = sessions.get(projectId)?.terminals.get(terminalId);
+      if (!terminal?.pty || terminal.exited) {
+        throw new Error("terminal ainda não aceita input");
+      }
+      terminal.lastInputTime = Date.now();
+      terminal.pty.write(data);
+    },
+    interruptTerminal: async (projectId, terminalId) => {
+      const terminal = sessions.get(projectId)?.terminals.get(terminalId);
+      if (!terminal?.pty || terminal.exited) {
+        throw new Error("terminal ainda não pode ser interrompido");
+      }
+      terminal.lastInputTime = Date.now();
+      terminal.pty.write("\x03");
+    },
+  };
+}
+
 wss.on("connection", (ws) => {
   clients.add(ws);
   ws.send(JSON.stringify(helloPayload()));
@@ -880,7 +1039,7 @@ wss.on("connection", (ws) => {
         if (r.ok && r.text) {
           const sess = sessions.get(meta.projectId);
           const t = sess?.terminals.get(meta.terminalId);
-          if (t) {
+          if (t?.pty) {
             try { t.pty.write(r.text); } catch {}
           }
         }
@@ -1128,7 +1287,7 @@ wss.on("connection", (ws) => {
       if (idChanged) {
         const oldSession = sessions.get(before.id);
         if (oldSession) {
-          for (const t of oldSession.terminals.values()) try { t.pty.kill(); } catch {}
+          killAllTerminals(oldSession);
           sessions.delete(before.id);
         }
         await createSession(merged);
@@ -1137,8 +1296,7 @@ wss.on("connection", (ws) => {
         if (s) {
           s.proj = merged;
           if (pathChanged) {
-            for (const t of s.terminals.values()) try { t.pty.kill(); } catch {}
-            s.terminals.clear();
+            killAllTerminals(s);
             await createTerminalIn(s, "Terminal 1");
           }
         }
@@ -1153,7 +1311,7 @@ wss.on("connection", (ws) => {
       const removed = PROJECTS[idx];
       const s = sessions.get(removed.id);
       if (s) {
-        for (const t of s.terminals.values()) try { t.pty.kill(); } catch {}
+        killAllTerminals(s);
         sessions.delete(removed.id);
       }
       PROJECTS.splice(idx, 1);
@@ -1213,14 +1371,19 @@ wss.on("connection", (ws) => {
     switch (msg.type) {
       case "input": {
         const t = session.terminals.get(msg.terminalId);
-        if (t) { t.lastInputTime = Date.now(); t.pty.write(msg.data); }
+        if (t?.pty) {
+          t.lastInputTime = Date.now();
+          t.pty.write(msg.data);
+        }
         break;
       }
       case "resize": {
         const t = session.terminals.get(msg.terminalId);
         if (t) {
+          t.cols = Math.max(1, Number(msg.cols) || 120);
+          t.rows = Math.max(1, Number(msg.rows) || 30);
           try {
-            t.pty.resize(msg.cols || 120, msg.rows || 30);
+            t.pty?.resize(t.cols, t.rows);
           } catch {}
         }
         break;
@@ -1262,10 +1425,7 @@ wss.on("connection", (ws) => {
         const t = session.terminals.get(msg.terminalId);
         if (!t) break;
         const oldName = t.name;
-        try {
-          t.pty.kill();
-        } catch {}
-        session.terminals.delete(msg.terminalId);
+        killTerminal(session, msg.terminalId);
         broadcast({
           type: "terminal_closed",
           projectId: session.proj.id,
@@ -1564,6 +1724,7 @@ const MIME = {
 
 const server = http.createServer((req, res) => {
   const u = url.parse(req.url);
+  if (controlApi?.handle(req, res)) return;
   if (teamRouter.handle(req, res, u)) return;
   if (u.pathname === "/projects.json") {
     res.writeHead(200, { "Content-Type": MIME[".json"] });
@@ -1694,10 +1855,13 @@ server.on("upgrade", (req, socket, head) => {
 async function shutdown(opts = {}) {
   const log = opts.log || console;
   log.log("\x1b[36m▸ cockpit\x1b[0m encerrando sessões…");
+  if (controlApi) {
+    removeControlDescriptor(controlDescriptorPath, controlApi.instanceId);
+    controlDescriptorPath = null;
+    controlApi = null;
+  }
   for (const s of sessions.values()) {
-    for (const t of s.terminals.values()) {
-      try { t.pty.kill(); } catch {}
-    }
+    killAllTerminals(s);
   }
   if (teamSelectionSyncTimer) {
     clearInterval(teamSelectionSyncTimer);
@@ -1720,6 +1884,9 @@ export async function startServer({
   voiceLogsDir = null,
   voiceEnabled = true,
   dictationEnabled = true,
+  controlPolicy = null,
+  controlPolicyPath = null,
+  controlRuntimeDir = null,
   log = console,
 } = {}) {
   PORT = port;
@@ -1748,6 +1915,25 @@ export async function startServer({
   PROJECTS.length = 0;
   for (const p of raw) PROJECTS.push(p);
 
+  const availableProjectIds = PROJECTS.map((project) => project.id);
+  const effectiveControlPolicy = controlPolicy
+    ? normalizeControlPolicy(controlPolicy, { availableProjectIds })
+    : loadControlPolicy(
+        controlPolicyPath || path.join(path.dirname(projectsPath), "mcp-policy.json"),
+        { availableProjectIds, log },
+      );
+  controlApi = createControlApi({
+    cockpitVersion: APP_VERSION,
+    policy: effectiveControlPolicy,
+    adapter: createControlAdapter(),
+    log,
+  });
+  if (effectiveControlPolicy.projects.size === 0) {
+    log.log(
+      "\x1b[33m▸ cockpit control\x1b[0m política sem projetos; acesso MCP negado por padrão",
+    );
+  }
+
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => {
@@ -1762,15 +1948,9 @@ export async function startServer({
   SERVER_URL = serverUrl;
   log.log(`\n\x1b[36m▸ cockpit\x1b[0m rodando em \x1b[1m${serverUrl}\x1b[0m\n`);
 
-  // Aquece a seleção central no boot. Novos PTYs revalidam esse cache com TTL,
-  // pois o processo Electron pode permanecer aberto por vários dias.
-  if (teamRouter.status().connected) {
-    log.log("\x1b[36m▸ cockpit\x1b[0m selecionando pool central…");
-    const boot = await teamRouter.bootstrap();
-    for (const warning of boot.warnings) {
-      log.log(`  \x1b[33m⚠\x1b[0m ${warning}`);
-    }
-  }
+  // Cada terminal faz sua própria seleção no backend. Não bloqueie o boot com
+  // uma seleção global: falhas e retentativas precisam aparecer dentro do
+  // terminal correspondente, sempre sem fallback para credenciais do host.
   // O Electron costuma permanecer aberto por dias. Rebaixe a seleção em
   // memória periodicamente para que novos/reiniciados PTYs nunca dependam do
   // token carregado no boot do aplicativo.
@@ -1787,7 +1967,28 @@ export async function startServer({
         exists ? "\x1b[32m✓\x1b[0m" : "\x1b[33m⚠\x1b[0m"
       } ${p.path}`
     );
-    await createSession(p);
+    await createSession(p, { autoTerminal: false });
+  }
+
+  // Só publique a capability depois que todas as sessions existirem. Assim,
+  // encontrar control.json também significa que a API está pronta para uso.
+  try {
+    controlDescriptorPath = writeControlDescriptor(
+      {
+        schemaVersion: 1,
+        controlUrl: `${serverUrl}${CONTROL_API_PREFIX}`,
+        token: controlApi.token,
+        instanceId: controlApi.instanceId,
+        pid: process.pid,
+        createdAt: new Date().toISOString(),
+      },
+      controlRuntimeDir ? { runtimeDir: controlRuntimeDir } : undefined,
+    );
+  } catch (error) {
+    controlDescriptorPath = null;
+    log.warn?.(
+      `[cockpit/control] descriptor runtime indisponível: ${error.message}`,
+    );
   }
 
   // voz/ditado opt-in — não derrubam o boot se faltar binário
@@ -1812,6 +2013,10 @@ export async function startServer({
     shutdown: (opts) => shutdown({ exit: false, ...opts }),
     server,
     PROJECTS,
+    control: {
+      instanceId: controlApi.instanceId,
+      descriptorPath: controlDescriptorPath,
+    },
   };
 }
 

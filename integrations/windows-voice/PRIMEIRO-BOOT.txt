@@ -1,0 +1,21 @@
+COCKPIT VOICE — PRIMEIRO BOOT
+==============================
+
+1. Instale o Windows 11 Enterprise Evaluation em Português (Brasil).
+2. Entre com uma conta Microsoft e conclua o Windows Update.
+3. Abra este disco compartilhado no Explorador.
+4. Clique com o botão direito em install-chatgpt.ps1 e execute com PowerShell.
+   Se o Windows bloquear scripts, abra PowerShell e execute:
+
+   powershell -ExecutionPolicy Bypass -File .\install-chatgpt.ps1
+
+5. Abra ChatGPT pelo menu Iniciar e entre com a conta do seu plano.
+6. Em Configurações > Privacidade > Microfone, permita acesso ao ChatGPT.
+7. Inicie uma conversa Voice no Codex e teste:
+   - captura do microfone;
+   - resposta de áudio;
+   - interrupção enquanto ele fala;
+   - criação e acompanhamento de uma tarefa simples.
+
+O disco compartilhado é somente leitura. O Cockpit ainda não é exposto à VM;
+a ponte MCP será conectada somente depois que o Voice estiver fluido.

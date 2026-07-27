@@ -10,6 +10,48 @@ _(nada ainda)_
 
 ---
 
+## [0.17.3] — 2026-07-27
+
+### Corrigido
+- **Terminal automático ao abrir o Cockpit.** O boot do servidor não cria mais um terminal
+  padrão para cada projeto cadastrado — a sessão de cada projeto agora começa vazia e o
+  terminal só é criado sob demanda, quando o usuário abre o projeto ou clica em "novo
+  terminal". Adicionar ou editar um projeto pela interface continua criando o terminal
+  inicial normalmente.
+
+---
+
+## [0.17.2] — 2026-07-25
+
+### Corrigido
+- **Branding das licenças no terminal.** As mensagens de solicitação, falha, retentativa e
+  sucesso agora mostram somente **Ailiv**, sem expor os nomes técnicos dos agentes.
+- **Textos do pool central.** Configurações, avisos devolvidos pelo backend e logs operacionais
+  visíveis também normalizam a identidade para **Ailiv**. Providers, comandos e integração
+  interna permanecem inalterados.
+
+---
+
+## [0.17.1] — 2026-07-25
+
+### Alterado (licenças exclusivamente online por terminal)
+- **Seleção nova no backend para cada terminal.** Todo terminal novo ou reiniciado ignora o
+  cache local de seleção e solicita ao DevNX Control as licenças atuais dos agentes Ailiv.
+- **Shell só nasce depois da licença central.** Enquanto o backend não retornar os dois
+  provedores, a aba permanece visível em estado de espera, mas nenhum PTY é criado e nenhuma
+  credencial do computador pode ser descoberta pelos CLIs.
+- **Retentativas visíveis e contínuas.** Em caso de falha, o próprio terminal mostra o motivo e
+  repete a seleção após 10 segundos, 30 segundos, 1 minuto e 2 minutos; depois continua tentando
+  a cada minuto até o backend responder. Fechar ou reiniciar a aba cancela a tentativa anterior.
+
+### Corrigido
+- **Fallback acidental para perfis locais dos agentes.** Removido o caminho que, após uma falha
+  ao preparar o broker, ainda iniciava o shell com o ambiente normal do host.
+- **Cache de 60 segundos entre terminais.** A criação de PTYs não reutiliza mais a seleção em
+  memória de outro terminal; cada abertura é confirmada diretamente pelo backend.
+
+---
+
 ## [0.17.0] — 2026-07-23
 
 ### Adicionado (split de terminais — dividir a tela como no tmux/iTerm)
