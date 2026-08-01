@@ -284,6 +284,7 @@
       border: 1px solid color-mix(in srgb, var(--status-waiting) 40%, transparent);
       border-radius: 999px;
     }
+    .tov-proj-wait[hidden] { display: none; }
     .tov-terms {
       display: flex; flex-direction: column; gap: 2px;
       padding: 2px 0 4px 20px;
@@ -300,9 +301,22 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .tov-term-state { font-size: 10px; color: var(--text-tertiary); }
+    .tov-term-meta {
+      font-size: 10px; color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
+    }
+    /* parado há +2h: o candidato a encerrar */
+    .tov-term.is-stale .tov-term-meta { color: var(--status-error); }
+    .tov-term.is-stale .tov-term-name { color: var(--text-primary); }
+    .tov-proj-tag {
+      padding: 1px 6px; border-radius: 999px;
+      font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--text-tertiary); border: 1px solid var(--border-default);
+    }
     .tov-term-close {
+      position: relative;
       display: flex; align-items: center; justify-content: center;
-      width: 22px; height: 22px; flex-shrink: 0; padding: 0;
+      width: 24px; height: 24px; flex-shrink: 0; padding: 0; line-height: 0;
       border: 1px solid var(--border-strong); border-radius: 6px;
       background: var(--bg-3); color: var(--text-secondary);
       cursor: pointer; opacity: 0.85;
@@ -313,7 +327,11 @@
       color: #fff; background: var(--status-error);
       border-color: var(--status-error); opacity: 1;
     }
-    .tov-term-close svg { width: 13px; height: 13px; }
+    /* o alvo do clique é sempre o botão: sem isso o e.target vira o <svg>, e a
+       área útil fica menor que o desenho sugere */
+    .tov-term-close svg { width: 13px; height: 13px; display: block; pointer-events: none; }
+    /* área de clique um pouco maior que o quadrado visível, sem mexer no layout */
+    .tov-term-close::after { content: ""; position: absolute; inset: -5px; }
     .tov-empty {
       padding: 22px 14px; text-align: center;
       font-size: 12px; color: var(--text-tertiary);
@@ -1278,7 +1296,7 @@
       position: absolute; inset: 0;
       display: none;
       flex-direction: column;
-      gap: 0; padding: 6px;
+      gap: 0; padding: 0;
     }
     .app.mosaic .mosaic-grid { display: flex; }
     /* Divisão do espaço: por padrão igual (flex-grow 1 em tudo). As proporções
@@ -1298,19 +1316,24 @@
     .mosaic-grid.resizing .mosaic-row > .mosaic-card,
     .mosaic-grid.resizing .mosaic-row > .mosaic-drop { transition: none; }
 
-    /* Divisores arrastáveis: ocupam o lugar do antigo gap (6px). Hit-area maior
-       via ::before pra facilitar pegar. */
+    /* Divisores arrastáveis: 2px, o mínimo pra separar visualmente dois cards
+       colados. A hit-area real vem do ::before (±4px), então continua fácil de
+       pegar mesmo com o strip fino. */
     .mosaic-col-resizer, .mosaic-row-resizer {
-      flex: 0 0 6px; position: relative; z-index: 5;
+      /* z-index 7 pra ficar acima do .xterm-viewport (6): o divisor é um
+         contexto de empilhamento, então sem isso o "+" que vaza sobre um card
+         com terminal ficaria coberto e sem clique. O strip é transparente —
+         elevá-lo não muda nada visualmente. */
+      flex: 0 0 2px; position: relative; z-index: 7;
       background: transparent; touch-action: none;
     }
     .mosaic-col-resizer { cursor: col-resize; align-self: stretch; }
-    .mosaic-row-resizer { cursor: row-resize; width: 100%; height: 6px; }
+    .mosaic-row-resizer { cursor: row-resize; width: 100%; height: 2px; }
     .mosaic-col-resizer::before {
-      content: ""; position: absolute; top: 0; bottom: 0; left: -3px; right: -3px;
+      content: ""; position: absolute; top: 0; bottom: 0; left: -4px; right: -4px;
     }
     .mosaic-row-resizer::before {
-      content: ""; position: absolute; left: 0; right: 0; top: -3px; bottom: -3px;
+      content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px;
     }
     /* traço central que aparece no hover/arraste */
     .mosaic-col-resizer::after, .mosaic-row-resizer::after {
@@ -1318,12 +1341,58 @@
       background: var(--border-strong); opacity: 0;
       transition: opacity .12s;
     }
-    .mosaic-col-resizer::after { top: 12px; bottom: 12px; left: 2px; width: 2px; }
-    .mosaic-row-resizer::after { left: 12px; right: 12px; top: 2px; height: 2px; }
+    .mosaic-col-resizer::after { top: 12px; bottom: 12px; left: 0; width: 2px; }
+    .mosaic-row-resizer::after { left: 12px; right: 12px; top: 0; height: 2px; }
     .mosaic-col-resizer:hover::after, .mosaic-row-resizer:hover::after,
     .mosaic-col-resizer.dragging::after, .mosaic-row-resizer.dragging::after {
       opacity: 1; background: var(--accent, #4a9eff);
     }
+
+    /* "+" no meio do divisor: cria uma célula vazia ali, sem passar pelo modal
+       de layout. Mora DENTRO do divisor (não pode ser irmão — o getPair do
+       attachResizer usa previous/nextElementSibling) e vaza pra fora do strip
+       de 6px. z-index 1 porque o ::after é pintado depois dos filhos.
+       pointer-events só quando visível: os 18px do botão bloqueariam o arraste
+       bem no centro do divisor. */
+    .mosaic-ins-btn {
+      position: absolute; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; padding: 0;
+      border: 1px solid var(--border-strong); border-radius: 50%;
+      background: var(--bg-2); color: var(--text-secondary);
+      font: 600 14px/1 system-ui, sans-serif;
+      cursor: pointer; opacity: 0; pointer-events: none;
+      transition: opacity .12s, background .12s, color .12s, transform .12s;
+    }
+    /* -8px = (2 - 18) / 2: centra o botão de 18px no strip de 2px */
+    .mosaic-col-resizer > .mosaic-ins-btn { top: 50%; left: -8px; margin-top: -9px; }
+    .mosaic-row-resizer > .mosaic-ins-btn { left: 50%; top: -8px; margin-left: -9px; }
+    /* nas bordas o botão ancora pra DENTRO do grid: sem padding nenhum,
+       centrar 18px na beirada jogaria metade pra fora da janela */
+    .mosaic-edge-x.at-start > .mosaic-ins-btn { top: 50%; left: 2px; margin-top: -9px; }
+    .mosaic-edge-x.at-end > .mosaic-ins-btn { top: 50%; right: 2px; margin-top: -9px; }
+    .mosaic-edge-y.at-start > .mosaic-ins-btn { left: 50%; top: 2px; margin-left: -9px; }
+    .mosaic-edge-y.at-end > .mosaic-ins-btn { left: 50%; bottom: 2px; margin-left: -9px; }
+    .mosaic-col-resizer:hover > .mosaic-ins-btn,
+    .mosaic-row-resizer:hover > .mosaic-ins-btn,
+    .mosaic-edge-x:hover > .mosaic-ins-btn,
+    .mosaic-edge-y:hover > .mosaic-ins-btn { opacity: 1; pointer-events: auto; }
+    .mosaic-ins-btn:hover {
+      background: var(--accent, #4a9eff); border-color: var(--accent, #4a9eff);
+      color: #fff; transform: scale(1.12);
+    }
+    /* durante qualquer arraste o "+" some e para de capturar o ponteiro */
+    .mosaic-col-resizer.dragging > .mosaic-ins-btn,
+    .mosaic-row-resizer.dragging > .mosaic-ins-btn,
+    .mosaic-grid.resizing .mosaic-ins-btn { opacity: 0; pointer-events: none; }
+
+    /* Faixas de inserção nas bordas externas — largura/altura zero, então não
+       consomem espaço nem deslocam o layout; a área de hover vem do ::before.
+       Ficam nas pontas do flex, longe do getPair dos divisores. */
+    .mosaic-edge-x, .mosaic-edge-y { position: relative; z-index: 7; flex: 0 0 0; }
+    .mosaic-edge-y { width: 100%; }
+    .mosaic-edge-x::before { content: ""; position: absolute; top: 0; bottom: 0; left: -7px; right: -7px; }
+    .mosaic-edge-y::before { content: ""; position: absolute; left: 0; right: 0; top: -7px; bottom: -7px; }
 
     .mosaic-card {
       display: flex; flex-direction: column;
@@ -1470,15 +1539,22 @@
       padding: 6px 4px 6px 8px;
     }
     .split-leaf-close {
-      position: absolute; top: 4px; right: 4px; z-index: 3;
+      /* acima do .xterm-viewport (z-index 6), senão só a borda do botão que
+         escapa do terminal recebe o clique e o centro do X fica morto */
+      position: absolute; top: 4px; right: 4px; z-index: 10;
       width: 20px; height: 20px; border-radius: 5px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
+      padding: 0; line-height: 0;
       background: var(--bg-2); color: var(--text-tertiary);
       opacity: 0; transition: opacity 120ms, background 120ms, color 120ms;
     }
     .split-leaf:hover .split-leaf-close { opacity: 0.75; }
     .split-leaf-close:hover { opacity: 1; background: var(--bg-3); color: var(--text-primary); }
-    .split-leaf-close svg { width: 13px; height: 13px; }
+    /* o alvo do clique é sempre o botão: sem isso o e.target vira o <svg> e a
+       área útil não bate com o desenho */
+    .split-leaf-close svg { width: 13px; height: 13px; display: block; pointer-events: none; }
+    /* alvo um pouco maior que o quadrado visível, centrado nele */
+    .split-leaf-close::after { content: ""; position: absolute; inset: -5px; }
     .split-leaf-placeholder {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       color: var(--text-tertiary); font-size: 12px;
@@ -1516,8 +1592,12 @@
       border: 1px dashed var(--border-strong); border-radius: 10px;
     }
     .mosaic-drop-plus svg { width: 18px; height: 18px; stroke-width: 1.5; }
-    .mosaic-drop { cursor: pointer; }
+    .mosaic-drop { cursor: pointer; position: relative; }
     .mosaic-drop:hover { border-color: var(--text-secondary); color: var(--text-primary); background: var(--bg-2); }
+    /* "−": devolve o espaço da célula vazia ao vizinho. Contraparte do "+" das
+       divisórias, então herda o visual de .mosaic-ins-btn e só troca a âncora. */
+    .mosaic-drop-remove { top: 8px; right: 8px; z-index: 2; }
+    .mosaic-drop:hover > .mosaic-drop-remove { opacity: 1; pointer-events: auto; }
     .mosaic-card.drag-over { border-color: var(--text-secondary); box-shadow: 0 0 0 1px var(--text-secondary); }
 
     /* Editor de layout (popover ancorado no botão Layout) */
@@ -4458,6 +4538,79 @@
       syncGridWeights();
     }
 
+    // ── Inserção posicional de célula (botão "+" dos divisores e das bordas) ──
+    // O editor de layout troca gridLayout inteiro e deixa normalizeSlots()
+    // preencher no FIM. Aqui a célula nasce NO MEIO, então o splice em
+    // gridSlots/gridColWeights é explícito e tem que ser atômico com o ajuste
+    // do gridLayout: com gridSlots.length > gridCellCount(), o ramo de encolher
+    // do normalizeSlots varre de trás pra frente removendo os VAZIOS — apagaria
+    // exatamente a célula recém-criada.
+    const NEW_ROW_COLS = 1; // linha criada pelo "+" nasce com 1 célula (largura toda)
+    // Peso da célula/linha nova: média dos vizinhos, não 1 fixo — numa linha com
+    // proporções customizadas (ex. 3:1) o peso 1 faria a nova nascer espremida.
+    // Nas bordas só existe um vizinho, então ele manda sozinho.
+    function mediaPeso(a, b) {
+      const va = typeof a === "number" && a > 0 ? a : null;
+      const vb = typeof b === "number" && b > 0 ? b : null;
+      if (va && vb) return (va + vb) / 2;
+      return va || vb || 1;
+    }
+    function commitGridStructure() {
+      syncGridWeights();
+      saveGridState();
+      renderMosaic();
+    }
+    // atIdx = índice GLOBAL (row-major) da célula que a nova empurra pra frente.
+    function insertGridColumn(rowIndex, atIdx) {
+      if (!(rowIndex >= 0 && rowIndex < gridLayout.length)) return false;
+      if (gridLayout[rowIndex] >= GRID_MAX_COLS) return false;
+      syncGridWeights(); // arrays paralelos ANTES do splice
+      const start = rowColOffset(rowIndex), end = start + gridLayout[rowIndex];
+      if (!(atIdx >= start && atIdx <= end)) return false;
+      // vizinhos só contam se estiverem na MESMA linha (borda tem um lado só)
+      const wA = atIdx > start ? gridColWeights[atIdx - 1] : null;
+      const wB = atIdx < end ? gridColWeights[atIdx] : null;
+      gridSlots.splice(atIdx, 0, null);
+      gridColWeights.splice(atIdx, 0, mediaPeso(wA, wB));
+      gridLayout[rowIndex] += 1;
+      commitGridStructure();
+      return true;
+    }
+    function insertGridRow(atRowIndex) {
+      if (gridLayout.length >= GRID_MAX_ROWS) return false;
+      if (!(atRowIndex >= 0 && atRowIndex <= gridLayout.length)) return false;
+      syncGridWeights();
+      const at = rowColOffset(atRowIndex); // calcular ANTES de mexer no gridLayout
+      const hA = atRowIndex > 0 ? gridRowWeights[atRowIndex - 1] : null;
+      const hB = atRowIndex < gridLayout.length ? gridRowWeights[atRowIndex] : null;
+      gridSlots.splice(at, 0, ...Array(NEW_ROW_COLS).fill(null));
+      gridColWeights.splice(at, 0, ...Array(NEW_ROW_COLS).fill(1));
+      gridRowWeights.splice(atRowIndex, 0, mediaPeso(hA, hB));
+      gridLayout.splice(atRowIndex, 0, NEW_ROW_COLS);
+      commitGridStructure();
+      return true;
+    }
+    // Remove a célula de índice global atIdx. Só faz sentido para célula VAZIA —
+    // quem chama garante isso (o botão só existe no .mosaic-drop). Se era a
+    // única da linha, a linha inteira vai junto: linha com 0 colunas não é
+    // representável em gridLayout e viraria uma faixa fantasma no flex.
+    function removeGridCell(rowIndex, atIdx) {
+      if (!(rowIndex >= 0 && rowIndex < gridLayout.length)) return false;
+      if (gridSlots.length <= 1) return false; // o mosaico não pode ficar sem nenhuma célula
+      const start = rowColOffset(rowIndex), end = start + gridLayout[rowIndex];
+      if (!(atIdx >= start && atIdx < end)) return false;
+      syncGridWeights();
+      gridSlots.splice(atIdx, 1);
+      gridColWeights.splice(atIdx, 1);
+      gridLayout[rowIndex] -= 1;
+      if (gridLayout[rowIndex] === 0) {
+        gridLayout.splice(rowIndex, 1);
+        gridRowWeights.splice(rowIndex, 1);
+      }
+      commitGridStructure();
+      return true;
+    }
+
     // Settings (persistidas no localStorage)
     const DEFAULT_SETTINGS = { autoSave: false, webglFast: false, idleReap: true };
     let cockpitSettings = (() => {
@@ -6163,10 +6316,12 @@
         }
         const close = document.createElement("div");
         close.className = "split-leaf-close";
-        close.title = "Fechar painel (mantém o terminal na aba)";
+        close.title = "Encerrar terminal (fecha o painel e mata o processo)";
         close.innerHTML = ICONS.x;
         close.addEventListener("mousedown", (e) => e.stopPropagation());
-        close.addEventListener("click", (e) => { e.stopPropagation(); closeLeaf(projId, node.id, { killTerminal: false }); });
+        // fechar o painel encerra o terminal de fato: deixar o processo vivo só
+        // escondia sessão consumindo RAM sem nenhum painel apontando pra ela
+        close.addEventListener("click", (e) => { e.stopPropagation(); closeLeaf(projId, node.id, { killTerminal: true }); });
         leafEl.appendChild(close);
         leafEl.addEventListener("mousedown", () => setFocusedLeaf(projId, node.id));
         return leafEl;
@@ -6442,7 +6597,7 @@
       });
     }
 
-    function buildMosaicCell(projId, i) {
+    function buildMosaicCell(projId, i, rowIndex) {
       const p = projId ? getProj(projId) : null;
 
       if (!p) {
@@ -6451,6 +6606,20 @@
         drop.dataset.slot = i;
         drop.innerHTML = `<div class="mosaic-drop-plus">${ICONS.plus}</div><div>clique para escolher um projeto</div>`;
         drop.addEventListener("click", () => openMosaicProjectPicker(i));
+        // remover o espaço só faz sentido enquanto sobrar alguma célula
+        if (gridSlots.length > 1) {
+          const rm = document.createElement("button");
+          rm.type = "button";
+          rm.className = "mosaic-ins-btn mosaic-drop-remove";
+          rm.title = "Remover este espaço";
+          rm.setAttribute("aria-label", "Remover este espaço");
+          rm.textContent = "−";
+          // o drop inteiro é clicável (abre o seletor de projeto): sem isto,
+          // remover a célula abriria o seletor de uma célula que deixou de existir
+          rm.addEventListener("pointerdown", (e) => e.stopPropagation());
+          rm.addEventListener("click", (e) => { e.stopPropagation(); removeGridCell(rowIndex, i); });
+          drop.appendChild(rm);
+        }
         wireMosaicDrop(drop, i);
         return drop;
       }
@@ -6673,12 +6842,40 @@
         onReset();
       });
     }
-    function buildColResizer(aIdx, bIdx) {
+    // "+" que insere uma célula ali. O divisor escuta pointerdown e dblclick
+    // nele mesmo e este botão é filho dele: sem stopPropagation o clique viraria
+    // arraste (e como o attachResizer faz setPointerCapture, o click sintético
+    // pode nem chegar ao botão) e o duplo-clique ainda igualaria os vizinhos.
+    function buildInsertBtn(label, onInsert) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "mosaic-ins-btn";
+      b.title = label;
+      b.setAttribute("aria-label", label);
+      b.textContent = "+";
+      b.addEventListener("pointerdown", (e) => e.stopPropagation());
+      b.addEventListener("dblclick", (e) => { e.stopPropagation(); e.preventDefault(); });
+      b.addEventListener("click", (e) => { e.stopPropagation(); onInsert(); });
+      return b;
+    }
+    // Faixa de inserção nas bordas externas (largura/altura zero — ver CSS).
+    // `side` é "start" ou "end"; serve só pra ancorar o botão pra dentro.
+    function buildEdgeInsert(axis, side, label, onInsert) {
+      const el = document.createElement("div");
+      el.className = `mosaic-edge-${axis} at-${side}`;
+      el.appendChild(buildInsertBtn(label, onInsert));
+      return el;
+    }
+    function buildColResizer(aIdx, bIdx, rowIndex) {
       const el = document.createElement("div");
       el.className = "mosaic-col-resizer";
       el.title = "Arraste para redimensionar · duplo-clique iguala";
       attachResizer(el, { axis: "x", weights: gridColWeights, idxA: aIdx, idxB: bIdx,
         getPair: () => [el.previousElementSibling, el.nextElementSibling] });
+      // o botão é FILHO do divisor, não irmão: o getPair acima depende de
+      // previous/nextElementSibling continuarem sendo as duas células
+      if (gridLayout[rowIndex] < GRID_MAX_COLS)
+        el.appendChild(buildInsertBtn("Inserir célula aqui", () => insertGridColumn(rowIndex, bIdx)));
       return el;
     }
     function buildRowResizer(topRowIndex) {
@@ -6687,6 +6884,8 @@
       el.title = "Arraste para redimensionar · duplo-clique iguala";
       attachResizer(el, { axis: "y", weights: gridRowWeights, idxA: topRowIndex, idxB: topRowIndex + 1,
         getPair: () => [el.previousElementSibling, el.nextElementSibling] });
+      if (gridLayout.length < GRID_MAX_ROWS)
+        el.appendChild(buildInsertBtn("Inserir linha aqui", () => insertGridRow(topRowIndex + 1)));
       return el;
     }
 
@@ -6726,21 +6925,30 @@
       const grid = document.getElementById("mosaicGrid");
       grid.innerHTML = "";
       let idx = 0;
+      // faixas de borda: sem elas, um layout de uma célula só (ou uma linha de
+      // uma coluna) não teria nenhum divisor onde pendurar o "+"
+      const canAddRow = gridLayout.length < GRID_MAX_ROWS;
+      if (canAddRow) grid.appendChild(buildEdgeInsert("y", "start", "Inserir linha acima", () => insertGridRow(0)));
       gridLayout.forEach((cols, r) => {
         if (r > 0) grid.appendChild(buildRowResizer(r - 1)); // divisor entre linha r-1 e r
         const row = document.createElement("div");
         row.className = "mosaic-row";
         row.style.flexGrow = String(gridRowWeights[r] ?? 1);
+        const rowStart = idx;
+        const canAddCol = cols < GRID_MAX_COLS;
+        if (canAddCol) row.appendChild(buildEdgeInsert("x", "start", "Inserir célula à esquerda", () => insertGridColumn(r, rowStart)));
         for (let c = 0; c < cols; c++) {
-          if (c > 0) row.appendChild(buildColResizer(idx - 1, idx)); // divisor entre col c-1 e c
+          if (c > 0) row.appendChild(buildColResizer(idx - 1, idx, r)); // divisor entre col c-1 e c
           const slot = gridSlots[idx];
-          const cell = buildMosaicCell(slot, idx);
+          const cell = buildMosaicCell(slot, idx, r);
           cell.style.flexGrow = String(gridColWeights[idx] ?? 1);
           row.appendChild(cell);
           idx++;
         }
+        if (canAddCol) row.appendChild(buildEdgeInsert("x", "end", "Inserir célula à direita", () => insertGridColumn(r, rowStart + cols)));
         grid.appendChild(row);
       });
+      if (canAddRow) grid.appendChild(buildEdgeInsert("y", "end", "Inserir linha abaixo", () => insertGridRow(gridLayout.length)));
       sendVisibleTerminals();
     }
 
@@ -7240,7 +7448,44 @@
       error: "erro",
     };
 
-    function renderTopOverview() {
+    // A partir de quanto tempo sem atividade um terminal conta como "esquecido".
+    // Mesmo limiar do reaper do servidor (2h), pra leitura bater com o que ele faz.
+    const TOV_STALE_MS = 2 * 60 * 60 * 1000;
+
+    // "11:54", "ontem 11:54", "29/07 11:54" — hora só, salvo quando muda o dia.
+    function tovClock(ts) {
+      if (!ts) return "";
+      const d = new Date(ts);
+      const hhmm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const meia = (x) => { const y = new Date(x); y.setHours(0, 0, 0, 0); return y.getTime(); };
+      const dias = Math.round((meia(Date.now()) - meia(ts)) / 86400000);
+      if (dias <= 0) return hhmm;
+      if (dias === 1) return `ontem ${hhmm}`;
+      return `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} ${hhmm}`;
+    }
+
+    // duração curta: "8min", "2h10", "1d3h"
+    function tovDur(ms) {
+      const min = Math.floor(ms / 60000);
+      if (min < 1) return "agora";
+      if (min < 60) return `${min}min`;
+      const h = Math.floor(min / 60), m = min % 60;
+      if (h < 24) return m ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+      const d = Math.floor(h / 24), rh = h % 24;
+      return rh ? `${d}d${rh}h` : `${d}d`;
+    }
+
+    // O painel é redesenhado a cada mudança de status de qualquer terminal. Se
+    // isso acontece entre o seu mousedown e o mouseup, o botão sob o cursor é
+    // substituído e o clique não chega a existir — e a lista ainda pode
+    // reordenar, movendo o alvo debaixo do ponteiro. Então: com o mouse dentro
+    // do painel o redesenho fica pendente e só acontece quando você sai (ou
+    // quando é o próprio painel que pediu, via force).
+    let topOverviewHover = false;
+    let topOverviewDirty = false;
+    let topOverviewSig = null; // árvore desenhada por último (projetos/terminais)
+
+    function renderTopOverview({ force = false } = {}) {
       const body = document.getElementById("topOverviewBody");
       const badge = document.getElementById("openTermBadge");
       const sub = document.getElementById("topOverviewSub");
@@ -7251,76 +7496,154 @@
         badge.hidden = totalWaiting === 0;
       }
       if (!body) return;
+      // o badge acima já foi atualizado; só a lista é que espera o mouse sair
+      if (topOverviewHover && !force) { topOverviewDirty = true; return; }
+      topOverviewDirty = false;
 
+      const now = Date.now();
       const open = projects.filter((p) => p.terminals && p.terminals.length > 0);
       const totalTerms = open.reduce((n, p) => n + p.terminals.length, 0);
+      const isStale = (t) =>
+        t.status !== "waiting" && now - (t.lastActivity || t.startedAt || now) >= TOV_STALE_MS;
+      const totalStale = open.reduce((n, p) => n + p.terminals.filter(isStale).length, 0);
       if (sub) {
         sub.textContent = open.length
           ? `${open.length} ${open.length === 1 ? "projeto" : "projetos"} · ${totalTerms} ${totalTerms === 1 ? "terminal" : "terminais"}`
+            + (totalStale ? ` · ${totalStale} parado${totalStale === 1 ? "" : "s"} há +2h` : "")
           : "nada aberto";
       }
 
       if (!open.length) {
         body.innerHTML = `<div class="tov-empty">Nenhum terminal aberto agora.</div>`;
+        topOverviewSig = null; // força redesenho quando algo voltar a abrir
         return;
       }
 
-      // ordena: projetos com terminal aguardando primeiro, mantendo a ordem original
+      // ordena: aguardando primeiro, depois os esquecidos (o que você provavelmente
+      // veio encerrar), o resto mantém a ordem original
       const ordered = open
-        .map((p, idx) => ({ p, idx, waiting: p.terminals.some((t) => t.status === "waiting") }))
-        .sort((a, b) => (b.waiting - a.waiting) || (a.idx - b.idx))
+        .map((p, idx) => ({
+          p, idx,
+          waiting: p.terminals.some((t) => t.status === "waiting"),
+          stale: p.terminals.some(isStale),
+        }))
+        .sort((a, b) => (b.waiting - a.waiting) || (b.stale - a.stale) || (a.idx - b.idx))
         .map((e) => e.p);
 
-      let html = "";
-      ordered.forEach((p) => {
-        const waitCount = p.terminals.filter((t) => t.status === "waiting").length;
-        html += `<div class="tov-proj" data-projid="${p.id}">
-          <div class="tov-proj-head" data-projfocus="${p.id}">
-            <span class="tov-proj-dot" style="background:${p.color || "#888"}"></span>
-            <span class="tov-proj-name">${escapeHtml(p.name)}</span>
-            <span class="tov-proj-count">${p.terminals.length}</span>
-            ${waitCount ? `<span class="tov-proj-wait"><span class="status-dot waiting"></span>${waitCount}</span>` : ""}
-          </div>
-          <div class="tov-terms">`;
-        p.terminals.forEach((t) => {
-          const label = TOV_STATE_LABEL[t.status] || t.status || "";
-          html += `<div class="tov-term ${t.status === "waiting" ? "is-waiting" : ""}" data-projid="${p.id}" data-tid="${t.id}">
-            <span class="status-dot ${t.status}"></span>
-            <span class="tov-term-name">${escapeHtml(t.name)}</span>
-            <span class="tov-term-state">${label}</span>
-            <button class="tov-term-close" data-close-projid="${p.id}" data-close-tid="${t.id}" title="Encerrar terminal">${ICONS.x}</button>
-          </div>`;
-        });
-        html += `</div></div>`;
-      });
-      body.innerHTML = html;
+      // Só refaz o HTML quando a árvore muda (projeto/terminal entrou, saiu ou
+      // trocou de lugar). Status e "parado há" são atualizados nos nós que já
+      // existem: recriar tudo tirava o botão de baixo do cursor no meio do
+      // clique — mousedown num nó, mouseup em outro, e o clique nem acontecia.
+      const sig = ordered
+        .map((p) => `${p.id}${p.hidden ? "*" : ""}:${p.terminals.map((t) => t.id).join(",")}`)
+        .join("|");
 
-      // focar projeto pelo cabeçalho
-      body.querySelectorAll("[data-projfocus]").forEach((el) => {
-        el.addEventListener("click", () => {
-          focusTerminal(el.dataset.projfocus, null);
-          closeTopOverview();
-        });
-      });
-      // focar terminal específico (clique fora do X)
-      body.querySelectorAll(".tov-term").forEach((el) => {
-        el.addEventListener("click", (e) => {
-          if (e.target.closest(".tov-term-close")) return;
-          focusTerminal(el.dataset.projid, el.dataset.tid);
-          closeTopOverview();
-        });
-      });
-      // encerrar terminal pelo X (confirma se rodando/aguardando via requestCloseTerminal)
-      body.querySelectorAll(".tov-term-close").forEach((el) => {
-        el.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          await requestCloseTerminal(el.dataset.closeProjid, el.dataset.closeTid);
-          renderTopOverview(); // atualiza a lista na hora
+      if (sig !== topOverviewSig || !body.firstElementChild) {
+        topOverviewSig = sig;
+        body.innerHTML = ordered.map((p) => `
+          <div class="tov-proj" data-projid="${p.id}">
+            <div class="tov-proj-head" data-projfocus="${p.id}">
+              <span class="tov-proj-dot" style="background:${p.color || "#888"}"></span>
+              <span class="tov-proj-name">${escapeHtml(p.name)}</span>
+              <span class="tov-proj-count">${p.terminals.length}</span>
+              ${p.hidden ? `<span class="tov-proj-tag" title="Projeto oculto: não aparece na barra lateral nem no mosaico">oculto</span>` : ""}
+              <span class="tov-proj-wait" hidden><span class="status-dot waiting"></span><span class="tov-proj-wait-n"></span></span>
+            </div>
+            <div class="tov-terms">
+              ${p.terminals.map((t) => `
+                <div class="tov-term" data-projid="${p.id}" data-tid="${t.id}">
+                  <span class="status-dot"></span>
+                  <span class="tov-term-name">${escapeHtml(t.name)}</span>
+                  <span class="tov-term-meta"></span>
+                  <span class="tov-term-state"></span>
+                  <button class="tov-term-close" data-close-projid="${p.id}" data-close-tid="${t.id}" title="Encerrar terminal">${ICONS.x}</button>
+                </div>`).join("")}
+            </div>
+          </div>`).join("");
+      }
+
+      // atualiza o conteúdo variável nos nós que já estão lá
+      ordered.forEach((p) => {
+        const projEl = body.querySelector(`.tov-proj[data-projid="${CSS.escape(p.id)}"]`);
+        if (!projEl) return;
+        const waitCount = p.terminals.filter((t) => t.status === "waiting").length;
+        const waitEl = projEl.querySelector(".tov-proj-wait");
+        if (waitEl) {
+          waitEl.hidden = waitCount === 0;
+          waitEl.querySelector(".tov-proj-wait-n").textContent = String(waitCount);
+        }
+        const nameEl = projEl.querySelector(".tov-proj-name");
+        if (nameEl && nameEl.textContent !== p.name) nameEl.textContent = p.name;
+
+        p.terminals.forEach((t) => {
+          const el = projEl.querySelector(`.tov-term[data-tid="${CSS.escape(t.id)}"]`);
+          if (!el) return;
+          const parado = now - (t.lastActivity || t.startedAt || now);
+          const velho = isStale(t);
+          // "aberto 11:54 · parado há 9h33" — a hora diz desde quando existe,
+          // o "parado há" diz se ainda tem alguém do outro lado
+          const meta = [
+            t.startedAt ? `aberto ${tovClock(t.startedAt)}` : "",
+            parado >= 3 * 60000 ? `parado há ${tovDur(parado)}` : "",
+          ].filter(Boolean).join(" · ");
+
+          el.classList.toggle("is-waiting", t.status === "waiting");
+          el.classList.toggle("is-stale", velho);
+          el.title = t.startedAt
+            ? `Aberto em ${new Date(t.startedAt).toLocaleString("pt-BR")}\nÚltima atividade: ${new Date(t.lastActivity || t.startedAt).toLocaleString("pt-BR")}`
+            : "";
+          el.querySelector(".status-dot").className = `status-dot ${t.status}`;
+          const nomeEl = el.querySelector(".tov-term-name");
+          if (nomeEl.textContent !== t.name) nomeEl.textContent = t.name;
+          const metaEl = el.querySelector(".tov-term-meta");
+          if (metaEl.textContent !== meta) metaEl.textContent = meta;
+          const stateEl = el.querySelector(".tov-term-state");
+          const label = TOV_STATE_LABEL[t.status] || t.status || "";
+          if (stateEl.textContent !== label) stateEl.textContent = label;
         });
       });
     }
 
+    // Listeners no container, não nas linhas: o innerHTML acima troca os nós a
+    // cada redesenho, e handlers presos neles morriam junto.
+    function setupTopOverviewDelegation() {
+      const body = document.getElementById("topOverviewBody");
+      const panel = document.getElementById("topOverview");
+      if (!body || !panel) return;
+
+      panel.addEventListener("mouseenter", () => { topOverviewHover = true; });
+      panel.addEventListener("mouseleave", () => {
+        topOverviewHover = false;
+        if (topOverviewDirty) renderTopOverview();
+      });
+
+      body.addEventListener("click", async (e) => {
+        // encerrar pelo X (confirma se rodando/aguardando via requestCloseTerminal)
+        const close = e.target.closest(".tov-term-close");
+        if (close) {
+          e.stopPropagation();
+          await requestCloseTerminal(close.dataset.closeProjid, close.dataset.closeTid);
+          renderTopOverview({ force: true }); // atualiza a lista na hora
+          return;
+        }
+        // focar terminal específico
+        const term = e.target.closest(".tov-term");
+        if (term) {
+          focusTerminal(term.dataset.projid, term.dataset.tid);
+          closeTopOverview();
+          return;
+        }
+        // focar projeto pelo cabeçalho
+        const head = e.target.closest("[data-projfocus]");
+        if (head) {
+          focusTerminal(head.dataset.projfocus, null);
+          closeTopOverview();
+        }
+      });
+    }
+
     let topOverviewOpen = false;
+    let topOverviewTimer = null;
     function openTopOverview() {
       const panel = document.getElementById("topOverview");
       const btn = document.getElementById("btnOpenTerminals");
@@ -7333,6 +7656,9 @@
       panel.setAttribute("aria-hidden", "false");
       btn?.classList.add("active");
       topOverviewOpen = true;
+      // "parado há X" envelhece sozinho: com o painel aberto, redesenha a cada 30s
+      clearInterval(topOverviewTimer);
+      topOverviewTimer = setInterval(renderTopOverview, 30000);
       showTopBar(); // garante a barra visível enquanto o painel está aberto
     }
     function closeTopOverview() {
@@ -7343,6 +7669,8 @@
       panel.setAttribute("aria-hidden", "true");
       btn?.classList.remove("active");
       topOverviewOpen = false;
+      clearInterval(topOverviewTimer);
+      topOverviewTimer = null;
       // esconde do fluxo só depois da transição
       setTimeout(() => { if (!topOverviewOpen) panel.hidden = true; }, 240);
     }
@@ -7369,6 +7697,7 @@
         if (e.key === "Escape" && topOverviewOpen) closeTopOverview();
       });
 
+      setupTopOverviewDelegation();
       renderTopOverview();
     }
 
@@ -9627,6 +9956,10 @@
         case "hello": handleHello(msg); break;
         case "output": {
           writeTerminalOutput(msg.projectId, msg.terminalId, msg.data);
+          // mantém o "parado há X" do painel vivo sem precisar de round-trip:
+          // qualquer saída (inclusive o eco do que você digita) é atividade
+          const oTerm = getProj(msg.projectId)?.terminals.find((t) => t.id === msg.terminalId);
+          if (oTerm) oTerm.lastActivity = Date.now();
           const isActiveView = msg.projectId === activeProjId &&
             msg.terminalId === getActiveTid() &&
             (viewModeByProj.get(activeProjId) || "terminal") === "terminal";
@@ -9665,6 +9998,7 @@
           p.terminals.push({
             id: msg.terminal.id, name: msg.terminal.name,
             status: msg.terminal.status, statusText: msg.terminal.statusText,
+            startedAt: msg.terminal.startedAt, lastActivity: msg.terminal.lastActivity,
           });
           createXterm(p, msg.terminal);
           // replay do buffer histórico (ex.: aviso de path inexistente)
@@ -9843,14 +10177,23 @@
         // adiciona novos
         np.terminals.forEach((nt) => {
           if (!p.terminals.find((x) => x.id === nt.id)) {
-            p.terminals.push({ id: nt.id, name: nt.name, status: nt.status, statusText: nt.statusText });
+            p.terminals.push({
+              id: nt.id, name: nt.name, status: nt.status, statusText: nt.statusText,
+              startedAt: nt.startedAt, lastActivity: nt.lastActivity,
+            });
             createXterm(p, nt);
           }
         });
         // atualiza props existentes
         p.terminals.forEach((t) => {
           const nt = np.terminals.find((x) => x.id === t.id);
-          if (nt) { t.name = nt.name; t.status = nt.status; t.statusText = nt.statusText; }
+          if (nt) {
+            t.name = nt.name; t.status = nt.status; t.statusText = nt.statusText;
+            t.startedAt = nt.startedAt ?? t.startedAt;
+            // o cliente pode ter um lastActivity mais novo (output que chegou
+            // depois desse snapshot) — fica com o maior dos dois
+            t.lastActivity = Math.max(nt.lastActivity || 0, t.lastActivity || 0);
+          }
         });
 
         // se não tem terminal ativo, ativa o primeiro
@@ -9912,6 +10255,7 @@
         terminals: p.terminals.map((t) => ({
           id: t.id, name: t.name,
           status: t.status, statusText: t.statusText,
+          startedAt: t.startedAt, lastActivity: t.lastActivity,
         })),
       }));
 

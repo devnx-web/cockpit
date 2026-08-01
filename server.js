@@ -20,6 +20,7 @@ import {
   requireFreshTerminalSelections,
 } from "./lib/team-terminal-license.js";
 import { createFileSearchService } from "./lib/file-search.js";
+import { createUsageService } from "./lib/usage/service.js";
 import {
   appendControlOutputEvent,
   CONTROL_API_PREFIX,
@@ -41,6 +42,7 @@ let PROJECTS = []; // populado em startServer()
 let SERVER_URL = null;
 let controlApi = null;
 let controlDescriptorPath = null;
+let usage = null; // coletor de uso de tokens; null se não subir (opcional)
 const teamAccounts = createTeamAccountsClient();
 const teamRouter = createTeamRouter({
   client: teamAccounts,
@@ -301,6 +303,7 @@ async function createTerminalIn(session, name = null, meta = {}) {
     outputSequence: 0,
     outputEvents: [],
     outputEventBytes: 0,
+    startedAt: Date.now(),     // painel "Aberto agora": desde quando o terminal existe
     lastOutputTime: Date.now(),
     lastInputTime: Date.now(), // reaper: atividade = max(output, input)
     lastSeenTime: Date.now(),  // reaper: última vez visível num cliente
@@ -349,19 +352,67 @@ async function createSession(proj, { autoTerminal = true } = {}) {
   return session;
 }
 
-function killTerminal(session, tid) {
+/**
+ * Toda a descendência de um pid, via /proc (Linux). Precisa varrer todas as
+ * tasks porque um processo multi-thread (node, por exemplo) registra os filhos
+ * sob a thread que fez o fork, não necessariamente sob a principal.
+ */
+function collectDescendants(pid, out = [], depth = 0) {
+  if (depth > 20) return out;
+  let tasks;
+  try { tasks = fs.readdirSync(`/proc/${pid}/task`); } catch { return out; }
+  for (const task of tasks) {
+    let raw;
+    try { raw = fs.readFileSync(`/proc/${pid}/task/${task}/children`, "utf8"); } catch { continue; }
+    for (const part of raw.trim().split(/\s+/)) {
+      const child = parseInt(part, 10);
+      if (!Number.isFinite(child) || out.includes(child)) continue;
+      out.push(child);
+      collectDescendants(child, out, depth + 1);
+    }
+  }
+  return out;
+}
+
+/**
+ * Matar só o PTY não basta: o job control do bash põe cada comando em seu
+ * próprio process group, então um agente (`claude`) ou dev server sobrevive ao
+ * SIGHUP do shell, é reparentado pro init e continua consumindo RAM — e, no
+ * caso do agente, tokens. Aqui a árvore é coletada ANTES de derrubar o shell
+ * (depois o vínculo pai/filho se perde) e encerrada das folhas pra raiz.
+ */
+function killTerminal(session, tid, { hard = false } = {}) {
   const t = session.terminals.get(tid);
   if (!t) return false;
   t.authCancelled = true;
   t.authRetry?.cancel();
   t.authRetry = null;
+
+  const pid = t.pty?.pid;
+  const tree = pid ? collectDescendants(pid) : [];
   try { t.pty?.kill(); } catch {}
+
+  // folhas primeiro: evita que um pai respawne filho enquanto derrubamos
+  for (const child of [...tree].reverse()) {
+    try { process.kill(child, hard ? "SIGKILL" : "SIGTERM"); } catch {}
+  }
+  if (!hard && tree.length) {
+    // quem ignorou o SIGTERM leva SIGKILL — inclusive o shell, se travou
+    const timer = setTimeout(() => {
+      for (const child of [...tree].reverse()) {
+        try { process.kill(child, "SIGKILL"); } catch {}
+      }
+      if (pid) { try { process.kill(pid, "SIGKILL"); } catch {} }
+    }, 2000);
+    timer.unref?.();
+  }
+
   session.terminals.delete(tid);
   return true;
 }
 
-function killAllTerminals(session) {
-  for (const tid of [...session.terminals.keys()]) killTerminal(session, tid);
+function killAllTerminals(session, opts = {}) {
+  for (const tid of [...session.terminals.keys()]) killTerminal(session, tid, opts);
 }
 
 // Detecta se há um comando rodando em foreground no PTY (dev server, build,
@@ -845,10 +896,7 @@ function helloPayload() {
       return {
         ...p,
         terminals: s ? Array.from(s.terminals.values()).map((t) => ({
-          id: t.id,
-          name: t.name,
-          status: t.status,
-          statusText: t.statusText,
+          ...terminalSummary(t),
           buffer: t.buffer.join(""),
         })) : [],
       };
@@ -861,7 +909,35 @@ async function persistProjects() {
   await fs.promises.writeFile(PROJECTS_PATH, json, "utf8");
 }
 
+/**
+ * O banco de uso guarda só o `project_id`. O nome, a cor e o ícone vivem aqui, em
+ * PROJECTS — juntar na saída evita duplicar esses dados no SQLite e mantê-los
+ * desatualizados quando o projeto é renomeado. Para os repositórios descobertos
+ * automaticamente o próprio banco traz um `label`.
+ */
+function withProjectNames(dados) {
+  if (!dados?.byProject) return dados;
+  const porId = new Map(PROJECTS.map((p) => [p.id, p]));
+  return {
+    ...dados,
+    byProject: dados.byProject.map((linha) => {
+      const projeto = porId.get(linha.project_id);
+      return {
+        ...linha,
+        name: projeto?.name ?? linha.label ?? (linha.project_id === "__none__" ? "Sem projeto" : linha.project_id),
+        color: projeto?.color ?? null,
+        icon: projeto?.icon ?? null,
+        // Repositório medido mas não cadastrado: a UI pode oferecer "adicionar projeto".
+        derived: !projeto && linha.project_id !== "__none__",
+      };
+    }),
+  };
+}
+
 function broadcastProjectsChanged() {
+  // As regras de atribuição de uso derivam de PROJECTS[].path: cadastrar um projeto
+  // promove o histórico que já vinha sendo medido como repositório avulso.
+  usage?.setProjects(PROJECTS);
   // versão leve sem buffer (clientes mantêm o que já têm)
   broadcast({
     type: "projects_changed",
@@ -869,9 +945,7 @@ function broadcastProjectsChanged() {
       const s = sessions.get(p.id);
       return {
         ...p,
-        terminals: s ? Array.from(s.terminals.values()).map((t) => ({
-          id: t.id, name: t.name, status: t.status, statusText: t.statusText,
-        })) : [],
+        terminals: s ? Array.from(s.terminals.values()).map(terminalSummary) : [],
       };
     }),
   });
@@ -976,7 +1050,14 @@ function detectCommonPaths() {
 }
 
 function terminalSummary(t) {
-  return { id: t.id, name: t.name, status: t.status, statusText: t.statusText };
+  return {
+    id: t.id, name: t.name, status: t.status, statusText: t.statusText,
+    // O painel "Aberto agora" mostra "aberto às HH:MM · parado há Xh" pra dar
+    // pra decidir o que encerrar sem entrar em cada aba. `lastActivity` é o
+    // mesmo relógio que o reaper usa (max de output e input).
+    startedAt: t.startedAt,
+    lastActivity: Math.max(t.lastOutputTime, t.lastInputTime),
+  };
 }
 
 function createControlAdapter() {
@@ -1059,6 +1140,33 @@ wss.on("connection", (ws) => {
     try {
       msg = JSON.parse(raw.toString());
     } catch {
+      return;
+    }
+
+    // ---- Uso de tokens (global, sem projeto) ----
+    if (msg.type === "usage_stats") {
+      const dados = usage
+        ? usage.stats({ days: Number(msg.days) > 0 ? Number(msg.days) : 1 })
+        : { available: false, status: null };
+      ws.send(JSON.stringify({ type: "usage_stats", ...withProjectNames(dados) }));
+      return;
+    }
+
+    if (msg.type === "usage_scan_now") {
+      usage?.scanNow();
+      ws.send(JSON.stringify({ type: "usage_scan_started", ok: Boolean(usage) }));
+      return;
+    }
+
+    if (msg.type === "usage_sync_now") {
+      usage?.syncNow();
+      ws.send(JSON.stringify({ type: "usage_sync_started", ok: Boolean(usage) }));
+      return;
+    }
+
+    if (msg.type === "usage_refresh_prices") {
+      usage?.refreshPrices();
+      ws.send(JSON.stringify({ type: "usage_prices_refreshing", ok: Boolean(usage) }));
       return;
     }
 
@@ -1861,7 +1969,9 @@ async function shutdown(opts = {}) {
     controlApi = null;
   }
   for (const s of sessions.values()) {
-    killAllTerminals(s);
+    // no shutdown não há segundo tempo pro SIGKILL de cortesia: o processo sai
+    // antes do timer, então derruba a árvore direto
+    killAllTerminals(s, { hard: true });
   }
   if (teamSelectionSyncTimer) {
     clearInterval(teamSelectionSyncTimer);
@@ -1872,6 +1982,8 @@ async function shutdown(opts = {}) {
   shutdownAllLsp();
   await voice.stop().catch(() => {});
   await stt.stop().catch(() => {});
+  await usage?.stop().catch(() => {});
+  usage = null;
   if (opts.exit !== false) process.exit(0);
 }
 
@@ -1884,6 +1996,7 @@ export async function startServer({
   voiceLogsDir = null,
   voiceEnabled = true,
   dictationEnabled = true,
+  usageEnabled = process.env.COCKPIT_USAGE !== "0",
   controlPolicy = null,
   controlPolicyPath = null,
   controlRuntimeDir = null,
@@ -1989,6 +2102,30 @@ export async function startServer({
     log.warn?.(
       `[cockpit/control] descriptor runtime indisponível: ${error.message}`,
     );
+  }
+
+  // Coletor de uso de tokens: worker próprio, único escritor do usage.db.
+  // Best-effort como voz/ditado — se não subir, o Cockpit funciona sem métricas.
+  if (!usageEnabled) {
+    log.log?.(`\x1b[33m▸ uso\x1b[0m coleta desligada (COCKPIT_USAGE=0)`);
+  } else try {
+    usage = createUsageService({
+      log,
+      appVersion: `cockpit/${APP_VERSION}`,
+      // Caminho absoluto do projeto sai da máquina só se pedirem: nome de pasta
+      // de cliente não precisa aparecer no painel para a conta fechar.
+      sendProjectPaths: process.env.COCKPIT_USAGE_PATHS === "1",
+      onEvent: (evento) => {
+        // Só o que a UI precisa ver: progresso do backfill e fim de varredura.
+        if (evento?.type === "progress" || evento?.type === "scan_done" || evento?.type === "backfill_done") {
+          broadcast({ type: "usage_progress", ...evento });
+        }
+      },
+    });
+    usage.start({ projects: PROJECTS });
+  } catch (error) {
+    usage = null;
+    log.warn?.(`[cockpit/uso] coletor indisponível: ${error.message}`);
   }
 
   // voz/ditado opt-in — não derrubam o boot se faltar binário

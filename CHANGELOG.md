@@ -10,6 +10,53 @@ _(nada ainda)_
 
 ---
 
+## [0.18.0] — 2026-07-31
+
+### Adicionado
+- **"+" nas divisórias e nas bordas do mosaico.** Passar o mouse numa divisória (ou na borda
+  externa do grid) revela um "+" no meio; clicar insere ali uma célula vazia — sem passar pelo
+  modal "Layout · N×N" do topo. A célula nasce **no ponto exato** onde você clicou, então dá
+  para montar layouts assimétricos (uma linha com 3 colunas e outra com 2, por exemplo) no
+  lugar onde a decisão acontece. A divisória horizontal cria uma linha nova de largura inteira.
+  As bordas externas cobrem os casos que não têm divisória nenhuma: um mosaico 1×1 ou qualquer
+  linha de uma coluna só. O peso da célula nova é a média dos vizinhos, para não nascer
+  espremida numa linha com proporções customizadas. Ao atingir o limite (6 colunas ou 6 linhas)
+  o botão simplesmente não aparece.
+- **"−" para remover um espaço não usado.** Toda célula vazia mostra, no canto, um botão que
+  devolve aquele espaço aos vizinhos. Se era a única célula da linha, a linha inteira sai junto.
+  O botão não aparece em card com projeto (para isso existe o X do card) nem quando resta uma
+  única célula no mosaico.
+- **Painel "Aberto agora" mais informativo.** Cada terminal mostra desde quando existe e quando
+  teve atividade pela última vez ("agora", "2h10", "ontem 11:54"). Terminais parados há mais de
+  2h — o mesmo limiar do reaper do servidor — são marcados como esquecidos e sobem na lista,
+  logo abaixo dos que estão aguardando resposta. O redesenho da lista fica pendente enquanto o
+  mouse está dentro do painel, para que ela não se reordene debaixo do cursor no meio de um clique.
+- **Coleta de uso de tokens (infraestrutura).** Worker próprio que lê os logs de sessão dos
+  agentes, calcula custo por modelo e guarda num banco local, exposto por WebSocket
+  (`usage_stats`). Desligável com `COCKPIT_USAGE=0`. **Ainda não há painel na interface** — esta
+  versão entrega só a base de dados.
+
+### Alterado
+- **Mosaico com espaçamento mínimo.** O grid perdeu os 6px de padding e as divisórias caíram de
+  6px para 2px, então os cards ocupam a janela inteira e ficam praticamente colados. A área de
+  pegada das divisórias **não** encolheu: continua com 10px, agora vindo da hit-area invisível.
+
+### Corrigido
+- **O X do painel do split não encerrava o terminal.** Fechar um painel apenas desfazia o
+  desenho: o processo continuava vivo, consumindo memória, sem nenhum painel apontando para ele.
+  Agora o X encerra a sessão de verdade — e mata a **árvore inteira** de processos, não só o
+  shell. Como o bash põe cada comando em seu próprio process group, o SIGHUP no shell não
+  alcançava os filhos, e agentes de IA de longa duração sobreviviam ao fechamento. A descendência
+  é coletada via `/proc` e recebe SIGTERM, com SIGKILL para quem ignorar.
+- **Clique desalinhado no X do painel do split.** O botão ficava atrás da camada de rolagem do
+  terminal, então só a faixa que sobrava fora dele respondia — era preciso clicar um pouco acima
+  do desenho. O mesmo problema afetava o X do painel "Aberto agora".
+- **Documentação de desinstalação apontava para o pacote errado.** O `installer.md` mandava
+  `apt remove cockpit`, que é o **Web Console do Debian/Ubuntu** e não tem relação com este app —
+  seguir a instrução derrubava o console web da máquina. O pacote correto é `cockpit-devnx`.
+
+---
+
 ## [0.17.3] — 2026-07-27
 
 ### Corrigido
