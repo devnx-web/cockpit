@@ -10,6 +10,17 @@ _(nada ainda)_
 
 ---
 
+## [0.18.1] — 2026-08-03
+
+### Alterado
+- **Cantos dos cards do mosaico quase retos.** O arredondamento caiu de 10px para 3px nos cards
+  e nas células vazias (e de 8px para 3px nos painéis divididos dentro do card). Com o
+  espaçamento mínimo da 0.18.0, os cards ficaram colados — e um raio grande abria um losango de
+  fundo justamente onde quatro cantos se encontram, lendo como espaço desperdiçado. Os 3px que
+  sobraram evitam que a borda colorida de um card encoste na do vizinho e vire cara de tabela.
+
+---
+
 ## [0.18.0] — 2026-07-31
 
 ### Adicionado
