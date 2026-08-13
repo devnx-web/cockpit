@@ -10,6 +10,41 @@ _(nada ainda)_
 
 ---
 
+## [0.19.0] — 2026-08-13
+
+### Adicionado
+- **Gaveta de ações no card do mosaico.** Os quatro botões soltos do cabeçalho viraram dois: o
+  "+" (novo terminal, a ação mais frequente) e um "⋯" que abre um menu com o resto — comandos
+  rápidos, maximizar, desacoplar e remover do mosaico. O cabeçalho do card disputava espaço
+  entre as mini-abas e os botões, e em card estreito as abas sumiam primeiro; agora esse espaço
+  volta pra quem precisa dele. O menu é a mesma peça do menu de contexto que já existia, e a
+  lista de itens é um array — acrescentar uma ação nova é uma linha.
+- **Desacoplar projeto em janela própria.** Pelo item "Desacoplar" da gaveta, o projeto abre numa
+  janela separada em modo Foco, escopada a ele só: sem sidebar, sem mosaico, sem troca de
+  projeto. No mosaico da janela principal o card vira um marcador "aberto em janela própria"
+  com botão **reancorar**, e as duas janelas se sincronizam sozinhas. **Fechar a janela
+  desacoplada não encerra nada** — os PTYs vivem no servidor e o scrollback é reposto pelo
+  buffer que o servidor já mantinha, então reabrir devolve a sessão como estava.
+
+### Alterado
+- **Janela desacoplada com cabeçalho enxuto.** Só o ícone e o nome do projeto. Saíram o caminho
+  completo e o badge de agente/status — numa janela de um projeto só, isso é contexto de
+  navegação que não existe mais.
+
+### Removido
+- **Rodapé de atalhos.** A barra inferior com os dez atalhos e os contadores
+  `rodando / aguardando / erro` saiu. Os atalhos continuam todos funcionando e listados na Ajuda
+  (`⌘/`), que é onde se aprende atalho; os contadores já existiam em dois lugares melhores — o
+  de "aguardando" na barra de título (clicável, pula pro próximo) e o resumo completo no rodapé
+  da sidebar. Com a linha do rodapé fora do grid, a área de terminal ganha esses 30px em toda a
+  interface, não só no mosaico, que já a escondia.
+- **Dicas de atalho embutidas na interface.** `sem abas — ⌘B novo terminal · ⌘E arquivos` virou
+  só `sem abas`; o estado vazio perdeu o `clique acima ou pressione ⌘B`; e o badge do cabeçalho
+  não repete mais `use ⌘B para criar` quando o projeto está sem terminal. Mesmo motivo: é
+  informação que se lê uma vez e depois só ocupa espaço.
+
+---
+
 ## [0.18.1] — 2026-08-03
 
 ### Alterado

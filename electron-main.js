@@ -16,8 +16,12 @@ const isDev = !app.isPackaged;
 const FIXED_PORT = 47817;
 
 // Instância única — evita dois Cockpits disputando o atalho global Ctrl+Espaço.
+// Sai na hora: app.quit() só agenda o encerramento, então o módulo seguiria
+// carregando, subiria um segundo servidor e sobrescreveria o control.json da
+// instância que já está rodando — deixando-a viva porém inalcançável pela
+// Control API (e portanto pelo MCP).
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  app.exit(0);
 }
 
 // projects.json fica em userData (gravável em produção, fora do asar)
@@ -109,12 +113,17 @@ async function bootServer() {
   return serverInstance;
 }
 
-function createWindow(serverUrl) {
-  mainWindow = new BrowserWindow({
-    width: 1500,
-    height: 950,
-    minWidth: 980,
-    minHeight: 600,
+// URL do servidor local, guardada pra abrir janelas desacopladas depois do boot.
+let serverUrlRef = null;
+// Janelas desacopladas vivas: projId -> BrowserWindow (uma por projeto).
+const detachedWindows = new Map();
+
+function makeWindow(serverUrl, { width, height, minWidth, minHeight, query = "" } = {}) {
+  const win = new BrowserWindow({
+    width: width || 1500,
+    height: height || 950,
+    minWidth: minWidth || 700,
+    minHeight: minHeight || 480,
     frame: false,
     titleBarStyle: "hidden",
     backgroundColor: "#0a0b0d",
@@ -129,13 +138,10 @@ function createWindow(serverUrl) {
     },
   });
 
-  mainWindow.loadURL(serverUrl);
+  win.loadURL(serverUrl + query);
+  win.once("ready-to-show", () => win.show());
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
-  });
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url }) => {
     // links externos abrem no browser do sistema
     if (/^https?:\/\//.test(url) && !url.startsWith(serverUrl)) {
       shell.openExternal(url);
@@ -144,29 +150,68 @@ function createWindow(serverUrl) {
     return { action: "allow" };
   });
 
-  mainWindow.on("maximize", () => {
-    mainWindow.webContents.send("window:state", { maximized: true });
-  });
-  mainWindow.on("unmaximize", () => {
-    mainWindow.webContents.send("window:state", { maximized: false });
-  });
+  win.on("maximize", () => win.webContents.send("window:state", { maximized: true }));
+  win.on("unmaximize", () => win.webContents.send("window:state", { maximized: false }));
+  return win;
+}
+
+function createWindow(serverUrl) {
+  serverUrlRef = serverUrl;
+  mainWindow = makeWindow(serverUrl, { minWidth: 980, minHeight: 600 });
   mainWindow.on("closed", () => { mainWindow = null; });
 }
 
-// IPC: controles da janela (renderer chama via window.cockpitDesktop)
-ipcMain.handle("window:minimize", () => mainWindow?.minimize());
-ipcMain.handle("window:toggle-maximize", () => {
-  if (!mainWindow) return false;
-  if (mainWindow.isMaximized()) {
-    mainWindow.unmaximize();
+// IPC: controles da janela (renderer chama via window.cockpitDesktop).
+// Resolvem a janela pelo sender — com janela desacoplada aberta, mirar em
+// mainWindow faria o "fechar" da desacoplada derrubar a janela principal.
+const senderWindow = (e) => BrowserWindow.fromWebContents(e.sender);
+ipcMain.handle("window:minimize", (e) => senderWindow(e)?.minimize());
+ipcMain.handle("window:toggle-maximize", (e) => {
+  const win = senderWindow(e);
+  if (!win) return false;
+  if (win.isMaximized()) {
+    win.unmaximize();
     return false;
   }
-  mainWindow.maximize();
+  win.maximize();
   return true;
 });
-ipcMain.handle("window:close", () => mainWindow?.close());
-ipcMain.handle("window:is-maximized", () => !!mainWindow?.isMaximized());
+ipcMain.handle("window:close", (e) => senderWindow(e)?.close());
+ipcMain.handle("window:is-maximized", (e) => !!senderWindow(e)?.isMaximized());
 ipcMain.handle("app:platform", () => process.platform);
+
+// Desacoplar: abre o projeto numa janela própria (?detach=<projId>). Os PTYs
+// vivem no servidor e o buffer volta no hello, então a janela nova reconstrói
+// o terminal sozinha — nada é movido nem reiniciado. Fechar a janela só derruba
+// um cliente WebSocket; os processos seguem rodando.
+ipcMain.handle("window:detach", (e, projId) => {
+  if (!serverUrlRef || !projId) return false;
+  const existing = detachedWindows.get(projId);
+  if (existing && !existing.isDestroyed()) {
+    if (existing.isMinimized()) existing.restore();
+    existing.focus();
+    return true;
+  }
+  const win = makeWindow(serverUrlRef, {
+    width: 1000,
+    height: 700,
+    query: `?detach=${encodeURIComponent(projId)}`,
+  });
+  detachedWindows.set(projId, win);
+  win.on("closed", () => {
+    if (detachedWindows.get(projId) === win) detachedWindows.delete(projId);
+  });
+  return true;
+});
+
+// Reancorar: fecha a janela desacoplada. O projeto volta a aparecer normalmente
+// no mosaico — de novo, sem tocar nos processos.
+ipcMain.handle("window:reattach", (_e, projId) => {
+  const win = detachedWindows.get(projId);
+  if (!win || win.isDestroyed()) return false;
+  win.close();
+  return true;
+});
 
 // Ditado por voz nativo — status e liga/desliga (painel de voz)
 ipcMain.handle("dictation:get-status", () => dictationStatus());

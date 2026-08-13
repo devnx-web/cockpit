@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld("cockpitDesktop", {
   onWindowState: (cb) => {
     ipcRenderer.on("window:state", (_e, state) => cb(state));
   },
+  // Abre o projeto numa janela própria (desacoplar). Resolve true se abriu ou
+  // se já havia uma janela desacoplada desse projeto (que é trazida pro foco).
+  detachProject: (projId) => ipcRenderer.invoke("window:detach", projId),
+  // Fecha a janela desacoplada do projeto (reancorar).
+  reattachProject: (projId) => ipcRenderer.invoke("window:reattach", projId),
   // Revela um arquivo/pasta no gerenciador de arquivos do SO.
   showItemInFolder: (fullPath) => ipcRenderer.invoke("shell:show-item-in-folder", fullPath),
   // Inicia um drag nativo do SO para arrastar o arquivo pra fora da janela.
