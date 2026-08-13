@@ -7433,6 +7433,8 @@
 
     function selectTerminal(projId, tid) {
       termUnread.delete(k(projId, tid));
+      // você foi ver o terminal: o próximo prompt dele pode avisar de novo
+      waitingNotifiedAt.delete(k(projId, tid));
       updateTabUnread(projId, tid);
       viewModeByProj.set(projId, "terminal");
       if (hasSplit(projId)) {
@@ -10189,6 +10191,7 @@
           if (!p) return;
           const closedTerm = p.terminals.find((t) => t.id === msg.terminalId);
           dismissReapToast(msg.projectId, msg.terminalId);
+          waitingNotifiedAt.delete(k(msg.projectId, msg.terminalId));
           p.terminals = p.terminals.filter((t) => t.id !== msg.terminalId);
           destroyXterm(msg.projectId, msg.terminalId);
           if (activeTerminalByProj.get(msg.projectId) === msg.terminalId) {
@@ -10655,7 +10658,18 @@
     // ============================================================
     // TOAST
     // ============================================================
-    function showToast({ title, message, action, projColor, autoClose = 8000 }) {
+    // Toasts com `key` são únicos: um novo com a mesma chave substitui o
+    // anterior em vez de empilhar mais um card na pilha.
+    const keyedToasts = new Map(); // key -> { toast, timer }
+    function showToast({ title, message, action, projColor, autoClose = 8000, key }) {
+      if (key) {
+        const prev = keyedToasts.get(key);
+        if (prev) {
+          clearTimeout(prev.timer);
+          dismissToast(prev.toast);
+          keyedToasts.delete(key);
+        }
+      }
       const container = document.getElementById("toastContainer");
       const toast = document.createElement("div");
       toast.className = "toast";
@@ -10674,8 +10688,12 @@
         });
       }
       container.appendChild(toast);
-      const timer = setTimeout(() => dismissToast(toast), autoClose);
+      const timer = setTimeout(() => {
+        dismissToast(toast);
+        if (key) keyedToasts.delete(key);
+      }, autoClose);
       toast.addEventListener("click", () => clearTimeout(timer));
+      if (key) keyedToasts.set(key, { toast, timer });
     }
     function dismissToast(toast) {
       if (!toast?.parentElement) return;
@@ -12527,8 +12545,22 @@
       });
     }
 
+    // Um agente pode entrar e sair de "waiting" várias vezes em poucos segundos
+    // (cada bloco de saída reavalia o estado), e cada transição chamava aqui —
+    // enchendo a tela de cards idênticos do mesmo terminal. O aviso agora é um
+    // por terminal: o toast tem chave (substitui o anterior em vez de empilhar)
+    // e só volta a aparecer depois da janela abaixo, ou se você já tiver ido ao
+    // terminal nesse meio tempo.
+    const WAITING_RENOTIFY_MS = 60000;
+    const waitingNotifiedAt = new Map(); // "projId:tid" -> timestamp do último aviso
+
     function showWaitingToast(proj, term) {
+      const tk = k(proj.id, term.id);
+      const now = Date.now();
+      if (now - (waitingNotifiedAt.get(tk) || 0) < WAITING_RENOTIFY_MS) return;
+      waitingNotifiedAt.set(tk, now);
       showToast({
+        key: `waiting:${tk}`,
         title: `${proj.name} aguarda sua resposta`,
         message: `Terminal "${term.name}" está parado num prompt.`,
         projColor: proj.color,

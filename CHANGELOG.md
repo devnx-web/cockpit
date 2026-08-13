@@ -10,6 +10,18 @@ _(nada ainda)_
 
 ---
 
+## [0.19.1] — 2026-08-13
+
+### Corrigido
+- **Aviso de "aguarda sua resposta" repetido do mesmo terminal.** Um agente entra e sai do estado
+  `waiting` várias vezes em poucos segundos — cada bloco de saída reavalia o estado — e cada
+  transição criava um card novo, empilhando cinco ou seis avisos idênticos do mesmo terminal na
+  tela (com o bipe junto). Agora o aviso é um por terminal: o toast tem chave e substitui o
+  anterior em vez de somar mais um, e só reaparece depois de 60s ou se você tiver ido ao terminal
+  nesse meio tempo — nesse caso o próximo prompt volta a avisar na hora.
+
+---
+
 ## [0.19.0] — 2026-08-13
 
 ### Adicionado
