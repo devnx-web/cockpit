@@ -182,8 +182,8 @@ ipcMain.handle("app:platform", () => process.platform);
 
 // Desacoplar: abre o projeto numa janela própria (?detach=<projId>). Os PTYs
 // vivem no servidor e o buffer volta no hello, então a janela nova reconstrói
-// o terminal sozinha — nada é movido nem reiniciado. Fechar a janela só derruba
-// um cliente WebSocket; os processos seguem rodando.
+// o terminal sozinha — nada é movido nem reiniciado. Desacoplar é só de ida: a
+// janela vive até ser fechada, e fechar encerra o projeto (veja abaixo).
 ipcMain.handle("window:detach", (e, projId) => {
   if (!serverUrlRef || !projId) return false;
   const existing = detachedWindows.get(projId);
@@ -198,17 +198,31 @@ ipcMain.handle("window:detach", (e, projId) => {
     query: `?detach=${encodeURIComponent(projId)}`,
   });
   detachedWindows.set(projId, win);
+
+  // Fechar a janela encerra os terminais do projeto. Quem confirma e mata é o
+  // renderer (é lá que estão o status dos terminais e o WebSocket), então a
+  // primeira passada é barrada e devolvida pra ele; o segundo close() já vem
+  // com o flag e passa direto.
+  //
+  // O gancho é o "close" da janela, não o pagehide do renderer: pagehide também
+  // dispara em reload, e um F5 mataria os terminais sem ninguém pedir.
+  win.on("close", (ev) => {
+    if (win.__cockpitClosing) return;
+    ev.preventDefault();
+    win.webContents.send("window:confirm-close");
+  });
   win.on("closed", () => {
     if (detachedWindows.get(projId) === win) detachedWindows.delete(projId);
   });
   return true;
 });
 
-// Reancorar: fecha a janela desacoplada. O projeto volta a aparecer normalmente
-// no mosaico — de novo, sem tocar nos processos.
-ipcMain.handle("window:reattach", (_e, projId) => {
-  const win = detachedWindows.get(projId);
+// O renderer terminou de encerrar o projeto (ou o usuário confirmou): agora o
+// close passa. Se ele cancelar, simplesmente não chama isto e a janela fica.
+ipcMain.handle("window:close-confirmed", (e) => {
+  const win = senderWindow(e);
   if (!win || win.isDestroyed()) return false;
+  win.__cockpitClosing = true;
   win.close();
   return true;
 });

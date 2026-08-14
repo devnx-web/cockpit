@@ -1514,29 +1514,6 @@
     .mosaic-card-btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
     .mosaic-card-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 
-    /* Card cujo projeto está aberto em janela própria: o slot é mantido (pra não
-       embaralhar o arranjo) mas fica apagado, sinalizando "está em outro lugar". */
-    .mosaic-card.detached { opacity: 0.62; }
-    .mosaic-card.detached:hover { opacity: 1; }
-    .mosaic-detached {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-      font-size: 12px; color: var(--text-tertiary); text-align: center;
-    }
-    .mosaic-detached-icon { opacity: 0.5; }
-    .mosaic-detached-icon svg { width: 22px; height: 22px; stroke-width: 1.5; }
-    .mosaic-detached-btn {
-      padding: 5px 12px;
-      font-size: 11.5px; font-family: inherit;
-      color: var(--text-secondary);
-      background: var(--bg-2);
-      border: 1px solid var(--border-default);
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 90ms, color 90ms;
-    }
-    .mosaic-detached-btn:hover { background: var(--bg-3); color: var(--text-primary); }
-
     /* Janela desacoplada: sem sidebar, sem barra de abas global, sem mosaico —
        é o modo Foco reduzido a um projeto só. */
     .app.detached .sidebar,
@@ -4425,8 +4402,22 @@
     // handles de janelas abertas por window.open (modo navegador, sem Electron)
     const detachedTabs = new Map();
 
+    // Solta o slot que o projeto ocupava no mosaico. O grid é de células fixas
+    // (gridSlots[i] = projId | null), então isto não mexe no arranjo: a célula
+    // vira o "clique para escolher um projeto" e fica livre pra outro projeto.
+    function releaseSlot(projId) {
+      const idx = gridSlots.indexOf(projId);
+      if (idx < 0) return;
+      gridSlots[idx] = null;
+      saveGridState();
+      if (layoutMode === "mosaic") renderMosaic();
+    }
+
     async function detachProject(projId) {
       if (!projId || projId === DETACHED_PROJ) return;
+      // o projeto passa a ser mostrado na janela própria: manter o card aqui só
+      // gastaria uma célula do grid pra dizer "está em outro lugar"
+      releaseSlot(projId);
       if (window.cockpitDesktop?.detachProject) {
         await window.cockpitDesktop.detachProject(projId);
         return;
@@ -4439,20 +4430,6 @@
         "width=1000,height=700",
       );
       if (w) detachedTabs.set(projId, w);
-    }
-
-    async function reattachProject(projId) {
-      if (window.cockpitDesktop?.reattachProject) {
-        await window.cockpitDesktop.reattachProject(projId);
-      } else {
-        const open = detachedTabs.get(projId);
-        try { open?.close(); } catch {}
-        detachedTabs.delete(projId);
-      }
-      // fallback: se a janela sumiu sem se desmarcar (crash, kill), o registro
-      // ficaria preso e o card mudo pra sempre
-      markDetached(projId, false);
-      if (layoutMode === "mosaic") renderMosaic();
     }
 
     if (DETACHED_PROJ) {
@@ -5191,10 +5168,11 @@
       addBtn.addEventListener("click", (e) => { e.stopPropagation(); closeQcmdPopover(); showManageCmdsModal(projId); });
       pop.appendChild(addBtn);
 
-      const rect = anchorEl.getBoundingClientRect();
-      pop.style.top = (rect.bottom + 6) + "px";
-      pop.style.left = rect.left + "px";
+      // entra no DOM antes de posicionar: placeFloating precisa medir a largura
+      // real do popover pra saber se ele cabe (fora do DOM ela é zero, e era por
+      // isso que num card colado na borda direita ele vazava pra fora da tela)
       document.body.appendChild(pop);
+      placeFloating(pop, anchorEl, { gap: 6 });
 
       // fechar ao clicar fora
       setTimeout(() => {
@@ -6739,8 +6717,7 @@
         <span class="mosaic-card-title">${escapeHtml(p.name)}</span>
         <div class="mosaic-card-tabs">${tabsHtml}</div>
         <div class="mosaic-card-actions">
-          <button class="mosaic-card-btn" data-act="new" title="Novo terminal">${ICONS.plus}</button>
-          <button class="mosaic-card-btn" data-act="drawer" title="Mais ações">${ICONS.more}</button>
+          <button class="mosaic-card-btn" data-act="drawer" title="Ações do projeto">${ICONS.more}</button>
         </div>`;
       cell.appendChild(head);
 
@@ -6781,18 +6758,7 @@
       body.className = "mosaic-card-body";
       cell.appendChild(body);
 
-      if (isDetached(projId)) {
-        // o terminal está sendo mostrado na janela desacoplada. Reparentar a
-        // mesma .terminal-instance aqui não faria sentido (o DOM é desta janela,
-        // a de lá tem o dela), então o card vira um atalho pra trazer de volta.
-        cell.classList.add("detached");
-        body.innerHTML = `<div class="mosaic-detached">
-          <div class="mosaic-detached-icon">${DETACH_ICON}</div>
-          <div>aberto em janela própria</div>
-          <button class="mosaic-detached-btn">reancorar</button>
-        </div>`;
-        body.querySelector(".mosaic-detached-btn").addEventListener("click", () => reattachProject(projId));
-      } else if (p.terminals.length === 0) {
+      if (p.terminals.length === 0) {
         body.innerHTML = `<div class="mosaic-drop"><div class="mosaic-drop-plus">${ICONS.plus}</div><div>criar terminal</div></div>`;
         body.querySelector(".mosaic-drop").addEventListener("click", () => requestCreateTerminal(projId));
       } else if (hasSplit(projId)) {
@@ -6847,7 +6813,6 @@
           onReorder: (order) => { applyTerminalOrder(projId, order); renderMosaic(); },
         });
       }
-      head.querySelector('[data-act="new"]').addEventListener("click", (e) => showAddTerminalMenu(e.currentTarget, projId));
       head.querySelector('[data-act="drawer"]').addEventListener("click", (e) => {
         e.stopPropagation();
         openCardDrawer(e.currentTarget, projId);
@@ -7291,16 +7256,20 @@
 
       const updateCounter = () => {
         const c = pop.querySelector("#pickCounter");
-        if (c) c.textContent = `${projects.length} projetos · clique pra adicionar ao card`;
+        if (c) c.textContent = `${projects.filter((p) => !isDetached(p.id)).length} projetos · clique pra adicionar ao card`;
       };
 
       const renderList = () => {
         const listEl = pop.querySelector("#pickList");
         const q = pickQuery.trim().toLowerCase();
 
+        // Projeto aberto em janela própria fica fora da lista: fixá-lo numa célula
+        // daqui abriria uma segunda UI pro mesmo projeto, competindo com a janela.
+        const pickable = projects.filter((p) => !isDetached(p.id));
+
         // Seção "Terminais abertos" — todos os terminais já abertos, pra jogar um
         // terminal específico na célula (fixa o projeto e deixa aquele terminal ativo).
-        let openTerms = projects.flatMap((p) => p.terminals.map((t) => ({ p, t })));
+        let openTerms = pickable.flatMap((p) => p.terminals.map((t) => ({ p, t })));
         if (q) openTerms = openTerms.filter(({ p, t }) => [p.name, t.name, p.id].filter(Boolean).join(" ").toLowerCase().includes(q));
         // terminais aguardando resposta vêm primeiro (mantém ordem original entre iguais)
         openTerms = openTerms
@@ -7325,7 +7294,7 @@
           </div>` : "";
 
         // TODOS os projetos (inclusive ocultos). Ocultos vão pro fim.
-        let items = projects.slice();
+        let items = pickable.slice();
         if (q) items = items.filter((p) => [p.name, p.id, p.group, p.path].filter(Boolean).join(" ").toLowerCase().includes(q));
 
         // agrupa por grupo, preservando a ordem
@@ -7962,29 +7931,52 @@
       }, 8000);
       requestCreateTerminal(projId);
     }
+    // Posiciona um menu/popover ancorado num botão, garantindo que ele caiba na
+    // janela: prende no eixo X e vira pra cima quando não há espaço embaixo. Sem
+    // isso, um card na borda direita joga metade do menu pra fora da tela — e os
+    // cards do mosaico vivem nas bordas. `align` é o lado do botão pelo qual o
+    // menu se alinha quando há espaço de sobra.
+    // O tamanho vem de offsetWidth/Height e não de getBoundingClientRect: os
+    // menus entram com animação que começa em scale(0.97), e o rect mede a caixa
+    // já transformada — daria uma largura menor que a real bem no frame em que
+    // estamos decidindo se ela cabe.
+    function placeFloating(el, anchorEl, { align = "left", gap = 4 } = {}) {
+      const r = anchorEl.getBoundingClientRect();
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const x = align === "right" ? r.right - w : r.left;
+      el.style.left = `${Math.max(8, Math.min(x, window.innerWidth - w - 8))}px`;
+      let top = r.bottom + gap;
+      if (top + h > window.innerHeight) top = Math.max(8, r.top - h - gap);
+      el.style.top = `${top}px`;
+    }
+
     // Gaveta do card do mosaico (botão "⋯"). Concentra as ações que antes eram
     // botões soltos no header: em card estreito eles disputavam espaço com as
-    // mini-abas e as abas é que sumiam. Só o "+" ficou fora, por ser a ação de
-    // alta frequência. Os itens são uma lista de dados — acrescentar um novo
-    // (ex.: "Desacoplar") é uma linha aqui, sem mexer no layout do header.
+    // mini-abas e as abas é que sumiam — por isso o header ficou só com o "⋯" e
+    // até o "+" (novo terminal) virou item daqui. Os itens são uma lista de
+    // dados: acrescentar um novo é uma linha, sem mexer no layout do header.
     function openCardDrawer(anchorEl, projId) {
       document.querySelectorAll(".context-menu").forEach((m) => m.remove());
 
-      // o índice do slot é resolvido na hora do clique, não capturado no render:
-      // o mosaico re-renderiza a qualquer momento e um índice velho removeria o
-      // card errado.
+      // as opções que eram do "+" entram aqui direto, e não como submenu: são
+      // três itens, e menu dentro de menu num card pequeno é pior que a lista.
+      // Sem nenhum terminal ainda, dividir não faz sentido — some.
+      const temTerminal = (getProj(projId)?.terminals.length || 0) > 0;
       const items = [
+        { icon: ICONS.plus, label: "Nova aba", run: () => requestCreateTerminal(projId) },
+        ...(temTerminal ? [
+          { icon: SPLIT_ICON_RIGHT, label: "Dividir à direita", run: () => requestSplit(projId, "row") },
+          { icon: SPLIT_ICON_DOWN, label: "Dividir abaixo", run: () => requestSplit(projId, "col") },
+        ] : []),
+        { divider: true },
         { icon: QCMD_ICON, label: "Comandos rápidos", run: () => openQcmdPopover(anchorEl, projId) },
         { icon: MOSAIC_FOCUS_ICON, label: "Maximizar", run: () => { selectProject(projId); setLayoutMode("focus"); } },
         { icon: DETACH_ICON, label: "Desacoplar", run: () => detachProject(projId) },
         { divider: true },
-        { icon: ICONS.x, label: "Remover do mosaico", danger: true, run: () => {
-          const idx = gridSlots.indexOf(projId);
-          if (idx < 0) return;
-          gridSlots[idx] = null;
-          saveGridState();
-          renderMosaic();
-        } },
+        // fechar mata os processos; remover só solta a célula e deixa tudo rodando
+        { icon: ICONS.x, label: "Fechar projeto e terminais", danger: true, run: () => closeProject(projId) },
+        { icon: ICONS.x, label: "Remover do mosaico", danger: true, run: () => releaseSlot(projId) },
       ];
 
       const menu = document.createElement("div");
@@ -7998,12 +7990,7 @@
       document.body.appendChild(menu);
 
       // alinhado pela direita do botão (o cluster mora na borda direita do card)
-      const r = anchorEl.getBoundingClientRect();
-      const mr = menu.getBoundingClientRect();
-      menu.style.left = `${Math.max(8, Math.min(r.right - mr.width, window.innerWidth - mr.width - 8))}px`;
-      let top = r.bottom + 4;
-      if (top + mr.height > window.innerHeight) top = Math.max(8, r.top - mr.height - 4);
-      menu.style.top = `${top}px`;
+      placeFloating(menu, anchorEl, { align: "right" });
       anchorEl.classList.add("open");
 
       // dismiss é desregistrado no close() — senão o listener sobrevive ao
@@ -8036,7 +8023,6 @@
       // sem terminal ainda: dividir não faz sentido, cria direto
       if (!p || p.terminals.length === 0) { requestCreateTerminal(projId); return; }
       document.querySelectorAll(".context-menu").forEach((m) => m.remove());
-      const r = anchorEl.getBoundingClientRect();
       const menu = document.createElement("div");
       menu.className = "context-menu";
       menu.style.cssText = "position:fixed;z-index:300";
@@ -8046,12 +8032,7 @@
         <div class="context-item" data-a="right">${SPLIT_ICON_RIGHT} Dividir à direita</div>
         <div class="context-item" data-a="down">${SPLIT_ICON_DOWN} Dividir abaixo</div>`;
       document.body.appendChild(menu);
-      const mr = menu.getBoundingClientRect();
-      const left = Math.max(8, Math.min(r.left, window.innerWidth - mr.width - 8));
-      let top = r.bottom + 4;
-      if (top + mr.height > window.innerHeight) top = Math.max(8, r.top - mr.height - 4);
-      menu.style.left = `${left}px`;
-      menu.style.top = `${top}px`;
+      placeFloating(menu, anchorEl);
       const remove = () => menu.remove();
       menu.querySelectorAll(".context-item").forEach((item) => item.addEventListener("click", () => {
         remove();
@@ -8082,6 +8063,64 @@
         ws.send(JSON.stringify({ type: "close_terminal", projectId: projId, terminalId: tid }));
       }
     }
+    // Fecha o projeto: encerra todos os terminais dele e solta a célula do
+    // mosaico. O projeto continua cadastrado (nada sai do projects.json) — só
+    // deixa de estar aberto.
+    //
+    // A confirmação é uma só, no nível do projeto: passar por
+    // requestCloseTerminal renderia um diálogo por terminal, então o envio do
+    // close_terminal é feito direto aqui. Devolve false se o usuário cancelar.
+    async function closeProject(projId) {
+      const proj = getProj(projId);
+      if (!proj) return false;
+      const vivos = proj.terminals.filter((t) => t.status === "running" || t.status === "waiting");
+      if (vivos.length) {
+        const quais = vivos.length === 1
+          ? `<strong>${escapeHtml(vivos[0].name)}</strong> está ativo`
+          : `<strong>${vivos.length} terminais</strong> estão ativos`;
+        const ok = await showConfirm({
+          title: "Fechar projeto?",
+          message: `Em <strong>${escapeHtml(proj.name)}</strong>, ${quais}.<br/>Fechar agora vai matar os processos e perder o estado.`,
+          confirmLabel: "Fechar mesmo assim",
+          cancelLabel: "Manter aberto",
+          danger: true,
+        });
+        if (!ok) return false;
+      }
+      if (ws?.readyState === 1) {
+        for (const t of proj.terminals) {
+          ws.send(JSON.stringify({ type: "close_terminal", projectId: projId, terminalId: t.id }));
+        }
+      }
+      releaseSlot(projId);
+      return true;
+    }
+
+    // Espera o WebSocket escoar o que já foi enfileirado, desistindo no timeout.
+    // Fechar a janela derruba o socket na hora: um close_terminal ainda no buffer
+    // nunca chegaria ao servidor e o processo ficaria órfão.
+    function flushWs(timeoutMs = 1000) {
+      return new Promise((resolve) => {
+        if (ws?.readyState !== 1 || !ws.bufferedAmount) return resolve();
+        const limite = performance.now() + timeoutMs;
+        const tick = () => {
+          if (ws.readyState !== 1 || !ws.bufferedAmount || performance.now() > limite) return resolve();
+          setTimeout(tick, 20);
+        };
+        tick();
+      });
+    }
+
+    // Janela desacoplada: o main barra o fechamento e devolve aqui pra encerrar
+    // o projeto. Confirmado, libera o close; cancelado, a janela fica de pé.
+    if (DETACHED_PROJ && window.cockpitDesktop?.onConfirmClose) {
+      window.cockpitDesktop.onConfirmClose(async () => {
+        if (!(await closeProject(DETACHED_PROJ))) return;
+        await flushWs();
+        window.cockpitDesktop.confirmClose();
+      });
+    }
+
     function requestRenameTerminal(projId, tid, name) {
       if (ws?.readyState === 1) {
         ws.send(JSON.stringify({ type: "rename_terminal", projectId: projId, terminalId: tid, name }));

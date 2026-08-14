@@ -10,6 +10,39 @@ _(nada ainda)_
 
 ---
 
+## [0.20.0] — 2026-08-14
+
+### Adicionado
+- **Fechar projeto e terminais.** Item novo na gaveta do card: encerra todos os terminais do
+  projeto e solta a célula do mosaico. O projeto continua cadastrado — "fechar" aqui significa
+  encerrar o que está rodando, não apagar nada. Se algum terminal estiver ativo, aparece **uma**
+  confirmação no nível do projeto (e não uma por terminal), avisando quantos processos vão morrer.
+- **Fechar a janela desacoplada encerra o projeto.** O X da janela agora mata os terminais dela,
+  com a mesma confirmação. O gancho é o `close` da janela e não o `pagehide` do renderer: um F5
+  na janela desacoplada mataria os terminais sem ninguém pedir.
+
+### Alterado
+- **Desacoplar libera a célula do mosaico.** O card do projeto desacoplado não fica mais ocupando
+  um espaço do grid pra dizer "estou em outro lugar" — a célula vira "clique para escolher um
+  projeto" e pode receber outro projeto na hora. O arranjo que você desenhou não muda: o mosaico
+  é um grid de células fixas, então soltar uma não embaralha as outras. Projeto aberto em janela
+  própria também sai da lista do seletor de célula, pra não abrir duas UIs do mesmo projeto.
+- **O "+" do card foi pra dentro da gaveta.** As três ações que ele abria — nova aba, dividir à
+  direita, dividir abaixo — agora são itens diretos do menu "⋯", não um submenu: são três, e menu
+  dentro de menu num card pequeno é pior que a lista. O cabeçalho do card ficou com um botão só.
+
+### Removido
+- **Reancorar.** Desacoplar virou caminho único: a janela do projeto vive até ser fechada. O card
+  fantasma no mosaico existia só pra hospedar esse botão.
+
+### Corrigido
+- **Menus do card vazando pra fora da tela.** O popover de comandos rápidos era posicionado antes
+  de entrar no DOM — media largura zero — e não se prendia à janela, então num card da borda
+  direita metade dele ficava fora. Agora os três menus flutuantes do card usam o mesmo cálculo:
+  prendem no eixo X e viram pra cima quando não há espaço embaixo.
+
+---
+
 ## [0.19.1] — 2026-08-13
 
 ### Corrigido
