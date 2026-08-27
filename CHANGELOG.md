@@ -10,6 +10,37 @@ _(nada ainda)_
 
 ---
 
+## [0.21.0] — 2026-08-26
+
+### Adicionado
+- **LifeAi, a maestra.** Ela conduz os agentes dos terminais em vez de programar: recebe uma
+  demanda em linguagem natural, acha o projeto, põe um agente pra trabalhar, conversa com ele e
+  traduz o resultado. Entram a fila de demandas, o despacho, a busca de projeto por nome (a
+  mesma que evita inventar id), o daemon com broker próprio e o console web.
+- **Mais de uma janela do Cockpit.** Clicar no ícone com o app aberto não fazia nada; agora abre
+  outra janela principal — mesmos projetos, mesmos terminais, mesmas demandas, porque todas
+  falam com o mesmo servidor. Também por **Ctrl+Shift+N** e pela ação "Nova janela" no ícone da
+  dock. Continua havendo um servidor só: o `control.json`, o `projects.json`, as homes do broker
+  de contas, o `usage.db`, o Ctrl+Espaço do ditado e os sockets de voz são únicos por máquina e
+  não sobreviveriam a dois donos.
+- **Agente de voz (experimento).** Um acompanhante que observa a fila de demandas e narra o que
+  está acontecendo.
+
+### Alterado
+- **A política do MCP se relê sozinha.** Liberar um projeto para a LifeAi custava um restart — e
+  restart mata todos os terminais. Agora a alteração no `mcp-policy.json` vale na requisição
+  seguinte. JSON quebrado mantém a política anterior no ar (um editor que salva em duas etapas
+  não corta o acesso de ninguém no meio do trabalho); arquivo apagado revoga. E
+  `"projects": "all"` libera o catálogo inteiro, inclusive os projetos criados depois.
+
+### Corrigido
+- **"Zero terminais" num projeto com agente rodando.** A allowlist do MCP era lida uma vez no
+  boot e ainda era podada pelo catálogo daquele instante, então projeto criado depois nascia
+  invisível para a LifeAi — que relatava fielmente uma lista vazia. Agravava o efeito ter dois
+  projetos apontando para a mesma pasta: um era encontrado, o agente trabalhava no outro.
+
+---
+
 ## [0.20.0] — 2026-08-14
 
 ### Adicionado
