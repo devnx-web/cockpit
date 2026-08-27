@@ -235,3 +235,48 @@ test("does not retry a mutation after an ambiguous network failure", async (t) =
   assert.equal(firstCalls, 1);
   assert.equal(secondCalls, 0);
 });
+
+test("as rotas de orquestração passam pelo cliente que recarrega o descritor", async (t) => {
+  const seen = [];
+  const server = await startServer(async (req, res) => {
+    seen.push(req.url);
+    if (req.method === "POST") {
+      const body = await readJson(req);
+      return sendJson(res, 202, {
+        ok: true,
+        requestId: body.requestId,
+        ack: { accepted: true, completed: false, at: "2026-08-25T12:00:00.000Z" },
+        data: { demand: { id: "d1", projectId: "alpha", status: "queued" } },
+      });
+    }
+    if (req.url.includes("/projects/search")) {
+      return sendJson(res, 200, {
+        ok: true,
+        data: { query: "a", ambiguous: true, candidates: [{ id: "alpha", name: "Alpha" }] },
+      });
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      cursor: "demands:x:revision:2",
+      data: { revision: 2, timedOut: true, demands: [] },
+    });
+  });
+  t.after(() => server.close());
+
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "cockpit-mcp-reload-"));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const descriptorPath = path.join(temp, "control.json");
+  replaceDescriptor(descriptorPath, {
+    controlUrl: server.controlUrl,
+    token: TOKEN_ONE,
+    instanceId: INSTANCE_ONE,
+  });
+  const client = createConfiguredControlClient(configFromDescriptor(descriptorPath));
+
+  // sem estes três registrados aqui, a tool correspondente ficaria invisível
+  assert.equal((await client.findProjects("a")).candidates[0].id, "alpha");
+  assert.equal((await client.listDemands({ waitMs: 0 })).timedOut, true);
+  const dispatched = await client.dispatchDemand("alpha", { text: "faz aí" });
+  assert.equal(dispatched.data.demand.id, "d1");
+  assert.ok(seen.some((url) => url.includes("/dispatch")));
+});

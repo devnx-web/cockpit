@@ -2086,6 +2086,150 @@
       margin-left: -3px;
     }
 
+    /* PAINEL LIFEAI — agente global da Ailiv. Irmão flex do mosaico: empurra,
+       não sobrepõe, no mesmo padrão do painel Git. */
+    .lifeai-panel {
+      width: 400px;
+      border-left: 1px solid var(--border-default);
+      background: var(--bg-1);
+      display: none;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .lifeai-panel.visible { display: flex; }
+    .lifeai-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-default);
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-2);
+      flex-shrink: 0;
+      min-height: 40px;
+    }
+    .lifeai-title {
+      flex: 1; min-width: 0;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.005em;
+    }
+    .lifeai-console-btn {
+      font: inherit; font-size: 10px;
+      padding: 3px 8px; border-radius: 4px;
+      color: var(--text-secondary);
+      background: transparent;
+      border: 1px solid var(--border-default);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .lifeai-console-btn:hover { color: var(--text-primary); background: var(--bg-3); }
+    .lifeai-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text-tertiary);
+      flex-shrink: 0;
+    }
+    .lifeai-dot.on { background: #4ade80; }
+    .lifeai-dot.busy { background: #fb923c; }
+    .lifeai-log {
+      flex: 1; overflow-y: auto;
+      padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 8px;
+      font-size: 12px; line-height: 1.5;
+    }
+    .lifeai-empty {
+      color: var(--text-tertiary);
+      font-size: 11px;
+      padding: 12px 0;
+      line-height: 1.6;
+    }
+    /* Comando para ligar o serviço: texto selecionável, nunca um botão que
+       executa — quem decide subir um serviço de fundo é o usuário. */
+    .lifeai-empty code {
+      display: block;
+      margin-top: 8px;
+      padding: 6px 8px;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-family: var(--mono, monospace);
+      font-size: 11px;
+      user-select: all;
+    }
+    .lifeai-msg {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--text-primary);
+    }
+    .lifeai-msg.me {
+      align-self: flex-end;
+      max-width: 85%;
+      background: var(--bg-3, var(--bg-2));
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      padding: 6px 9px;
+    }
+    .lifeai-step {
+      color: var(--text-secondary);
+      font-family: var(--font-term);
+      font-size: 11px;
+      display: flex; gap: 6px; align-items: baseline;
+    }
+    .lifeai-step .tool { color: var(--text-tertiary); }
+    .lifeai-step.fail { color: #f87171; }
+    .lifeai-approval {
+      border: 1px solid #fb923c;
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: var(--bg-2);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .lifeai-approval-text {
+      font-size: 11px;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .lifeai-approval-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .lifeai-approval-actions button {
+      font: inherit; font-size: 11px;
+      padding: 4px 10px; border-radius: 6px;
+      border: 1px solid var(--border-default);
+      background: var(--bg-1); color: var(--text-primary);
+      cursor: pointer;
+    }
+    .lifeai-approval-actions button:hover { background: var(--bg-2); }
+    .lifeai-approval-actions button.deny { color: #f87171; }
+    .lifeai-compose {
+      border-top: 1px solid var(--border-default);
+      padding: 8px;
+      flex-shrink: 0;
+      background: var(--bg-2);
+    }
+    .lifeai-compose textarea {
+      width: 100%; box-sizing: border-box;
+      resize: none;
+      min-height: 56px; max-height: 160px;
+      font: inherit; font-size: 12px; line-height: 1.5;
+      padding: 7px 9px;
+      border-radius: 7px;
+      border: 1px solid var(--border-default);
+      background: var(--bg-1);
+      color: var(--text-primary);
+    }
+    .lifeai-compose textarea:focus {
+      outline: none;
+      border-color: var(--accent, #6366f1);
+    }
+    .lifeai-compose-hint {
+      margin-top: 5px;
+      font-size: 10px;
+      color: var(--text-tertiary);
+    }
+    /* Agente global não pertence a uma janela de um projeto. */
+    .app.detached .lifeai-panel,
+    .app.detached #lifeaiResizeHandle,
+    .app.detached #btnLifeai { display: none !important; }
+
     /* GIT PANEL */
     .git-panel {
       width: 360px;
@@ -4013,6 +4157,13 @@
                 <path d="M18 9a9 9 0 0 1-9 9"/>
               </svg>
             </button>
+            <button class="icon-btn" title="LifeAi (⌘⇧L)" id="btnLifeai">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+                <circle cx="12" cy="12" r="4.5"/>
+                <path d="M6.3 6.3l2.1 2.1M15.6 15.6l2.1 2.1M17.7 6.3l-2.1 2.1M8.4 15.6l-2.1 2.1"/>
+              </svg>
+            </button>
             <button class="icon-btn" title="Renomear terminal (F2)" id="btnRename">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -4142,6 +4293,26 @@
           </div>
           <div class="git-files" id="gitFiles">
             <div class="git-empty">carregando…</div>
+          </div>
+        </aside>
+        <div class="panel-resize-handle" id="lifeaiResizeHandle"></div>
+        <aside class="lifeai-panel" id="lifeaiPanel">
+          <div class="lifeai-header">
+            <span class="lifeai-dot" id="lifeaiDot"></span>
+            <span class="lifeai-title">LifeAi</span>
+            <button class="lifeai-console-btn" id="lifeaiConsole" title="Abrir o console no navegador" hidden>console</button>
+            <button class="icon-btn" id="lifeaiClose" title="Fechar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="lifeai-log" id="lifeaiLog">
+            <div class="lifeai-empty">Mande uma demanda. Ela decide se resolve sozinha ou abre um terminal no projeto certo.</div>
+          </div>
+          <div class="lifeai-compose">
+            <textarea id="lifeaiInput" rows="2" placeholder="O que você precisa?" spellcheck="false"></textarea>
+            <div class="lifeai-compose-hint"><span class="kbd">↵</span> enviar · <span class="kbd">⇧↵</span> nova linha</div>
           </div>
         </aside>
       </div>
@@ -8257,6 +8428,180 @@
     }
 
     // ============================================================
+    // LIFEAI — agente global da Ailiv
+    // ============================================================
+    let lifeaiPanelVisible = false;
+    let lifeaiRunId = null;
+
+    function toggleLifeaiPanel() {
+      // Numa janela desacoplada não existe agente global: ela é de um projeto.
+      if (DETACHED_PROJ) return;
+      lifeaiPanelVisible = !lifeaiPanelVisible;
+      document.getElementById("lifeaiPanel").classList.toggle("visible", lifeaiPanelVisible);
+      document.getElementById("lifeaiResizeHandle").classList.toggle("visible", lifeaiPanelVisible);
+      if (lifeaiPanelVisible) {
+        if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "lifeai_status" }));
+        document.getElementById("lifeaiInput").focus();
+      }
+      // re-fit terminal após resize
+      setTimeout(() => {
+        const inst = xtermInstances.get(k(activeProjId, getActiveTid()));
+        if (inst) try { inst.fitAddon.fit(); } catch {}
+      }, 60);
+    }
+
+    function lifeaiAppend(node) {
+      const log = document.getElementById("lifeaiLog");
+      log.querySelector(".lifeai-empty")?.remove();
+      log.appendChild(node);
+      log.scrollTop = log.scrollHeight;
+      return node;
+    }
+
+    /**
+     * Tudo que chega do agente — texto, nome de ferramenta, pedido de aprovação
+     * — é dado produzido por um processo. Vai para o DOM via textContent, nunca
+     * como HTML, e nunca dispara ação sozinho.
+     */
+    function lifeaiLine(className, texto) {
+      const el = document.createElement("div");
+      el.className = className;
+      el.textContent = texto;
+      return lifeaiAppend(el);
+    }
+
+    /**
+     * A LifeAi é um serviço à parte: o Cockpit só relata o que encontrou. Se
+     * já houve conversa no painel, o histórico fica — só marca a queda numa
+     * linha, em vez de apagar o que o usuário estava lendo.
+     */
+    function lifeaiRenderOffline(state) {
+      const log = document.getElementById("lifeaiLog");
+      const input = document.getElementById("lifeaiInput");
+      input.disabled = true;
+      input.placeholder = state?.reason === "starting"
+        ? "LifeAi está subindo…"
+        : "LifeAi desligada";
+      const vazio = log.querySelector(".lifeai-empty");
+      if (!vazio) {
+        lifeaiLine("lifeai-step fail", state?.reason === "starting"
+          ? "✕ LifeAi não respondeu — o serviço pode estar subindo"
+          : "✕ LifeAi desligada");
+        return;
+      }
+      vazio.textContent = state?.reason === "starting"
+        ? "A LifeAi está de pé mas ainda não responde. Confira o serviço:"
+        : "A LifeAi não está rodando. Ela é um serviço próprio — ligue com:";
+      const cmd = document.createElement("code");
+      cmd.textContent = state?.startCommand || "systemctl --user start lifeai";
+      vazio.appendChild(cmd);
+    }
+
+    function lifeaiRenderOnline() {
+      const input = document.getElementById("lifeaiInput");
+      input.disabled = false;
+      input.placeholder = "O que você precisa?";
+      const vazio = document.getElementById("lifeaiLog").querySelector(".lifeai-empty");
+      if (vazio && vazio.querySelector("code")) {
+        vazio.textContent = "Mande uma demanda. Ela decide se resolve sozinha ou abre um terminal no projeto certo.";
+      }
+    }
+
+    function lifeaiSetDot(estado) {
+      const dot = document.getElementById("lifeaiDot");
+      dot.classList.toggle("on", estado === "on");
+      dot.classList.toggle("busy", estado === "busy");
+    }
+
+    function lifeaiApprovalCard(event) {
+      const card = document.createElement("div");
+      card.className = "lifeai-approval";
+      const texto = document.createElement("div");
+      texto.className = "lifeai-approval-text";
+      texto.textContent = [event.title, event.message, event.command]
+        .filter(Boolean).join("\n") || "A LifeAi pede aprovação para continuar.";
+      card.appendChild(texto);
+
+      const acoes = document.createElement("div");
+      acoes.className = "lifeai-approval-actions";
+      const escolhas = Array.isArray(event.choices) && event.choices.length
+        ? event.choices : ["once", "deny"];
+      const rotulos = { once: "Aprovar", session: "Aprovar na sessão", always: "Sempre", deny: "Negar" };
+      const runId = event.run_id;
+      for (const escolha of escolhas) {
+        const chave = typeof escolha === "string" ? escolha : escolha?.value;
+        if (!chave || !rotulos[chave]) continue;
+        const btn = document.createElement("button");
+        btn.textContent = rotulos[chave];
+        if (chave === "deny") btn.classList.add("deny");
+        btn.addEventListener("click", () => {
+          if (ws?.readyState === 1) {
+            ws.send(JSON.stringify({ type: "lifeai_approval", runId, choice: chave }));
+          }
+          acoes.remove();
+          texto.textContent += `\n→ ${rotulos[chave]}`;
+        });
+        acoes.appendChild(btn);
+      }
+      card.appendChild(acoes);
+      return lifeaiAppend(card);
+    }
+
+    // Um <div> por run que acumula os deltas de texto da resposta.
+    let lifeaiStreamEl = null;
+
+    function lifeaiHandleEvent(event) {
+      switch (event?.event) {
+        case "tool.started":
+          // Nome de ferramenta chega como mcp__servidor__tool; o painel mostra
+          // só a última parte, que é o que diz alguma coisa a quem lê.
+          lifeaiLine("lifeai-step", `▸ ${String(event.tool || "ferramenta").split("__").pop()}`);
+          lifeaiSetDot("busy");
+          break;
+        case "tool.completed":
+          lifeaiSetDot("busy");
+          break;
+        case "message.delta": {
+          if (!lifeaiStreamEl) lifeaiStreamEl = lifeaiLine("lifeai-msg", "");
+          lifeaiStreamEl.textContent += String(event.delta || event.text || "");
+          document.getElementById("lifeaiLog").scrollTop = 1e9;
+          break;
+        }
+        case "approval.request":
+          lifeaiApprovalCard(event);
+          lifeaiSetDot("busy");
+          break;
+        case "run.completed": {
+          const saida = String(event.output || "");
+          // O texto final repete o que já veio em deltas; só escreve se não veio.
+          if (!lifeaiStreamEl && saida) lifeaiLine("lifeai-msg", saida);
+          lifeaiStreamEl = null;
+          lifeaiRunId = null;
+          lifeaiSetDot("on");
+          break;
+        }
+        case "run.failed":
+        case "run.cancelled":
+          lifeaiLine("lifeai-step fail", `✕ ${event.error || event.event}`);
+          lifeaiStreamEl = null;
+          lifeaiRunId = null;
+          lifeaiSetDot("on");
+          break;
+      }
+    }
+
+    function lifeaiSend() {
+      const campo = document.getElementById("lifeaiInput");
+      const texto = campo.value.trim();
+      if (!texto || ws?.readyState !== 1) return;
+      campo.value = "";
+      lifeaiLine("lifeai-msg me", texto);
+      lifeaiStreamEl = null;
+      lifeaiSetDot("busy");
+      ws.send(JSON.stringify({ type: "lifeai_ask", text: texto }));
+    }
+
+    // ============================================================
     // GIT
     // ============================================================
     function toggleGitPanel() {
@@ -10281,6 +10626,23 @@
         case "git_result":
           handleGitResult(msg);
           break;
+        case "lifeai_status":
+          lifeaiSetDot(msg.state?.running ? "on" : "off");
+          // Sem console de pé o botão some: link quebrado é pior que ausência.
+          document.getElementById("lifeaiConsole").hidden = !msg.state?.consoleUrl;
+          if (msg.state?.running) lifeaiRenderOnline();
+          else lifeaiRenderOffline(msg.state);
+          break;
+        case "lifeai_run_started":
+          lifeaiRunId = msg.runId;
+          break;
+        case "lifeai_event":
+          lifeaiHandleEvent(msg.event);
+          break;
+        case "lifeai_error":
+          lifeaiLine("lifeai-step fail", `✕ ${msg.message}`);
+          lifeaiSetDot("on");
+          break;
         case "files_result":
           handleFilesResult(msg);
           break;
@@ -10347,6 +10709,10 @@
             env: np.env || {},
             commands: np.commands || [],
             hidden: !!np.hidden,
+            description: np.description || "",
+            aliases: np.aliases || [],
+            stack: np.stack || [],
+            defaultAgent: np.defaultAgent || "",
             terminals: [],
           };
           projects.push(p);
@@ -10360,6 +10726,10 @@
             env: np.env || {},
             commands: np.commands || [],
             hidden: !!np.hidden,
+            description: np.description || "",
+            aliases: np.aliases || [],
+            stack: np.stack || [],
+            defaultAgent: np.defaultAgent || "",
           });
         }
 
@@ -10451,6 +10821,10 @@
         env: p.env || {},
         commands: p.commands || [],
         hidden: !!p.hidden,
+        description: p.description || "",
+        aliases: p.aliases || [],
+        stack: p.stack || [],
+        defaultAgent: p.defaultAgent || "",
         terminals: p.terminals.map((t) => ({
           id: t.id, name: t.name,
           status: t.status, statusText: t.statusText,
@@ -10522,6 +10896,7 @@
       { id: "act-file-search", label: "Buscar arquivo no projeto…", hint: "⌘P", icon: "file" },
       { id: "act-save", label: "Salvar arquivo aberto", hint: "⌘S", icon: "save" },
       { id: "act-git", label: "Abrir/fechar painel Git", hint: "⌘G", icon: "edit" },
+      { id: "act-lifeai", label: "Abrir/fechar painel LifeAi", hint: "⌘⇧L", icon: "megaphone" },
       { id: "act-git-refresh", label: "Atualizar status do Git", hint: "", icon: "restart" },
       { id: "act-new-term", label: "Novo terminal no projeto atual", hint: "⌘T / ⌘B", icon: "plus" },
       { id: "act-close-term", label: "Fechar terminal atual", hint: "⌘W", icon: "x" },
@@ -10670,6 +11045,7 @@
         case "act-file-search": focusFileSearch(); break;
         case "act-save": saveCurrentFile(); break;
         case "act-git": toggleGitPanel(); break;
+        case "act-lifeai": toggleLifeaiPanel(); break;
         case "act-git-refresh":
           if (!gitPanelVisible) toggleGitPanel();
           else refreshGit();
@@ -10976,6 +11352,31 @@
                   <div class="form-helper">use o mesmo nome em vários projetos pra agrupá-los</div>
                 </div>
 
+                <label class="form-label" style="padding-top:14px">Descrição</label>
+                <div>
+                  <textarea id="pDescription" class="form-input" rows="2" maxlength="400" placeholder="Ex.: financeiro da academia PHD — cobranças e relatórios" style="resize:vertical" autocomplete="off"></textarea>
+                  <div class="form-helper">é por aqui que o orquestrador distingue projetos de nome parecido</div>
+                </div>
+
+                <label class="form-label">Apelidos</label>
+                <div>
+                  <input id="pAliases" class="form-input" placeholder="financeiro, cobrança" autocomplete="off" />
+                  <div class="form-helper">separados por vírgula — como você chama o projeto falando</div>
+                </div>
+
+                <label class="form-label">Stack</label>
+                <div>
+                  <input id="pStack" class="form-input" placeholder="next, supabase, node" autocomplete="off" />
+                  <div class="form-helper">separada por vírgula</div>
+                </div>
+
+                <label class="form-label">Agente padrão</label>
+                <div>
+                  <input id="pDefaultAgent" class="form-input" placeholder="(opcional)" autocomplete="off" list="agentSugg" />
+                  <datalist id="agentSugg"></datalist>
+                  <div class="form-helper">rótulo de um dos comandos abaixo — usado quando o agente não for dito</div>
+                </div>
+
                 <label class="form-label" style="padding-top:14px">Env vars</label>
                 <div>
                   <textarea id="pEnv" class="form-input" rows="3" placeholder="NODE_ENV=development&#10;PORT=8080" style="resize:vertical;font-family:var(--font-term);font-size:11px;line-height:1.5" autocomplete="off" spellcheck="false"></textarea>
@@ -11020,6 +11421,10 @@
           idI.value = existing.id || "";
           pathI.value = existing.path || "";
           groupI.value = existing.group || "";
+          $("pDescription").value = existing.description || "";
+          $("pAliases").value = (existing.aliases || []).join(", ");
+          $("pStack").value = (existing.stack || []).join(", ");
+          $("pDefaultAgent").value = existing.defaultAgent || "";
           if (existing.env && Object.keys(existing.env).length > 0) {
             $("pEnv").value = Object.entries(existing.env).map(([k, v]) => `${k}=${v}`).join("\n");
           }
@@ -11041,6 +11446,10 @@
               renderCmdList();
             });
           });
+          // sugestões do "agente padrão" acompanham a lista de comandos
+          $("agentSugg").innerHTML = localCmds
+            .map((c) => `<option value="${escapeHtml(c.label)}"></option>`)
+            .join("");
         };
         renderCmdList();
 
@@ -11136,6 +11545,14 @@
               if (ek) envObj[ek] = ev;
             }
           });
+          // catálogo: sempre enviado, inclusive vazio — é assim que apagar o
+          // campo na tela some com ele do projects.json (o servidor limpa)
+          const splitList = (value) =>
+            (value || "")
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
+              .slice(0, 12);
           close({
             id, name, path,
             color: selectedColor,
@@ -11143,6 +11560,10 @@
             group: group || undefined,
             env: Object.keys(envObj).length > 0 ? envObj : undefined,
             commands: localCmds,
+            description: $("pDescription").value.trim().slice(0, 400),
+            aliases: splitList($("pAliases").value),
+            stack: splitList($("pStack").value),
+            defaultAgent: $("pDefaultAgent").value.trim().slice(0, 80),
           });
         };
         overlay.querySelector(".cancel-btn").addEventListener("click", () => close(null));
@@ -12756,6 +13177,13 @@
         return;
       }
 
+      // ⌘⇧L — toggle painel LifeAi (Shift evita colidir com Ctrl+L = limpar terminal)
+      if (isMod && e.shiftKey && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        toggleLifeaiPanel();
+        return;
+      }
+
       // ⌘⇧M — alterna Foco ↔ Mosaico (Shift evita colidir com Ctrl+M = Enter no terminal)
       if (isMod && e.shiftKey && e.key.toLowerCase() === "m") {
         e.preventDefault();
@@ -13002,6 +13430,18 @@
       });
       clear.addEventListener("click", () => clearFileSearch());
     })();
+
+    // LifeAi bindings
+    document.getElementById("btnLifeai").addEventListener("click", toggleLifeaiPanel);
+    document.getElementById("lifeaiClose").addEventListener("click", toggleLifeaiPanel);
+    document.getElementById("lifeaiConsole").addEventListener("click", () => {
+      // Quem pede o ticket e abre o navegador é o servidor: aqui só o aviso.
+      if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "lifeai_console" }));
+    });
+    document.getElementById("lifeaiInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); lifeaiSend(); }
+      e.stopPropagation();
+    });
 
     // Git bindings
     document.getElementById("btnGit").addEventListener("click", toggleGitPanel);
@@ -13602,6 +14042,7 @@
       }
       wire("filesResizeHandle", "filesPanel", "left",  "cockpit-files-width", 180, 560, 280);
       wire("gitResizeHandle",   "gitPanel",   "right", "cockpit-git-width",   220, 640, 360);
+      wire("lifeaiResizeHandle", "lifeaiPanel", "right", "cockpit-lifeai-width", 280, 720, 400);
     })();
 
     // === Electron: dots Mac funcionais ===

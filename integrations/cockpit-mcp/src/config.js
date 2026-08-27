@@ -8,6 +8,8 @@ const KNOWN_ACTIONS = new Set([
   "create_terminal",
   "send_input",
   "interrupt_terminal",
+  // despachar é criar terminal + digitar nele, numa ação só
+  "dispatch",
 ]);
 
 function parseInteger(value, fallback, name, { min, max }) {

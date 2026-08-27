@@ -115,6 +115,18 @@ export class ReloadingControlClient {
     return this.#read("readTerminal", [projectId, terminalId, options]);
   }
 
+  findProjects(query, options) {
+    return this.#read("findProjects", [query, options]);
+  }
+
+  listDemands(options) {
+    return this.#read("listDemands", [options]);
+  }
+
+  dispatchDemand(projectId, demand) {
+    return this.#mutate("dispatchDemand", [projectId, demand]);
+  }
+
   createTerminal(projectId, name) {
     return this.#mutate("createTerminal", [projectId, name]);
   }

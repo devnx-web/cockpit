@@ -1,0 +1,23 @@
+[Unit]
+Description=LifeAi — programador auxiliar da Ailiv
+Documentation=file:///home/ftgk/cockpit/integrations/lifeai/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /home/ftgk/cockpit/bin/lifeaid.js
+# Segredos de gateway (TELEGRAM_BOT_TOKEN etc.) moram aqui, 0600, fora do Git.
+# O "-" faz o serviço subir mesmo antes do arquivo existir.
+EnvironmentFile=-%h/.lifeai/env
+Restart=on-failure
+RestartSec=5
+# O daemon supervisiona o processo Python da LifeAi; matar só o líder deixaria
+# órfão segurando o lock do gateway.
+KillMode=control-group
+# >=30s por exigência do drain do gateway: com menos, o systemd manda SIGKILL
+# no meio da drenagem e mensagens em voo se perdem.
+TimeoutStopSec=45
+
+[Install]
+WantedBy=default.target

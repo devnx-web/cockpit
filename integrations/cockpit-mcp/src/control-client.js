@@ -76,6 +76,53 @@ function sanitizeProject(project) {
   };
 }
 
+function clampString(value, max) {
+  return typeof value === "string" ? value.slice(0, max) : "";
+}
+
+function sanitizeProjectCandidate(candidate) {
+  return {
+    id: String(candidate?.id || ""),
+    name: clampString(candidate?.name, 120),
+    color: typeof candidate?.color === "string" ? candidate.color : null,
+    description: clampString(candidate?.description, 400),
+    aliases: Array.isArray(candidate?.aliases)
+      ? candidate.aliases.slice(0, 12).map((alias) => clampString(alias, 40))
+      : [],
+    stack: Array.isArray(candidate?.stack)
+      ? candidate.stack.slice(0, 12).map((item) => clampString(item, 40))
+      : [],
+    defaultAgent: clampString(candidate?.defaultAgent, 80),
+    hasDescription: candidate?.hasDescription === true,
+    score: Number(candidate?.score) || 0,
+    matchedOn: Array.isArray(candidate?.matchedOn)
+      ? candidate.matchedOn.slice(0, 8).map((item) => clampString(item, 24))
+      : [],
+    busyTerminals: Number(candidate?.busyTerminals) || 0,
+    freeTerminals: Number(candidate?.freeTerminals) || 0,
+    activeDemands: Number(candidate?.activeDemands) || 0,
+  };
+}
+
+function sanitizeDemand(demand) {
+  return {
+    id: String(demand?.id || ""),
+    title: clampString(demand?.title, 120),
+    projectId: String(demand?.projectId || ""),
+    projectName: clampString(demand?.projectName, 120),
+    terminalId: demand?.terminalId ? String(demand.terminalId) : null,
+    terminalName: clampString(demand?.terminalName, 120),
+    agentLabel: clampString(demand?.agentLabel, 80),
+    status: clampString(demand?.status, 32) || "unknown",
+    statusText: clampString(demand?.statusText, 240),
+    stage: clampString(demand?.stage, 32),
+    error: demand?.error ? clampString(demand.error, 120) : null,
+    createdAt: Number(demand?.createdAt) || 0,
+    lastChangeAt: Number(demand?.lastChangeAt) || 0,
+    endedAt: Number(demand?.endedAt) || null,
+  };
+}
+
 function sanitizeTerminal(terminal) {
   return {
     id: String(terminal?.id || ""),
@@ -331,6 +378,52 @@ export class ControlClient {
     };
   }
 
+  async findProjects(query, { limit } = {}) {
+    const response = await this.#request("projects/search", {
+      query: { q: query, limit },
+    });
+    const candidates = response.data?.candidates;
+    if (!Array.isArray(candidates)) {
+      throw new ControlApiError(
+        "resposta de search não contém data.candidates",
+        "CONTROL_INVALID_RESPONSE",
+      );
+    }
+    const safeCandidates = candidates.map(sanitizeProjectCandidate);
+    return {
+      query: clampString(response.data?.query, 200),
+      // o filtro local repete o do servidor: escopo do MCP pode ser menor
+      candidates: this.allowedProjects
+        ? safeCandidates.filter((candidate) => this.allowedProjects.has(candidate.id))
+        : safeCandidates,
+      ambiguous: response.data?.ambiguous !== false,
+    };
+  }
+
+  async listDemands({ afterCursor, waitMs = 0 } = {}) {
+    const response = await this.#request("demands", {
+      query: { after: afterCursor, wait_ms: waitMs },
+      // o long-poll é do servidor: o timeout local precisa cobrir a espera
+      timeoutMs: this.timeoutMs + waitMs,
+    });
+    const demands = response.data?.demands;
+    if (!Array.isArray(demands)) {
+      throw new ControlApiError(
+        "resposta de demands não contém data.demands",
+        "CONTROL_INVALID_RESPONSE",
+      );
+    }
+    const safeDemands = demands.map(sanitizeDemand);
+    return {
+      cursor: response.cursor ?? afterCursor ?? null,
+      revision: Number(response.data?.revision) || 0,
+      timedOut: response.data?.timedOut === true,
+      demands: this.allowedProjects
+        ? safeDemands.filter((demand) => this.allowedProjects.has(demand.projectId))
+        : safeDemands,
+    };
+  }
+
   async #action(relativePath, actionData, { requestId = randomUUID() } = {}) {
     const response = await this.#request(relativePath, {
       method: "POST",
@@ -375,6 +468,27 @@ export class ControlClient {
     };
   }
 
+  async dispatchDemand(projectId, { text, title, agent } = {}, options) {
+    assertProjectAllowed(this.allowedProjects, projectId);
+    const result = await this.#action(
+      `projects/${encodeSegment(projectId)}/dispatch`,
+      {
+        text,
+        ...(title ? { title } : {}),
+        ...(agent ? { agent } : {}),
+      },
+      options,
+    );
+    return {
+      requestId: result.requestId,
+      ack: result.ack,
+      cursor: result.cursor,
+      data: result.data?.demand
+        ? { demand: sanitizeDemand(result.data.demand) }
+        : null,
+    };
+  }
+
   async sendInput(projectId, terminalId, data, options) {
     assertProjectAllowed(this.allowedProjects, projectId);
     const result = await this.#action(
@@ -413,8 +527,10 @@ export const controlClientInternals = {
   readLimitedBody,
   safeApiMessage,
   sanitizeAck,
+  sanitizeDemand,
   sanitizeEvents,
   sanitizeProject,
+  sanitizeProjectCandidate,
   sanitizeTerminal,
   safeVersion,
 };

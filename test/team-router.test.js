@@ -200,3 +200,50 @@ test("manual optimize synchronizes usage before replacing provider selections", 
   assert.equal(events[0], "usage");
   assert.deepEqual(new Set(events.slice(1)), new Set(["select:openai", "select:claude"]));
 });
+
+function collectResponse() {
+  return {
+    statusCode: null,
+    headers: null,
+    writeHead(status, headers) { this.statusCode = status; this.headers = headers; },
+    end() { this.ended = true; },
+  };
+}
+
+test("o sufixo /anthropic existe só para o cliente e não chega ao broker", async () => {
+  const seen = [];
+  const client = fakeClient({
+    handleClaudeProxyRequest: async ({ requestPath }) => {
+      seen.push(requestPath);
+      return { status: 200, headers: new Headers({ "content-type": "application/json" }), body: null };
+    },
+  });
+  const router = createTeamRouter({ client, brokerUrl: () => BROKER_URL });
+
+  for (const pathname of ["/team/claude/anthropic/v1/messages", "/team/claude/v1/messages"]) {
+    const res = collectResponse();
+    await router.proxyClaude(request("POST", { model: "x" }), res, { pathname, search: "?beta=true" });
+    assert.equal(res.statusCode, 200);
+  }
+
+  // Os dois caminhos convergem: o Hermes/LifeAi precisa da base_url terminando
+  // em /anthropic, o broker continua vendo /v1/... como sempre viu.
+  assert.deepEqual(seen, ["/v1/messages?beta=true", "/v1/messages?beta=true"]);
+});
+
+test("credenciais para consumidor externo apontam para o sufixo aceito pelo cliente", () => {
+  let label = null;
+  const router = createTeamRouter({
+    client: fakeClient({
+      issueClaudeCapability: (received) => { label = received; return "cc-cockpit-fake"; },
+    }),
+    brokerUrl: () => BROKER_URL,
+  });
+
+  assert.deepEqual(router.issueClaudeAccess("lifeai"), {
+    baseUrl: `${BROKER_URL}/team/claude/anthropic`,
+    capability: "cc-cockpit-fake",
+  });
+  assert.equal(label, "lifeai");
+  assert.equal(createTeamRouter({ client: fakeClient(), brokerUrl: () => null }).issueClaudeAccess("lifeai"), null);
+});

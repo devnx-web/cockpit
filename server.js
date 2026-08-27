@@ -13,6 +13,7 @@ import * as stt from "./lib/stt.js";
 import { attachLspWebSocket, shutdownAllLsp } from "./lib/lsp.js";
 import { createTeamAccountsClient } from "./lib/team-accounts.js";
 import { createTeamRouter } from "./lib/team-router.js";
+import { createLifeAiClient } from "./lib/lifeai-client.js";
 import { interactiveTerminalEnv } from "./lib/terminal-env.js";
 import {
   createTerminalLicenseRetry,
@@ -20,12 +21,15 @@ import {
   requireFreshTerminalSelections,
 } from "./lib/team-terminal-license.js";
 import { createFileSearchService } from "./lib/file-search.js";
+import { pickProjectFields, validateCatalogFields } from "./lib/project-search.js";
+import { createDemandStore, defaultDemandsPath } from "./lib/demands.js";
+import { createDispatcher } from "./lib/dispatch.js";
 import { createUsageService } from "./lib/usage/service.js";
 import {
   appendControlOutputEvent,
   CONTROL_API_PREFIX,
   createControlApi,
-  loadControlPolicy,
+  createControlPolicySource,
   normalizeControlPolicy,
   removeControlDescriptor,
   writeControlDescriptor,
@@ -43,11 +47,16 @@ let SERVER_URL = null;
 let controlApi = null;
 let controlDescriptorPath = null;
 let usage = null; // coletor de uso de tokens; null se não subir (opcional)
+let demands = null; // registro de demandas do orquestrador; null antes do boot
 const teamAccounts = createTeamAccountsClient();
 const teamRouter = createTeamRouter({
   client: teamAccounts,
   brokerUrl: () => SERVER_URL,
 });
+// A LifeAi roda como serviço próprio (bin/lifeaid.js, systemd --user). Aqui o
+// Cockpit é só mais um cliente dela: lê onde ela atende e conversa. Nunca sobe,
+// nunca desliga — fechar a janela não pode calar o agente no Telegram.
+const lifeai = createLifeAiClient();
 const fileSearch = createFileSearchService();
 const TEAM_SELECTION_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const TEAM_AUTH_RECOVERY_COOLDOWN_MS = 30 * 1000;
@@ -221,6 +230,7 @@ function attachTerminalPty(session, terminal, { cwd, pathOk }) {
     terminal.statusText =
       evt.exitCode === 0 ? "shell encerrado" : `falhou (exit ${evt.exitCode})`;
     broadcastTerminalStatus(session, terminal);
+    demands?.onTerminalExit(session.proj.id, terminal.id, terminal.exitCode);
   });
 
   appendTerminalOutput(
@@ -280,8 +290,21 @@ function startTerminalLicenseProvisioning(session, terminal, context) {
 async function createTerminalIn(session, name = null, meta = {}) {
   const tid = `t${session.nextId++}`;
   const projPath = session.proj.path;
-  const pathOk = projPath && fs.existsSync(projPath);
-  const cwd = pathOk ? projPath : process.env.HOME;
+  // meta.cwd: gancho para abrir o terminal em outro diretório do mesmo projeto
+  // (worktree, subpasta). Só vale se for um diretório que existe de verdade —
+  // caminho inválido cai no path do projeto em vez de virar erro de spawn.
+  const requestedCwd =
+    typeof meta.cwd === "string" && meta.cwd
+      ? (() => {
+          try {
+            return fs.statSync(meta.cwd).isDirectory() ? meta.cwd : null;
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+  const pathOk = Boolean(requestedCwd) || (projPath && fs.existsSync(projPath));
+  const cwd = requestedCwd || (pathOk ? projPath : process.env.HOME);
 
   if (!pathOk) {
     console.warn(
@@ -299,6 +322,7 @@ async function createTerminalIn(session, name = null, meta = {}) {
     bufferSize: 0,
     maxBufferSize: 200 * 1024,
     owner: meta.owner === "mcp" ? "mcp" : "ui",
+    cwd,
     controlGeneration: randomUUID(),
     outputSequence: 0,
     outputEvents: [],
@@ -518,6 +542,8 @@ function updateTerminalStatus(session, terminal) {
     terminal.status = status;
     terminal.statusText = text;
     broadcastTerminalStatus(session, terminal);
+    // a demanda deriva daqui — nenhuma heurística nova, mesma leitura
+    demands?.onTerminalStatus(session.proj.id, terminal.id, status, text);
   }
 }
 
@@ -964,6 +990,8 @@ function validateProjectShape(p, { isNew = true, ignoreId = null } = {}) {
   } catch (e) {
     return "caminho inacessível: " + e.message;
   }
+  const catalogError = validateCatalogFields(p);
+  if (catalogError) return catalogError;
   if (isNew && PROJECTS.find((x) => x.id === p.id)) return `já existe um projeto com id "${p.id}"`;
   if (!isNew && p.id !== ignoreId && PROJECTS.find((x) => x.id === p.id))
     return `já existe um projeto com id "${p.id}"`;
@@ -1356,6 +1384,11 @@ wss.on("connection", (ws) => {
         shell: np.shell || "bash",
         ...(np.group ? { group: np.group } : {}),
         commands: Array.isArray(np.commands) ? np.commands : [],
+        // catálogo: só entram quando preenchidos, para não poluir o projects.json
+        ...(np.description ? { description: np.description } : {}),
+        ...(Array.isArray(np.aliases) && np.aliases.length ? { aliases: np.aliases } : {}),
+        ...(Array.isArray(np.stack) && np.stack.length ? { stack: np.stack } : {}),
+        ...(np.defaultAgent ? { defaultAgent: np.defaultAgent } : {}),
       };
       PROJECTS.push(newProj);
       try { await persistProjects(); } catch (e) {
@@ -1375,9 +1408,16 @@ wss.on("connection", (ws) => {
         return;
       }
       const before = PROJECTS[idx];
-      const merged = { ...before, ...msg.changes };
+      const merged = { ...before, ...pickProjectFields(msg.changes) };
       // se group veio vazio, remove
       if (merged.group === "" || merged.group === null) delete merged.group;
+      // idem para o catálogo: campo apagado na tela sai do arquivo
+      for (const field of ["description", "defaultAgent"]) {
+        if (merged[field] === "" || merged[field] === null) delete merged[field];
+      }
+      for (const field of ["aliases", "stack"]) {
+        if (Array.isArray(merged[field]) && merged[field].length === 0) delete merged[field];
+      }
       const err = validateProjectShape(merged, { isNew: false, ignoreId: before.id });
       if (err) {
         ws.send(JSON.stringify({ type: "project_admin_error", action: "update", error: err }));
@@ -1469,6 +1509,61 @@ wss.on("connection", (ws) => {
     }
     if (msg.type === "idle_reap_config") {
       idleReapEnabled = !!msg.enabled;
+      return;
+    }
+
+    // ---- LifeAi ----
+    // Sem projectId: é um agente global, não pertence a um terminal. Tudo vai
+    // por broadcast para o painel sobreviver a uma reconexão do cliente.
+    if (msg.type === "lifeai_status") {
+      ws.send(JSON.stringify({ type: "lifeai_status", state: await lifeai.state() }));
+      return;
+    }
+    // O endereço do console vale uma vez só e por um minuto: quem abre é o
+    // servidor, para o ticket não passar pelo DOM nem pelo histórico do
+    // navegador embutido.
+    if (msg.type === "lifeai_console") {
+      try {
+        const { url } = await lifeai.consoleTicket();
+        if (!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url)) {
+          throw new Error("o console devolveu um endereço fora do loopback");
+        }
+        const plat = os.platform();
+        const cmd = plat === "darwin" ? "open" : plat === "win32" ? "explorer.exe" : "xdg-open";
+        execFile(cmd, [url], { windowsHide: true }, () => {});
+      } catch (error) {
+        ws.send(JSON.stringify({ type: "lifeai_error", message: `console: ${error.message}` }));
+      }
+      return;
+    }
+    if (msg.type === "lifeai_ask") {
+      const texto = String(msg.text || "").trim();
+      if (!texto) return;
+      try {
+        const runId = await lifeai.ask(texto, {
+          // Evento do agente é dado a exibir: o painel renderiza, nunca executa.
+          onEvent: (event) => broadcast({ type: "lifeai_event", event }),
+        });
+        broadcast({ type: "lifeai_run_started", runId, text: texto });
+      } catch (error) {
+        broadcast({ type: "lifeai_error", message: error.message });
+      }
+      return;
+    }
+    if (msg.type === "lifeai_approval") {
+      try {
+        await lifeai.approve(String(msg.runId), String(msg.choice));
+      } catch (error) {
+        broadcast({ type: "lifeai_error", message: error.message });
+      }
+      return;
+    }
+    if (msg.type === "lifeai_stop_run") {
+      try {
+        await lifeai.stopRun(String(msg.runId));
+      } catch (error) {
+        broadcast({ type: "lifeai_error", message: error.message });
+      }
       return;
     }
 
@@ -1980,10 +2075,14 @@ async function shutdown(opts = {}) {
   teamAccounts.cleanupRuntime();
   try { dictation.stop(); } catch {}
   shutdownAllLsp();
+  // A LifeAi não é encerrada aqui de propósito: ela é um serviço à parte e
+  // precisa continuar respondendo (Telegram, demandas fora do Cockpit).
   await voice.stop().catch(() => {});
   await stt.stop().catch(() => {});
   await usage?.stop().catch(() => {});
   usage = null;
+  await demands?.close().catch(() => {});
+  demands = null;
   if (opts.exit !== false) process.exit(0);
 }
 
@@ -2028,17 +2127,40 @@ export async function startServer({
   PROJECTS.length = 0;
   for (const p of raw) PROJECTS.push(p);
 
-  const availableProjectIds = PROJECTS.map((project) => project.id);
+  // registro de demandas: precisa existir antes da Control API, que despacha
+  // por ele, e depois dos projetos, para o arquivo morar ao lado do projects.json
+  demands = createDemandStore({
+    filePath: defaultDemandsPath(projectsPath),
+    log: (msg) => log.log?.(msg),
+  });
+  demands.load();
+
+  // Política injetada (testes) fica fixa; a que vem de arquivo se relê sozinha
+  // quando o JSON muda. O Cockpit fica aberto por dias com agentes dentro: sem
+  // isso, liberar um projeto para o MCP custaria um restart, e restart mata
+  // todos os terminais.
   const effectiveControlPolicy = controlPolicy
-    ? normalizeControlPolicy(controlPolicy, { availableProjectIds })
-    : loadControlPolicy(
+    ? normalizeControlPolicy(controlPolicy)
+    : createControlPolicySource(
         controlPolicyPath || path.join(path.dirname(projectsPath), "mcp-policy.json"),
-        { availableProjectIds, log },
+        { log },
       );
+  const controlAdapter = createControlAdapter();
   controlApi = createControlApi({
     cockpitVersion: APP_VERSION,
     policy: effectiveControlPolicy,
-    adapter: createControlAdapter(),
+    adapter: controlAdapter,
+    demands,
+    dispatcher: createDispatcher({
+      adapter: controlAdapter,
+      demands,
+      // mesma leitura de scrollback do status de terminal — sem cursor próprio
+      readTail: (projectId, terminalId) => {
+        const terminal = sessions.get(projectId)?.terminals.get(terminalId);
+        return terminal ? recentText(terminal, 4096) : "";
+      },
+      log: (msg) => log.log?.(msg),
+    }),
     log,
   });
   if (effectiveControlPolicy.projects.size === 0) {

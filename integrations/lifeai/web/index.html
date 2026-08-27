@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LifeAi — Ailiv</title>
+  <link rel="stylesheet" href="/ui/theme.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <span class="ponto" id="ponto" title="estado do serviço"></span>
+      <strong>LifeAi</strong>
+      <span class="assinatura">Ailiv</span>
+    </div>
+    <nav class="abas" id="abas">
+      <button type="button" class="aba" data-aba="conversa">Conversa</button>
+      <button type="button" class="aba" data-aba="agenda">Agenda</button>
+      <button type="button" class="aba" data-aba="estado">Estado</button>
+    </nav>
+  </header>
+
+  <main id="palco"></main>
+
+  <div class="aviso" id="aviso" hidden></div>
+
+  <script type="module" src="/ui/app.js"></script>
+</body>
+</html>

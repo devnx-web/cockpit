@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { loadConfig } from "../src/config.js";
+import { configInternals, loadConfig } from "../src/config.js";
 
 const MCP_TOKEN = "mcp-token-abcdefghijklmnopqrstuvwxyz-123456";
 const CONTROL_TOKEN = "control-token-abcdefghijklmnopqrstuvwxyz-123";
@@ -190,4 +190,16 @@ test("rejects insecure, expired and symlinked descriptors", (t) => {
       }),
     /link simbólico/,
   );
+});
+
+test("a lista de ações conhecidas não muda sem quem depende dela saber", () => {
+  // Espelho da lista de capabilities em lib/control-api.js do Cockpit. Os dois
+  // pacotes não se importam, então a lista é repetida de propósito: adicionar
+  // uma ação sem atualizar o outro lado quebra um destes dois testes.
+  assert.deepEqual(
+    [...configInternals.KNOWN_ACTIONS].sort(),
+    ["create_terminal", "dispatch", "interrupt_terminal", "send_input"],
+  );
+  const config = loadConfig(validEnv({ COCKPIT_MCP_ACTIONS: "dispatch" }));
+  assert.deepEqual([...config.actions], ["dispatch"]);
 });

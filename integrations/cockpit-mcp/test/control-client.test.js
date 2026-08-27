@@ -279,3 +279,138 @@ test("control client blocks projects outside the configured scope", async () => 
     (error) => error.code === "PROJECT_FORBIDDEN",
   );
 });
+
+test("cliente sanitiza busca de projeto e despacho de demanda", async (t) => {
+  const seen = { search: null, dispatch: null };
+  const stub = await startControlStub(async (req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    if (url.pathname.endsWith("/projects/search")) {
+      seen.search = url.search;
+      return sendJson(res, 200, {
+        ok: true,
+        data: {
+          query: "phd",
+          ambiguous: false,
+          candidates: [
+            {
+              id: "phd-fin",
+              name: "PHD Financeiro",
+              description: "Painel financeiro",
+              aliases: ["fin"],
+              stack: ["next"],
+              defaultAgent: "ailiv c",
+              hasDescription: true,
+              score: 90,
+              matchedOn: ["name"],
+              busyTerminals: 1,
+              freeTerminals: 0,
+              activeDemands: 1,
+              // campos que o Cockpit não manda; se um dia mandar, não passam
+              path: "/private/path",
+              env: { SECRET: "must-not-cross-adapter" },
+            },
+            { id: "fora-do-escopo", name: "Fora" },
+          ],
+        },
+      });
+    }
+    if (url.pathname.endsWith("/dispatch")) {
+      seen.dispatch = await readJson(req);
+      return sendJson(res, 202, {
+        ok: true,
+        requestId: seen.dispatch.requestId,
+        cursor: "demands:i:revision:4",
+        ack: { accepted: true, completed: false, at: "2026-08-25T12:00:00.000Z" },
+        data: {
+          demand: {
+            id: "d1",
+            title: "erro de build",
+            projectId: "phd-fin",
+            status: "queued",
+            stage: "creating_terminal",
+            secreto: "não deve atravessar",
+          },
+        },
+      });
+    }
+    return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND" } });
+  });
+  t.after(() => stub.close());
+
+  const client = new ControlClient({
+    baseUrl: stub.baseUrl,
+    token: CONTROL_TOKEN,
+    allowedProjects: new Set(["phd-fin"]),
+  });
+
+  const found = await client.findProjects("phd", { limit: 3 });
+  assert.match(seen.search, /q=phd/);
+  assert.match(seen.search, /limit=3/);
+  assert.deepEqual(
+    found.candidates.map((candidate) => candidate.id),
+    ["phd-fin"],
+    "escopo local do MCP também filtra",
+  );
+  const raw = JSON.stringify(found);
+  assert.equal(raw.includes("must-not-cross-adapter"), false);
+  assert.equal(raw.includes("/private/path"), false);
+  assert.equal(found.ambiguous, false);
+
+  const dispatched = await client.dispatchDemand("phd-fin", {
+    text: "vê o erro de build",
+    title: "erro de build",
+  });
+  assert.equal(seen.dispatch.confirm, true);
+  assert.equal(seen.dispatch.requestId, dispatched.requestId);
+  assert.equal(dispatched.ack.completed, false);
+  assert.equal(dispatched.data.demand.status, "queued");
+  assert.equal(
+    JSON.stringify(dispatched).includes("não deve atravessar"),
+    false,
+    "campo desconhecido não atravessa o adaptador",
+  );
+
+  await assert.rejects(
+    () => client.dispatchDemand("outro", { text: "x" }),
+    (error) => error instanceof ControlApiError && error.code === "PROJECT_FORBIDDEN",
+  );
+});
+
+test("fila de demandas espera pelo servidor sem estourar o timeout local", async (t) => {
+  let seenUrl = null;
+  const stub = await startControlStub((req, res) => {
+    seenUrl = req.url;
+    // o servidor segura a resposta 120ms: o timeout local precisa cobrir a espera
+    setTimeout(() => {
+      sendJson(res, 200, {
+        ok: true,
+        cursor: "demands:i:revision:9",
+        data: {
+          revision: 9,
+          timedOut: false,
+          demands: [
+            { id: "d1", projectId: "alpha", status: "done", statusText: "ocioso" },
+            { id: "d2", projectId: "escondido", status: "done" },
+          ],
+        },
+      });
+    }, 120);
+  });
+  t.after(() => stub.close());
+
+  const client = new ControlClient({
+    baseUrl: stub.baseUrl,
+    token: CONTROL_TOKEN,
+    timeoutMs: 50,
+    allowedProjects: new Set(["alpha"]),
+  });
+
+  const result = await client.listDemands({
+    afterCursor: "demands:i:revision:8",
+    waitMs: 200,
+  });
+  assert.match(seenUrl, /wait_ms=200/);
+  assert.deepEqual(result.demands.map((demand) => demand.id), ["d1"]);
+  assert.equal(result.cursor, "demands:i:revision:9");
+  assert.equal(result.revision, 9);
+});

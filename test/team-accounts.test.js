@@ -538,3 +538,91 @@ test("server errors are redacted and logout revokes best-effort before deleting 
   assert.equal(fs.existsSync(path.join(homeDir, ".cockpit", "team-auth.json")), false);
   assert.equal(fs.existsSync(authPath), false);
 });
+
+test("lease Claude vale para consumidor externo, expira e some quando revogado", async (t) => {
+  const { client } = makeFixture(t, ({ url }) => {
+    if (url.pathname === "/api/login") return json({ access_token: "jwt" });
+    if (url.pathname === "/api/cockpit-ai/device-tokens") return json({ token: "device" });
+    if (url.pathname === "/api/cockpit-ai/select") return json(claudeSelection());
+    if (url.origin === "https://api.anthropic.com") {
+      return json({ type: "message", content: [{ type: "text", text: "OK" }] });
+    }
+    throw new Error(`Unexpected path ${url.pathname}`);
+  });
+  await connect(client);
+  await client.selectBest("claude");
+
+  // O prefixo cc- não é cosmético: é o que faz o SDK Anthropic mandar
+  // Authorization: Bearer, único header que o broker lê.
+  const lease = client.issueClaudeCapability("lifeai");
+  assert.match(lease, /^cc-cockpit-[A-Za-z0-9_-]{32}$/);
+
+  const response = await client.handleClaudeProxyRequest({
+    authorization: `Bearer ${lease}`,
+    method: "POST",
+    requestPath: "/v1/messages",
+    headers: { "content-type": "application/json" },
+    body: Buffer.from('{"model":"claude-test"}'),
+  });
+  assert.equal(response.status, 200);
+
+  const expirado = client.issueClaudeCapability("lifeai-curto", 60_000);
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() + 61_000 });
+  await assert.rejects(
+    client.handleClaudeProxyRequest({
+      authorization: `Bearer ${expirado}`,
+      method: "POST",
+      requestPath: "/v1/messages",
+    }),
+    (error) => error.code === "INVALID_OAUTH_CAPABILITY",
+  );
+  t.mock.timers.reset();
+
+  assert.equal(client.revokeClaudeCapability(lease), true);
+  assert.equal(client.revokeClaudeCapability(lease), false);
+  await assert.rejects(
+    client.handleClaudeProxyRequest({
+      authorization: `Bearer ${lease}`,
+      method: "POST",
+      requestPath: "/v1/messages",
+    }),
+    (error) => error.code === "INVALID_OAUTH_CAPABILITY",
+  );
+  assert.doesNotMatch(JSON.stringify(client.status()), /cc-cockpit-/);
+});
+
+test("renovar empurra o vencimento sem trocar o segredo que o filho já leu", async (t) => {
+  const { client } = makeFixture(t, ({ url }) => {
+    if (url.pathname === "/api/login") return json({ access_token: "jwt" });
+    if (url.pathname === "/api/cockpit-ai/device-tokens") return json({ token: "device" });
+    if (url.pathname === "/api/cockpit-ai/select") return json(claudeSelection());
+    if (url.origin === "https://api.anthropic.com") return json({ type: "message", content: [] });
+    throw new Error(`Unexpected path ${url.pathname}`);
+  });
+  await connect(client);
+  await client.selectBest("claude");
+
+  const lease = client.issueClaudeCapability("lifeai", 60_000);
+  const agora = Date.now();
+
+  t.mock.timers.enable({ apis: ["Date"], now: agora + 50_000 });
+  assert.equal(client.renewClaudeCapability(lease, 60_000), true);
+
+  // O consumidor recebeu a capability no env ao nascer e não tem como reler:
+  // renovar tem que manter o mesmo segredo válido, não emitir outro.
+  t.mock.timers.setTime(agora + 100_000);
+  const response = await client.handleClaudeProxyRequest({
+    authorization: `Bearer ${lease}`,
+    method: "POST",
+    requestPath: "/v1/messages",
+    body: Buffer.from("{}"),
+  });
+  assert.equal(response.status, 200);
+
+  // Passado o vencimento sem heartbeat, o lease morre e renovar não ressuscita.
+  t.mock.timers.setTime(agora + 500_000);
+  assert.equal(client.renewClaudeCapability(lease, 60_000), false);
+  assert.equal(client.renewClaudeCapability(lease, 60_000), false);
+  assert.equal(client.renewClaudeCapability("cc-cockpit-inexistente"), false);
+  t.mock.timers.reset();
+});

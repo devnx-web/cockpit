@@ -111,9 +111,20 @@ deny-by-default. No mesmo diretório de `projects.json`, crie `mcp-policy.json`:
 }
 ```
 
-Reinicie o Cockpit depois da alteração. `owned` é o recomendado: somente
-terminais criados pelo MCP ficam visíveis/controláveis. Use `all` apenas se o
-MCP realmente precisar alcançar terminais abertos pela UI.
+A alteração vale na requisição seguinte — o arquivo é relido quando muda, sem
+reiniciar o Cockpit. É de propósito: o Cockpit passa dias aberto com agentes
+trabalhando, e restart mata todos eles. Arquivo com JSON quebrado mantém a
+política anterior no ar (editor que salva em duas etapas não corta o acesso de
+ninguém); arquivo **apagado** revoga tudo.
+
+`"projects": "all"` libera o catálogo inteiro, **inclusive projetos criados
+depois**. Uma lista explícita continua sendo uma lista explícita — e é a única
+forma de restringir —, mas então cada projeto novo precisa ser acrescentado à
+mão, ou nasce invisível para o MCP.
+
+`terminalAccess: "owned"` é o recomendado: somente terminais criados pelo MCP
+ficam visíveis/controláveis. Use `all` apenas se o MCP realmente precisar
+alcançar terminais abertos pela UI.
 
 Há duas barreiras independentes para escrita:
 

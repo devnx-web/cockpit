@@ -21,3 +21,10 @@ config.json
 # Estados transitórios de ferramentas de planejamento/brainstorm
 .planning/debug/
 .superpowers/brainstorm/
+
+# agente de voz (experimento) — segredos e venv
+integrations/voice-agent/.env.local
+integrations/voice-agent/.venv/
+
+# estado de runtime quando o servidor roda a partir do repo
+demands.json
