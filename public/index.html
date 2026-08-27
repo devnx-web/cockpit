@@ -10432,6 +10432,11 @@
       ws = new WebSocket(`${proto}//${location.host}/ws`);
       ws.addEventListener("open", () => {
         setConn(true);
+        // Diz de saída o que esta janela é capaz de mostrar. O servidor recusa
+        // trabalho de agente em projeto sem janela que o exiba, e uma janela
+        // desacoplada só exibe o projeto dela — sem este aviso ela contaria
+        // como plateia de projetos que nunca vai abrir.
+        ws.send(JSON.stringify({ type: "window_scope", detachedProject: DETACHED_PROJ }));
         sendIdleReapConfig();
         sendVisibleTerminals();
       });
@@ -10532,6 +10537,26 @@
           refreshMosaicCardMeta(msg.projectId);
           updateWaitingCounter();
           if (msg.projectId === activeProjId && msg.terminalId === getActiveTid()) renderHeader();
+          break;
+        }
+        // O servidor está prestes a deixar um agente trabalhar neste projeto —
+        // ou já deixou, se for escrita em terminal que já existe. Ele não
+        // trabalha escondido: o projeto vem para a frente antes.
+        case "reveal_project": {
+          if (!getProj(msg.projectId)) break;
+          if (DETACHED_PROJ && DETACHED_PROJ !== msg.projectId) break;
+          // No terminal recém-criado o id ainda não chegou (o `terminal_added`
+          // vem depois e foca sozinho, agora que o projeto já é o ativo).
+          if (msg.terminalId) activeTerminalByProj.set(msg.projectId, msg.terminalId);
+          // No mosaico, ser o projeto ativo não é o mesmo que estar à vista: o
+          // que aparece são os cards da grade. Projeto fora dela ganha uma
+          // célula — a primeira livre, ou a do canto se estiver tudo ocupado.
+          if (layoutMode === "mosaic" && !gridSlots.includes(msg.projectId)) {
+            const livre = gridSlots.indexOf(null);
+            assignSlot(livre >= 0 ? livre : gridSlots.length - 1, msg.projectId);
+          }
+          if (activeProjId !== msg.projectId) selectProject(msg.projectId);
+          else { applyVisibility(); renderTabs(); renderHeader(); }
           break;
         }
         case "terminal_added": {

@@ -30,6 +30,7 @@ import {
   CONTROL_API_PREFIX,
   createControlApi,
   createControlPolicySource,
+  ControlHttpError,
   normalizeControlPolicy,
   removeControlDescriptor,
   writeControlDescriptor,
@@ -1088,8 +1089,60 @@ function terminalSummary(t) {
   };
 }
 
+/**
+ * Última vez que cada projeto foi trazido para a frente, para não repetir o
+ * pedido a cada tecla de uma mesma rajada de escrita. A janela é curta de
+ * propósito: se o usuário sair do projeto no meio, a próxima escrita traz de
+ * volta em vez de continuar acontecendo fora de vista.
+ */
+const reveladoEm = new Map();
+const REVELAR_DEBOUNCE_MS = 3_000;
+
+/**
+ * As janelas que **podem** mostrar este projeto.
+ *
+ * Uma janela desacoplada é presa a um projeto só (`?detach=<id>`) e ignora
+ * `selectProject` de qualquer outro — contá-la como plateia de um projeto que
+ * ela nunca vai exibir seria o mesmo buraco com outro nome.
+ */
+function janelasQueMostram(projectId) {
+  let total = 0;
+  for (const ws of clients) {
+    if (ws.readyState !== 1) continue;
+    if (ws.__detachedProject && ws.__detachedProject !== projectId) continue;
+    total += 1;
+  }
+  return total;
+}
+
 function createControlAdapter() {
   return {
+    /**
+     * Ou o projeto aparece na janela, ou a chamada não acontece.
+     *
+     * O servidor mantém uma sessão para cada projeto do catálogo desde o boot,
+     * então até aqui um agente podia nascer, trabalhar e commitar num projeto
+     * que ninguém tinha aberto. A regra agora é uma só: agente trabalha no que
+     * está à vista — e se não estiver, o Cockpit traz para a frente antes de
+     * deixar o trabalho começar.
+     */
+    revealProject: async (projectId, { reason = "", terminalId = null } = {}) => {
+      if (janelasQueMostram(projectId) === 0) {
+        throw new ControlHttpError(
+          409,
+          "NO_VISIBLE_WINDOW",
+          "nenhuma janela do Cockpit pode mostrar este projeto — abra o Cockpit no projeto antes de trabalhar nele",
+        );
+      }
+      const agora = Date.now();
+      const anterior = reveladoEm.get(projectId) || 0;
+      // Terminal novo sempre revela: é o momento em que o trabalho começa e o
+      // dono precisa ver, mesmo que a rajada anterior tenha sido há um segundo.
+      if (reason !== "input" || agora - anterior >= REVELAR_DEBOUNCE_MS) {
+        reveladoEm.set(projectId, agora);
+        broadcast({ type: "reveal_project", projectId, terminalId, reason });
+      }
+    },
     listProjects: () => PROJECTS,
     getProject: (projectId) => PROJECTS.find((project) => project.id === projectId),
     listTerminals: (projectId) =>
@@ -1168,6 +1221,17 @@ wss.on("connection", (ws) => {
     try {
       msg = JSON.parse(raw.toString());
     } catch {
+      return;
+    }
+
+    // Janela desacoplada só mostra o projeto dela; a principal mostra qualquer
+    // um. É o que decide se um projeto tem plateia na hora de autorizar um
+    // agente a trabalhar nele.
+    if (msg.type === "window_scope") {
+      ws.__detachedProject =
+        typeof msg.detachedProject === "string" && msg.detachedProject
+          ? msg.detachedProject
+          : null;
       return;
     }
 

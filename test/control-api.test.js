@@ -10,6 +10,7 @@ import {
   appendControlOutputEvent,
   createControlApi,
   createControlPolicySource,
+  ControlHttpError,
   normalizeControlPolicy,
   readTerminalEvents,
   removeControlDescriptor,
@@ -476,6 +477,9 @@ const KEYS = [
 
 function orchestrationFixture({
   capabilities = ["read", "create", "input", "interrupt", "dispatch"],
+  // `null` imita um adaptador sem interface (o gate de janela não existe);
+  // `false` imita o Cockpit fechado, que é onde a recusa tem de aparecer.
+  janelaAberta = true,
 } = {}) {
   const projects = [
     {
@@ -506,7 +510,22 @@ function orchestrationFixture({
     ["fora", new Map()],
   ]);
   const calls = { create: 0 };
+  const reveals = [];
   const adapter = {
+    ...(janelaAberta === null
+      ? {}
+      : {
+          revealProject: async (projectId, info) => {
+            if (!janelaAberta) {
+              throw new ControlHttpError(
+                409,
+                "NO_VISIBLE_WINDOW",
+                "nenhuma janela do Cockpit pode mostrar este projeto",
+              );
+            }
+            reveals.push({ projectId, ...info });
+          },
+        }),
     listProjects: () => projects,
     getProject: (projectId) => projects.find((project) => project.id === projectId),
     listTerminals: (projectId) => Array.from(terminals.get(projectId)?.values() || []),
@@ -557,7 +576,7 @@ function orchestrationFixture({
     dispatcher,
     log: { info() {}, warn() {} },
   });
-  return { api, adapter, calls, demands, runs };
+  return { api, adapter, calls, demands, runs, reveals };
 }
 
 test("busca de projeto nunca devolve caminho ou env e admite ambiguidade", async (t) => {
@@ -778,4 +797,95 @@ test("a API enxerga a política que vale agora, não a do boot", async (t) => {
   atual = normalizeControlPolicy({ projects: ["alpha"], capabilities: ["read"] });
   const depois = await jsonRequest(baseUrl, "projects", { headers: headers() });
   assert.deepEqual(depois.body.data.projects.map((p) => p.id), ["alpha"]);
+});
+
+// ── Nada acontece num projeto que ninguém está vendo ──────────────────────
+//
+// O servidor mantém uma sessão para cada projeto do catálogo desde o boot, e
+// isso bastava para um agente nascer, trabalhar e commitar num projeto que não
+// estava em janela nenhuma. O gate é o `revealProject` do adaptador: ou ele
+// traz o projeto para a frente, ou recusa a chamada.
+
+test("sem janela que mostre o projeto, despachar é recusado e nem demanda nasce", async (t) => {
+  const { api, calls, demands } = orchestrationFixture({ janelaAberta: false });
+  const { server, baseUrl } = await startFixtureServer(api);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const recusa = await jsonRequest(baseUrl, "projects/phd-financeiro/dispatch", {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json", "Idempotency-Key": KEY_DISPATCH }),
+    body: JSON.stringify({
+      requestId: KEY_DISPATCH,
+      confirm: true,
+      text: "publica isso no repositório",
+      title: "publicar",
+    }),
+  });
+
+  assert.equal(recusa.response.status, 409);
+  assert.equal(recusa.body.error.code, "NO_VISIBLE_WINDOW");
+  assert.equal(calls.create, 0, "nenhum terminal foi aberto às escondidas");
+  assert.equal(demands.list().length, 0, "nem demanda natimorta fica na lista");
+});
+
+test("sem janela, abrir terminal e escrever num que já existe também param", async (t) => {
+  const { api, calls } = orchestrationFixture({ janelaAberta: false });
+  const { server, baseUrl } = await startFixtureServer(api);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const criar = await jsonRequest(baseUrl, "projects/phd-financeiro/terminals", {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json", "Idempotency-Key": KEYS[0] }),
+    body: JSON.stringify({ requestId: KEYS[0], confirm: true, name: "às escondidas" }),
+  });
+  assert.equal(criar.response.status, 409);
+  assert.equal(criar.body.error.code, "NO_VISIBLE_WINDOW");
+  assert.equal(calls.create, 0);
+
+  const escrever = await jsonRequest(
+    baseUrl,
+    "projects/phd-financeiro/terminals/t-mcp/input",
+    {
+      method: "POST",
+      headers: headers({ "Content-Type": "application/json", "Idempotency-Key": KEYS[1] }),
+      body: JSON.stringify({ requestId: KEYS[1], confirm: true, data: "git push\r" }),
+    },
+  );
+  assert.equal(escrever.response.status, 409, "terminal já aberto não é porta dos fundos");
+  assert.equal(escrever.body.error.code, "NO_VISIBLE_WINDOW");
+});
+
+test("com janela aberta, o projeto vem para a frente antes de o trabalho começar", async (t) => {
+  const { api, calls, reveals, runs } = orchestrationFixture();
+  const { server, baseUrl } = await startFixtureServer(api);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const enviado = await jsonRequest(baseUrl, "projects/phd-financeiro/dispatch", {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json", "Idempotency-Key": KEY_DISPATCH }),
+    body: JSON.stringify({ requestId: KEY_DISPATCH, confirm: true, text: "confere os testes", title: "testes" }),
+  });
+  assert.equal(enviado.response.status, 202);
+  await Promise.all(runs);
+
+  assert.deepEqual(
+    reveals.map((r) => [r.projectId, r.reason]),
+    [["phd-financeiro", "dispatch"]],
+    "revelou o projeto uma vez, antes do despacho",
+  );
+  assert.equal(calls.create, 1, "e só então abriu o terminal");
+});
+
+test("adaptador sem interface segue funcionando: o gate é da janela, não da API", async (t) => {
+  const { api, calls } = orchestrationFixture({ janelaAberta: null });
+  const { server, baseUrl } = await startFixtureServer(api);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const criado = await jsonRequest(baseUrl, "projects/phd-financeiro/terminals", {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json", "Idempotency-Key": KEYS[2] }),
+    body: JSON.stringify({ requestId: KEYS[2], confirm: true, name: "sem janela nenhuma" }),
+  });
+  assert.equal(criado.response.status, 202);
+  assert.equal(calls.create, 1);
 });
