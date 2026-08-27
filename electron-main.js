@@ -15,12 +15,28 @@ const isDev = !app.isPackaged;
 // aleatória se estiver ocupada.
 const FIXED_PORT = 47817;
 
-// Instância única — evita dois Cockpits disputando o atalho global Ctrl+Espaço.
-// Sai na hora: app.quit() só agenda o encerramento, então o módulo seguiria
-// carregando, subiria um segundo servidor e sobrescreveria o control.json da
-// instância que já está rodando — deixando-a viva porém inalcançável pela
-// Control API (e portanto pelo MCP).
-if (!app.requestSingleInstanceLock()) {
+// Um servidor só, quantas janelas quiser.
+//
+// O lock não existe para limitar janelas — existe porque muita coisa aqui é
+// única por máquina e não sobrevive a dois donos: o control.json (nome fixo,
+// sem lock; o segundo sobrescreveria o descriptor do primeiro e o deixaria vivo
+// porém inalcançável pela Control API e pelo MCP), o projects.json (salvo por
+// inteiro a partir do array em memória, então projeto criado num processo some
+// no próximo save do outro), as homes do broker de contas — que o shutdown
+// limpa, arrancando o auth dos PTYs alheios —, o usage.db com seu escritor
+// único, o atalho global Ctrl+Espaço e os sockets de nome fixo do ditado.
+//
+// Então a segunda invocação não sobe nada: ela avisa a instância viva, que abre
+// mais uma janela. Mesmos projetos, mesmos terminais, mesmo descriptor. Antes
+// disso, clicar no ícone com o Cockpit aberto não fazia absolutamente nada.
+//
+// O app.exit(0) é imediato de propósito: app.quit() só agenda o encerramento, e
+// o módulo seguiria carregando até subir um segundo servidor.
+if (app.requestSingleInstanceLock()) {
+  app.on("second-instance", () => {
+    if (serverUrlRef) openMainWindow(serverUrlRef);
+  });
+} else {
   app.exit(0);
 }
 
@@ -85,7 +101,6 @@ function ensureVoiceLogsDir() {
   return dir;
 }
 
-let mainWindow = null;
 let serverInstance = null;
 let voiceConfigPathRef = null;
 
@@ -150,20 +165,32 @@ function makeWindow(serverUrl, { width, height, minWidth, minHeight, query = "" 
     return { action: "allow" };
   });
 
+  // Ctrl+Shift+N abre outra janela principal. É acelerador local da janela, não
+  // globalShortcut: nada a disputar com o Ctrl+Espaço do ditado, e nada que
+  // vaze pro resto do sistema quando o Cockpit está em segundo plano.
+  win.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || !input.control || !input.shift || input.alt) return;
+    if (input.key?.toLowerCase() !== "n") return;
+    event.preventDefault();
+    if (serverUrlRef) openMainWindow(serverUrlRef);
+  });
+
   win.on("maximize", () => win.webContents.send("window:state", { maximized: true }));
   win.on("unmaximize", () => win.webContents.send("window:state", { maximized: false }));
   return win;
 }
 
-function createWindow(serverUrl) {
+// Abre mais uma janela principal — a completa, sem ?detach=. Pode haver várias:
+// todas falam com o mesmo servidor, então veem os mesmos projetos e os mesmos
+// terminais, e o servidor já transmite tudo pra cada cliente conectado.
+function openMainWindow(serverUrl) {
   serverUrlRef = serverUrl;
-  mainWindow = makeWindow(serverUrl, { minWidth: 980, minHeight: 600 });
-  mainWindow.on("closed", () => { mainWindow = null; });
+  return makeWindow(serverUrl, { minWidth: 980, minHeight: 600 });
 }
 
 // IPC: controles da janela (renderer chama via window.cockpitDesktop).
-// Resolvem a janela pelo sender — com janela desacoplada aberta, mirar em
-// mainWindow faria o "fechar" da desacoplada derrubar a janela principal.
+// Resolvem a janela pelo sender — não existe "a janela principal" pra mirar, e
+// mesmo que existisse, o "fechar" de uma derrubaria a outra.
 const senderWindow = (e) => BrowserWindow.fromWebContents(e.sender);
 ipcMain.handle("window:minimize", (e) => senderWindow(e)?.minimize());
 ipcMain.handle("window:toggle-maximize", (e) => {
@@ -308,7 +335,7 @@ app.whenReady().then(async () => {
 
   try {
     const inst = await bootServer();
-    createWindow(inst.url);
+    openMainWindow(inst.url);
     // Ditado nativo (Ctrl+Espaço global). Opt-in por config; só Linux/X11.
     initDictation({ serverUrl: inst.url, configPath: voiceConfigPathRef });
   } catch (e) {
@@ -318,7 +345,7 @@ app.whenReady().then(async () => {
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0 && serverInstance) {
-      createWindow(serverInstance.url);
+      openMainWindow(serverInstance.url);
     }
   });
 });

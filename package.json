@@ -82,7 +82,18 @@
         "AppImage",
         "deb"
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "desktop": {
+        "entry": {
+          "Actions": "NewWindow;"
+        },
+        "desktopActions": {
+          "NewWindow": {
+            "Name": "Nova janela",
+            "Exec": "cockpit"
+          }
+        }
+      }
     },
     "deb": {
       "packageName": "cockpit-devnx"
