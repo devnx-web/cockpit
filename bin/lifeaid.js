@@ -23,7 +23,6 @@ import os from "os";
 import path from "path";
 
 import { createLifeAi } from "../lib/lifeai.js";
-import { createLifeAiConsole } from "../lib/lifeai-console.js";
 import { createTeamAccountsClient } from "../lib/team-accounts.js";
 import { createTeamRouter } from "../lib/team-router.js";
 
@@ -93,16 +92,9 @@ async function main() {
     revoke: (capability) => teamRouter.revokeClaudeAccess(capability),
   };
 
-  // O console é a cara web da LifeAi. Sobe antes dela para que o endereço já
-  // esteja no descriptor quando o API server ficar pronto.
-  let consoleWeb = null;
-  const lifeai = createLifeAi({
-    claudeAccess,
-    log,
-    env,
-    consoleUrl: () => consoleWeb?.url() || null,
-  });
-  consoleWeb = createLifeAiConsole({ resolveApi: () => lifeai.apiTarget(), log, env });
+  // A cara web da LifeAi é o projeto lifeai-console, com servidor próprio: o
+  // daemon não serve mais HTML nem faz proxy autenticado. Aqui sobra o núcleo.
+  const lifeai = createLifeAi({ claudeAccess, log, env });
 
   /**
    * No boot o serviço sobe antes da rede estar de fato utilizável, e aí a
@@ -133,11 +125,6 @@ async function main() {
 
   await bootstrapComRetry();
   log.log(`[lifeaid] broker em ${brokerUrl}, descriptor em ${lifeai.runtimeDir}`);
-  // Console fora do ar não pode calar a LifeAi: quem responde no Telegram é
-  // ela, não a interface.
-  await consoleWeb.start().catch((error) => {
-    log.log(`[lifeaid] console não subiu: ${error.message}`);
-  });
   const inicial = await lifeai.start();
   // Não subir agora não é fatal — o supervisor tenta de novo sozinho. Mas o
   // motivo precisa aparecer no journalctl, senão o serviço fica "ativo e mudo".
@@ -171,7 +158,6 @@ async function main() {
     encerrando = true;
     log.log(`[lifeaid] ${signal} — encerrando`);
     clearTimeout(reloadTimer);
-    await consoleWeb.stop().catch(() => {});
     await lifeai.stop().catch(() => {});
     await new Promise((resolve) => server.close(resolve));
     process.exit(0);

@@ -42,11 +42,12 @@ async function comandoStatus() {
 }
 
 async function comandoConsole(abrir) {
-  const { url } = await client.consoleTicket();
+  // O console vive no repositório lifeai-console e tem login próprio. Aqui só
+  // se confere que ele está atendendo — se não estiver, a mensagem de erro diz
+  // o que subir, em vez de abrir uma aba morta.
+  const { url } = await client.consoleUrl();
   process.stdout.write(`${url}\n`);
   if (!abrir) return;
-  // O endereço vale uma vez só e por um minuto: abrir aqui evita o
-  // copia-e-cola que costuma chegar tarde demais.
   const navegador = spawn("xdg-open", [url], { stdio: "ignore", detached: true });
   navegador.on("error", () => {
     process.stderr.write("não consegui abrir o navegador — cole o endereço acima\n");

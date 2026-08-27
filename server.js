@@ -1519,20 +1519,26 @@ wss.on("connection", (ws) => {
       ws.send(JSON.stringify({ type: "lifeai_status", state: await lifeai.state() }));
       return;
     }
-    // O endereço do console vale uma vez só e por um minuto: quem abre é o
-    // servidor, para o ticket não passar pelo DOM nem pelo histórico do
-    // navegador embutido.
+    // O console é outro projeto (lifeai-console), com servidor e sessão
+    // próprios. Aqui só abrimos uma janela no endereço dele — e se ninguém
+    // atender, o painel diz isso em vez de deixar o navegador reclamar.
     if (msg.type === "lifeai_console") {
       try {
-        const { url } = await lifeai.consoleTicket();
-        if (!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url)) {
-          throw new Error("o console devolveu um endereço fora do loopback");
+        const { url } = await lifeai.consoleUrl();
+        // Abrir endereço é ação privilegiada: só loopback sai daqui, mesmo que
+        // alguém tenha apontado LIFEAI_CONSOLE_URL para fora.
+        if (!/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/.test(url)) {
+          throw new Error("o endereço configurado está fora do loopback");
         }
         const plat = os.platform();
         const cmd = plat === "darwin" ? "open" : plat === "win32" ? "explorer.exe" : "xdg-open";
         execFile(cmd, [url], { windowsHide: true }, () => {});
       } catch (error) {
-        ws.send(JSON.stringify({ type: "lifeai_error", message: `console: ${error.message}` }));
+        // scope: o painel não pode pintar a bolinha da LifeAi de verde só
+        // porque o console (outro processo) não atendeu.
+        ws.send(JSON.stringify({
+          type: "lifeai_error", scope: "console", message: `console: ${error.message}`,
+        }));
       }
       return;
     }

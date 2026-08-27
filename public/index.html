@@ -10628,7 +10628,9 @@
           break;
         case "lifeai_status":
           lifeaiSetDot(msg.state?.running ? "on" : "off");
-          // Sem console de pé o botão some: link quebrado é pior que ausência.
+          // O console é um app à parte, com servidor próprio: o botão fica de
+          // pé mesmo com o serviço parado, e quem explica o que houve é a
+          // resposta do clique.
           document.getElementById("lifeaiConsole").hidden = !msg.state?.consoleUrl;
           if (msg.state?.running) lifeaiRenderOnline();
           else lifeaiRenderOffline(msg.state);
@@ -10641,7 +10643,9 @@
           break;
         case "lifeai_error":
           lifeaiLine("lifeai-step fail", `✕ ${msg.message}`);
-          lifeaiSetDot("on");
+          // Falha do console não diz nada sobre a LifeAi: são processos
+          // diferentes, e mexer no ponto aqui seria mentir sobre o serviço.
+          if (msg.scope !== "console") lifeaiSetDot("on");
           break;
         case "files_result":
           handleFilesResult(msg);
@@ -13435,7 +13439,8 @@
     document.getElementById("btnLifeai").addEventListener("click", toggleLifeaiPanel);
     document.getElementById("lifeaiClose").addEventListener("click", toggleLifeaiPanel);
     document.getElementById("lifeaiConsole").addEventListener("click", () => {
-      // Quem pede o ticket e abre o navegador é o servidor: aqui só o aviso.
+      // Quem confere se o console atende e abre a janela é o servidor: aqui só
+      // o aviso — e o erro dele volta como lifeai_error, legível no log.
       if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "lifeai_console" }));
     });
     document.getElementById("lifeaiInput").addEventListener("keydown", (e) => {

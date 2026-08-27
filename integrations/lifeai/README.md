@@ -54,42 +54,27 @@ segundo comando é melhor do que travar o terminal esperando.
 > abre outra instância, que não tem a credencial do broker no env. Use-o só
 > para `doctor`, `gateway setup` e afins.
 
-## Console Ailiv (a cara web)
+## Console (a cara web) — mora em outro repositório
 
-O daemon também sobe o **Console Ailiv** em `http://127.0.0.1:4747`
-(`LIFEAI_CONSOLE_PORT` muda a porta; ocupada, ele cai numa porta livre e
-registra no journal). É a LifeAi no navegador, com a identidade do Cockpit, e
-funciona com o Cockpit **fechado**.
+O console **não é mais servido por este repositório**. Ele virou projeto
+próprio, o `lifeai-console` (Vite + React na frente, BFF em Node atrás), que
+sobe sozinho em `http://127.0.0.1:4750` e tem login, sessão e build próprios. O
+daemon daqui não serve mais HTML, não faz proxy autenticado e não emite ticket.
+
+O Cockpit só sabe **um endereço** e abre uma janela nele:
 
 ```sh
-lifeai console            # imprime o endereço e abre o navegador
+lifeai console            # confere que o console atende, imprime e abre
 lifeai console --no-open  # só imprime
 ```
 
-Três abas: **Conversa** (sessões, histórico, stream e cards de aprovação),
-**Agenda** (tarefas recorrentes — criar, pausar, retomar, disparar) e **Estado**
-(saúde, modelo, skills e toolsets).
+`LIFEAI_CONSOLE_URL` muda o endereço (padrão `http://127.0.0.1:4750`). Se
+ninguém atender ali, tanto o comando quanto o botão do painel dizem isso em
+texto — nada de aba em branco ou erro de Chromium.
 
-Os arquivos ficam em `integrations/lifeai/web/` e são servidos como estão:
-HTML + CSS + ESM nativo, **sem etapa de build**. Editar e dar F5 basta.
-
-**Como a sessão funciona.** O endereço não é público: `lifeai console` pede ao
-daemon um *ticket* de uso único (60 s), o navegador o troca por um cookie
-`HttpOnly; SameSite=Strict` de 12 h e o ticket morre ali. Abrir a porta sem
-ticket devolve 401 com a instrução. Reiniciar o serviço invalida os cookies
-antigos — é só rodar `lifeai console` de novo.
-
-A chave da LifeAi **nunca chega ao navegador**: quem a injeta é o proxy do
-console (`lib/lifeai-console.js`), no servidor. O console escuta só em
-loopback, exige `Host` local (contra DNS rebinding) e `Origin` próprio em
-qualquer método de escrita.
-
-> Interface local sem senha: qualquer processo do seu usuário pode pedir um
-> ticket. É aceitável numa máquina pessoal; expor para fora exigiria
-> autenticação de verdade, que não existe aqui.
-
-No Cockpit, o botão **console** no topo do painel da LifeAi faz o mesmo — some
-quando o serviço está fora do ar.
+No Cockpit, o botão **console** no topo do painel da LifeAi faz o mesmo. Ele
+aparece mesmo com o serviço `lifeai` parado, porque o console é outro processo:
+quem explica o que está fora do ar é a resposta do clique.
 
 ## Segredos
 
