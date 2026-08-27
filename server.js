@@ -2163,7 +2163,14 @@ export async function startServer({
     }),
     log,
   });
-  if (effectiveControlPolicy.projects.size === 0) {
+  // A fonte que se relê é uma função; a política injetada nos testes é um
+  // objeto. Aqui só interessa o retrato do boot, para o aviso abaixo.
+  const politicaDoBoot =
+    typeof effectiveControlPolicy === "function"
+      ? effectiveControlPolicy()
+      : effectiveControlPolicy;
+  // Sem `.size` quando é "all" — aí não há o que avisar.
+  if (politicaDoBoot.projects.size === 0) {
     log.log(
       "\x1b[33m▸ cockpit control\x1b[0m política sem projetos; acesso MCP negado por padrão",
     );
