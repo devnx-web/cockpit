@@ -250,3 +250,52 @@ test("o cliente conversa com o serviço quando o descriptor é válido", async (
   assert.equal(state.startedAt, "2026-08-25T12:00:00.000Z");
   assert.deepEqual(chamadas, [{ url: "/v1/health", auth: "Bearer cc-teste" }]);
 });
+
+test("o lease do filho que caiu não leva junto o do sucessor", async (t) => {
+  // A regressão que isto trava: o handler de saída era anônimo e mexia no
+  // estado global sem saber de qual filho era. Quando o exit de um processo já
+  // substituído chegava atrasado, ele revogava a capability do sucessor vivo —
+  // que passava a levar 401 do broker em toda chamada, sem ter como reler o
+  // segredo do env. Foi assim que a LifeAi ficou dez horas cega.
+  const root = fakeInstall(t);
+  const access = fakeAccess();
+  const lifeai = createLifeAi({
+    claudeAccess: access,
+    log: SILENT,
+    env: { LIFEAI_ROOT: root, LIFEAI_RUNTIME_DIR: fakeRuntime(t) },
+  });
+
+  await lifeai.start();
+  await lifeai.restart();
+  t.after(() => lifeai.stop());
+
+  const atual = access.issued.at(-1) && `cc-cockpit-${access.issued.length}`;
+  assert.equal(access.issued.length, 2);
+  assert.equal(lifeai.state().running, true);
+  // O primeiro voltou; o que está de pé segue com o segredo que o broker aceita.
+  assert.deepEqual(access.revoked, ["cc-cockpit-1"]);
+  assert.ok(!access.revoked.includes(atual));
+});
+
+test("queda antes de atender não vira enxurrada de subidas", async (t) => {
+  // O filho leva ~25s para abrir o API server. Reagendar em 5s fazia a
+  // tentativa seguinte nascer em cima do irmão que ainda subia, e o `--replace`
+  // degolava os dois — 1762 vezes numa noite.
+  const root = fakeInstall(t);
+  fs.writeFileSync(path.join(root, "bin", "lifeai"), "#!/usr/bin/env bash\nexit 0\n");
+  fs.chmodSync(path.join(root, "bin", "lifeai"), 0o755);
+  const access = fakeAccess();
+  const lifeai = createLifeAi({
+    claudeAccess: access,
+    log: SILENT,
+    env: { LIFEAI_ROOT: root, LIFEAI_RUNTIME_DIR: fakeRuntime(t) },
+  });
+
+  await lifeai.start();
+  t.after(() => lifeai.stop());
+  await new Promise((resolve) => setTimeout(resolve, 6_000));
+
+  assert.equal(lifeai.state().running, false);
+  // Uma subida, não uma cada 5s: a espera fria é maior que o boot.
+  assert.equal(access.issued.length, 1);
+});
