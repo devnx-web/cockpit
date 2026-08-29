@@ -2,9 +2,9 @@
 
 Cabine de comando para múltiplos agentes de IA em vários projetos. Roda como app desktop em Linux (Electron + node-pty + xterm.js).
 
-Versão atual: **0.21.0** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.21.0/CHANGELOG.md))
+Versão atual: **0.21.1** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.21.1/CHANGELOG.md))
 
-> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.21.0/install.sh | sudo bash`
+> Instalador one-liner: `curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.21.1/install.sh | sudo bash`
 
 ---
 
@@ -23,7 +23,7 @@ Versão atual: **0.21.0** ([changelog](https://arquivos.devnx.com.br/cockpit/v0.
 ### Opção 1 — `.deb` (recomendado pra Debian/Ubuntu)
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.21.0/cockpit-devnx_0.21.0_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.21.1/cockpit-devnx_0.21.1_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb
 ```
 
@@ -42,7 +42,7 @@ Após instalar, o **Cockpit** aparece no menu de aplicativos. Ou abra pelo termi
 Não exige `sudo` nem instala nada no sistema.
 
 ```bash
-curl -L https://arquivos.devnx.com.br/cockpit/v0.21.0/Cockpit-0.21.0.AppImage -o ~/Cockpit.AppImage
+curl -L https://arquivos.devnx.com.br/cockpit/v0.21.1/Cockpit-0.21.1.AppImage -o ~/Cockpit.AppImage
 chmod +x ~/Cockpit.AppImage
 ~/Cockpit.AppImage
 ```
@@ -131,7 +131,7 @@ Edite `voice-config.json` e troque `tts_engine` para:
 ### A partir do `.deb`
 ```bash
 pkill -f "/opt/Cockpit/cockpit" 2>/dev/null    # fecha o app
-curl -L https://arquivos.devnx.com.br/cockpit/v0.21.0/cockpit-devnx_0.21.0_amd64.deb -o /tmp/cockpit.deb
+curl -L https://arquivos.devnx.com.br/cockpit/v0.21.1/cockpit-devnx_0.21.1_amd64.deb -o /tmp/cockpit.deb
 sudo dpkg -i /tmp/cockpit.deb       # substitui a versão anterior
 ```
 
@@ -148,7 +148,7 @@ Baixe o novo arquivo e substitua o antigo.
 # .deb — o pacote se chama cockpit-devnx (não confundir com o pacote `cockpit`
 # do Debian/Ubuntu, que é o Web Console do sistema)
 dpkg -l cockpit-devnx
-# espera: ii  cockpit-devnx  0.21.0  amd64
+# espera: ii  cockpit-devnx  0.21.1  amd64
 
 # AppImage (sem dpkg)
 ~/Cockpit.AppImage --version
@@ -206,7 +206,7 @@ rm -rf ~/.config/Cockpit              # opcional — apaga config/cache do usuá
 
 Para reinstalar depois:
 ```bash
-curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.21.0/install.sh | sudo bash
+curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.21.1/install.sh | sudo bash
 ```
 
 Na prática você raramente precisa desinstalar: `dpkg -i` faz upgrade in-place e preserva `~/.config/Cockpit/`. Veja [Atualizar para uma nova versão](#atualizar-para-uma-nova-versão).
@@ -268,7 +268,7 @@ sudo pacman -S fuse2
 
 ## Versões anteriores
 
-Disponíveis no mesmo bucket — basta trocar `v0.21.0` no path:
+Disponíveis no mesmo bucket — basta trocar `v0.21.1` no path:
 
 ```
 https://arquivos.devnx.com.br/cockpit/v<MAJOR.MINOR.PATCH>/cockpit_<versão>_amd64.deb
@@ -284,7 +284,7 @@ Histórico completo: [CHANGELOG.md](./CHANGELOG.md)
 Tudo num único comando:
 
 ```bash
-npm run release -- 0.21.0
+npm run release -- 0.21.1
 ```
 
 Isso roda `scripts/release.sh`, que faz nesta ordem:
@@ -307,9 +307,9 @@ Isso roda `scripts/release.sh`, que faz nesta ordem:
 ### Overrides via env
 
 ```bash
-COCKPIT_AWS_PROFILE=outro-profile  npm run release -- 0.21.0
-COCKPIT_SKIP_UPLOAD=1              npm run release -- 0.21.0    # só local
-COCKPIT_SKIP_BUILD=1               npm run release -- 0.21.0    # só upload
+COCKPIT_AWS_PROFILE=outro-profile  npm run release -- 0.21.1
+COCKPIT_SKIP_UPLOAD=1              npm run release -- 0.21.1    # só local
+COCKPIT_SKIP_BUILD=1               npm run release -- 0.21.1    # só upload
 ```
 
 ### Pós-release
@@ -317,14 +317,14 @@ COCKPIT_SKIP_BUILD=1               npm run release -- 0.21.0    # só upload
 Depois que o release subiu, valide:
 
 ```bash
-curl -sI https://arquivos.devnx.com.br/cockpit/v0.21.0/install.sh   # HTTP/2 200
-curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.21.0/install.sh | sudo bash
+curl -sI https://arquivos.devnx.com.br/cockpit/v0.21.1/install.sh   # HTTP/2 200
+curl -fsSL https://arquivos.devnx.com.br/cockpit/v0.21.1/install.sh | sudo bash
 ```
 
-Commitar a v0.21.0 (tag opcional):
+Commitar a v0.21.1 (tag opcional):
 
 ```bash
-git add -A && git commit -m "release: v0.21.0 — <resumo>"
-git tag v0.21.0
+git add -A && git commit -m "release: v0.21.1 — <resumo>"
+git tag v0.21.1
 git push --tags
 ```
