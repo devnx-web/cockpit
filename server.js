@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import url from "url";
 import os from "os";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { execFile } from "child_process";
 import { WebSocketServer } from "ws";
 import pkg from "node-pty";
@@ -15,6 +15,7 @@ import { createTeamAccountsClient } from "./lib/team-accounts.js";
 import { createTeamRouter } from "./lib/team-router.js";
 import { createLifeAiClient } from "./lib/lifeai-client.js";
 import { interactiveTerminalEnv } from "./lib/terminal-env.js";
+import { createAgentWake } from "./lib/agent-wake.js";
 import {
   createTerminalLicenseRetry,
   formatTerminalLicenseDelay,
@@ -31,6 +32,7 @@ import {
   createControlApi,
   createControlPolicySource,
   ControlHttpError,
+  constantTimeTokenEqual,
   normalizeControlPolicy,
   removeControlDescriptor,
   writeControlDescriptor,
@@ -58,6 +60,14 @@ const teamRouter = createTeamRouter({
 // Cockpit é só mais um cliente dela: lê onde ela atende e conversa. Nunca sobe,
 // nunca desliga — fechar a janela não pode calar o agente no Telegram.
 const lifeai = createLifeAiClient();
+// Ponte "o agente parou": avisa a LifeAi na hora em que o turno acaba, em vez
+// de deixá-la descobrir na próxima batida do cron. Só entrega o fato — quem
+// decide se algum vigia se importa é ela.
+const agentWake = createAgentWake({
+  notifyLifeAi: (payload) => lifeai.cronWake(payload),
+  resolveToken: (token) => findTerminalByWakeToken(token),
+  log: console,
+});
 const fileSearch = createFileSearchService();
 const TEAM_SELECTION_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const TEAM_AUTH_RECOVERY_COOLDOWN_MS = 30 * 1000;
@@ -91,6 +101,24 @@ function defaultShell() {
 // terminal = { id, name, pty, buffer[], lastOutputTime, status, statusText }
 // =========================================================
 const sessions = new Map();
+
+/**
+ * Acha o terminal dono de um token de wake. Percorre todos porque a comparação
+ * tem de ser em tempo constante: parar no primeiro prefixo que casa contaria
+ * quantos caracteres o palpite acertou.
+ */
+function findTerminalByWakeToken(token) {
+  if (!token) return null;
+  let achado = null;
+  for (const session of sessions.values()) {
+    for (const terminal of session.terminals.values()) {
+      if (terminal.wakeToken && constantTimeTokenEqual(terminal.wakeToken, token)) {
+        achado = { session, terminal };
+      }
+    }
+  }
+  return achado;
+}
 
 async function syncTeamSelections(log = console) {
   if (!teamRouter.status().connected) return;
@@ -198,6 +226,11 @@ function attachTerminalPty(session, terminal, { cwd, pathOk }) {
     COCKPIT_PROJECT: session.proj.id,
     COCKPIT_TERMINAL: terminal.id,
     COCKPIT: "1",
+    // Onde o hook "o agente parou" bate. Sem SERVER_URL (PTY nascido antes da
+    // porta ser conhecida) o hook fica sem endereço e sai calado.
+    ...(SERVER_URL
+      ? { COCKPIT_WAKE_URL: `${SERVER_URL}/wake`, COCKPIT_WAKE_TOKEN: terminal.wakeToken }
+      : {}),
   });
   // This call is intentionally strict. If broker environment preparation
   // fails, no host shell is spawned and the online retry loop remains active.
@@ -324,6 +357,9 @@ async function createTerminalIn(session, name = null, meta = {}) {
     maxBufferSize: 200 * 1024,
     owner: meta.owner === "mcp" ? "mcp" : "ui",
     cwd,
+    // Credencial do hook "o agente parou". Nasce e morre com o terminal, e não
+    // dá poder nenhum além de identificar quem está avisando.
+    wakeToken: randomBytes(32).toString("base64url"),
     controlGeneration: randomUUID(),
     outputSequence: 0,
     outputEvents: [],
@@ -433,6 +469,7 @@ function killTerminal(session, tid, { hard = false } = {}) {
   }
 
   session.terminals.delete(tid);
+  agentWake.forget(session.proj.id, tid);
   return true;
 }
 
@@ -545,6 +582,8 @@ function updateTerminalStatus(session, terminal) {
     broadcastTerminalStatus(session, terminal);
     // a demanda deriva daqui — nenhuma heurística nova, mesma leitura
     demands?.onTerminalStatus(session.proj.id, terminal.id, status, text);
+    // e o vigia da LifeAi acorda daqui, quando o agente não avisa sozinho
+    agentWake.onTerminalStatus(session, terminal, status, text);
   }
 }
 
@@ -1999,6 +2038,7 @@ const server = http.createServer((req, res) => {
   const u = url.parse(req.url);
   if (controlApi?.handle(req, res)) return;
   if (teamRouter.handle(req, res, u)) return;
+  if (agentWake.handle(req, res, u)) return;
   if (u.pathname === "/projects.json") {
     res.writeHead(200, { "Content-Type": MIME[".json"] });
     res.end(JSON.stringify(PROJECTS));

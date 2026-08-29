@@ -6,7 +6,20 @@ Datas em GMT-3 (Horário de Brasília).
 
 ## [Unreleased]
 
-_(nada ainda)_
+### Adicionado
+- **O vigia deixou de ser relógio e virou conversa.** Quando o agente de um terminal termina o
+  turno — ou trava esperando permissão —, o Cockpit avisa a LifeAi na hora, e ela acorda para
+  responder. Antes ela batia de 5 em 5 minutos e, em 64 de 100 acordadas, só descobria que o
+  agente ainda estava ocupado; quem terminava logo depois da batida ficava até 5 minutos parado
+  esperando o relógio. Agora a espera é de segundos, e o cron continua atrás, de 30 em 30
+  minutos, para o caso de o Cockpit estar fechado ou o agente morrer sem se despedir.
+  O sinal preciso vem do hook `Stop` do Claude Code, que bate em `POST /wake` com um token
+  sorteado por terminal (vive e morre com ele, e não serve para mais nada além de dizer "eu
+  parei"); a heurística de `ocioso` segue como rede para agente que não é Claude Code. A ponte
+  (`lib/agent-wake.js`) só avisa terminal que trabalhou desde o último aviso, junta em um só os
+  avisos que caem na mesma janela de 20s, e para no vigésimo da hora — a trava contra o laço
+  "ela manda, ele responde em dois segundos, ela manda de novo". LifeAi fora do ar é silêncio,
+  não erro.
 
 ---
 
