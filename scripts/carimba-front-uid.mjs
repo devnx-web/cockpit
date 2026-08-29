@@ -10,8 +10,8 @@
 // que dura é o `front_uid`.
 //
 // QUANDO RODAR: só depois de reiniciar o Cockpit com a versão que grava
-// `~/.cockpit/fronts.json`. Antes disso os uids não existem — não há o que
-// carimbar, e este script diz isso e sai.
+// `~/.cockpit/inventory.json` (0.22.0 em diante). Antes disso os uids não
+// existem — não há o que carimbar, e este script diz isso e sai.
 //
 // POR QUE NÃO RODA SOZINHO: ele reescreve arquivos de outro programa, que está
 // no ar. Um carimbo errado é pior que carimbo nenhum — uma frente apontada para
@@ -30,7 +30,9 @@ import { normalizeTitle } from "../lib/fronts.js";
 
 const APLICAR = process.argv.includes("--aplicar");
 const HOME = os.homedir();
-const FRONTS_PATH = path.join(HOME, ".cockpit", "fronts.json");
+// O inventário é a lista de frentes que o Cockpit publica em disco a cada
+// mudança; `fronts` é o campo dentro dele.
+const FRONTS_PATH = path.join(HOME, ".cockpit", "inventory.json");
 const WAKE_MAP_PATH = path.join(HOME, ".lifeai", "cron", "wake_map.json");
 const PLACAR_PATH = path.join(HOME, ".lifeai", "placar.json");
 
@@ -72,7 +74,7 @@ if (!frentesLidas.ok) {
     : `ilegível (${frentesLidas.erro.message})`;
   console.log(`O registro de frentes ${motivo}: ${FRONTS_PATH}`);
   console.log("");
-  console.log("Ele nasce quando o Cockpit sobe com a versão que grava fronts.json.");
+  console.log("Ele nasce quando o Cockpit sobe na 0.22.0 ou mais nova.");
   console.log("Reinicie o Cockpit, abra as frentes de sempre e rode isto de novo.");
   console.log("Nada foi alterado.");
   process.exit(0);

@@ -6,6 +6,10 @@ Datas em GMT-3 (Horário de Brasília).
 
 ## [Unreleased]
 
+---
+
+## [0.22.0] — 2026-08-29
+
 ### Adicionado
 - **O vigia deixou de ser relógio e virou conversa.** Quando o agente de um terminal termina o
   turno — ou trava esperando permissão —, o Cockpit avisa a LifeAi na hora, e ela acorda para
