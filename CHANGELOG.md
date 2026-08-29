@@ -10,6 +10,54 @@ _(nada ainda)_
 
 ---
 
+## [0.21.1] — 2026-08-29
+
+### Adicionado
+- **A LifeAi só age no que está à vista.** Despacho para projeto sem janela aberta passa a ser
+  recusado com 409 `NO_VISIBLE_WINDOW` em vez de acontecer às escondidas. O agente trabalha onde
+  você consegue olhar.
+
+### Alterado
+- **O console web saiu do Cockpit e virou endereço.** A cara web da LifeAi passa a ser o projeto
+  `lifeai-console`, com servidor, build e sessão próprios: saem `lib/lifeai-console.js`, os
+  estáticos de `integrations/lifeai/web/` e a porta 4747 do descriptor. No lugar,
+  `LIFEAI_CONSOLE_URL` (padrão `http://127.0.0.1:4750`), conferido antes de abrir a janela — 401
+  conta como de pé, porque pedir login é o console funcionando. Como agora são dois processos,
+  falha do console não pinta mais a bolinha da LifeAi de verde: o erro volta com
+  `scope: "console"`.
+- **A conversa do console ficou legível** antes do corte do fio: bolhas com horário e marcos de
+  dia, bloco de ferramentas que se recolhe, `◇ pensou` para o raciocínio, cartão de aprovação no
+  lugar onde a pergunta aconteceu, e um bloco de últimas acordadas em que job silencioso diz
+  "silêncio" — que é a diferença entre trabalhando quieto e morto.
+
+### Corrigido
+- **A LifeAi não conseguia delegar.** O subagente do `delegate_task` morria com 401 "Invalid
+  bearer token" na primeira chamada, sempre — toda tarefa que ela tentava fechar abrindo um filho
+  parava ali. A LifeAi recebia um par de variáveis privado que só chega ao cliente pelo caminho
+  que passa por `model:` no config.yaml; quem monta cliente fora dele, como o subagente, caía no
+  default público e saía para a api.anthropic.com levando uma capability que só o broker entende.
+  Agora o filho vai pelo broker como o pai.
+- **A LifeAi derrubava o próprio sucessor.** O supervisor detectou o lease da assinatura vencido
+  de madrugada, reiniciou como devia, e a partir daí foram 1762 subidas em dez horas, nenhuma
+  chegando a atender: toda acordada dos vigias morreu com 401 "Capability Claude inválida ou
+  expirada" — que não vem da Anthropic, vem do nosso próprio broker. O handler de saída do filho
+  era anônimo e mexia no estado global sem saber de qual processo era, então o `exit` de um filho
+  já substituído revogava a capability do sucessor vivo, que seguia de pé com um segredo que o
+  broker não aceitava mais e sem como reler o env. Junto vieram os três defeitos que alimentavam
+  o laço: reagendamento por cima de filho vivo, backoff que era zerado a cada spawn (e por isso
+  nunca cresceu), e 5 segundos até o SIGKILL quando o gateway precisa de mais para fechar os
+  bancos — quem morre assim deixa o lock órfão para a subida seguinte.
+- **O heartbeat desistia na primeira negativa de rede.** O lease vale uma hora e o tick só volta
+  em trinta minutos: dois erros seguidos matavam a sessão sem ninguém ter tentado de novo. Agora
+  são três tentativas dentro do mesmo tick, e o motivo da última falha aparece na janela em vez
+  de só no journal.
+- **O mosaico derrubava o painel do canto.** Projeto que ganhava atenção fora da grade tomava a
+  célula do canto quando tudo estava ocupado — o agente aparecia às custas de outro que você
+  estava olhando. Agora abre uma linha, ou uma coluna se as linhas estiverem no teto; só no
+  6x6 lotado é que ocupa o canto como antes.
+
+---
+
 ## [0.21.0] — 2026-08-26
 
 ### Adicionado
