@@ -10550,9 +10550,25 @@
           if (msg.terminalId) activeTerminalByProj.set(msg.projectId, msg.terminalId);
           // No mosaico, ser o projeto ativo não é o mesmo que estar à vista: o
           // que aparece são os cards da grade. Projeto fora dela ganha uma
-          // célula — a primeira livre, ou a do canto se estiver tudo ocupado.
+          // célula — a primeira livre, ou uma recém-aberta se estiver tudo
+          // ocupado. Derrubar o painel do canto para abrir espaço era o
+          // comportamento anterior, e custava caro: o agente aparecia às custas
+          // de outro que você estava olhando.
           if (layoutMode === "mosaic" && !gridSlots.includes(msg.projectId)) {
-            const livre = gridSlots.indexOf(null);
+            let livre = gridSlots.indexOf(null);
+            if (livre < 0) {
+              // Pelas mesmas funções do "+" do editor de layout: elas mexem em
+              // gridSlots/gridColWeights/gridRowWeights/gridLayout de uma vez e
+              // já commitam a estrutura. Um splice solto aqui deixaria
+              // gridSlots fora de gridCellCount(), e o normalizeSlots varrendo
+              // de trás para frente apagaria justamente a célula nova.
+              if (insertGridRow(gridLayout.length)) livre = gridSlots.indexOf(null);
+              else if (insertGridColumn(gridLayout.length - 1, gridSlots.length))
+                livre = gridSlots.indexOf(null);
+            }
+            // Grade no teto (6x6) e sem vaga: ocupa o canto mesmo. Entre
+            // sobrescrever um painel e deixar o agente trabalhar escondido, a
+            // regra da casa é aparecer.
             assignSlot(livre >= 0 ? livre : gridSlots.length - 1, msg.projectId);
           }
           if (activeProjId !== msg.projectId) selectProject(msg.projectId);
