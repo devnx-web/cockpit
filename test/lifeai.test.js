@@ -299,3 +299,55 @@ test("queda antes de atender não vira enxurrada de subidas", async (t) => {
   // Uma subida, não uma cada 5s: a espera fria é maior que o boot.
   assert.equal(access.issued.length, 1);
 });
+
+test("o heartbeat insiste quando a renovação dá erro, em vez de esperar 30min", async (t) => {
+  // O lease vale 1h e o tick só volta em 30min: desistir na primeira negativa
+  // de rede fazia dois erros seguidos matarem a sessão sem ninguém ter tentado
+  // outra vez. Foi assim que a madrugada de 29/08 começou.
+  const root = fakeInstall(t);
+  let falhas = 2;
+  const access = fakeAccess({
+    async renew() {
+      this.renewals += 1;
+      if (falhas > 0) { falhas -= 1; throw new Error("Control fora do ar"); }
+      return true;
+    },
+  });
+  const lifeai = createLifeAi({
+    claudeAccess: access,
+    log: SILENT,
+    heartbeatRetryDelayMs: 10,
+    env: { LIFEAI_ROOT: root, LIFEAI_RUNTIME_DIR: fakeRuntime(t) },
+  });
+
+  await lifeai.start();
+  t.after(() => lifeai.stop());
+  await lifeai.tick();
+
+  // Duas negativas e um acerto, tudo dentro do mesmo tick.
+  assert.equal(access.renewals, 3);
+  // Insistir renova o lease de sempre; trocar o segredo deixaria o filho mudo.
+  assert.equal(access.issued.length, 1);
+  assert.equal(lifeai.state().running, true);
+});
+
+test("o heartbeat desiste depois das tentativas e deixa o motivo à vista", async (t) => {
+  const root = fakeInstall(t);
+  const access = fakeAccess({
+    async renew() { this.renewals += 1; throw new Error("Control fora do ar"); },
+  });
+  const lifeai = createLifeAi({
+    claudeAccess: access,
+    log: SILENT,
+    heartbeatRetryDelayMs: 10,
+    env: { LIFEAI_ROOT: root, LIFEAI_RUNTIME_DIR: fakeRuntime(t) },
+  });
+
+  await lifeai.start();
+  t.after(() => lifeai.stop());
+  await lifeai.tick();
+
+  // Insiste um número fixo de vezes: retry infinito seguraria o tick seguinte.
+  assert.equal(access.renewals, 3);
+  assert.match(lifeai.state().lastError, /Control fora do ar/);
+});
