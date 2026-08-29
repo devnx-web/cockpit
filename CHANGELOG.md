@@ -38,6 +38,10 @@ Datas em GMT-3 (Horário de Brasília).
 - **O Cockpit não subia.** O `server.js` importava `constantTimeTokenEqual` de `lib/control-api.js`,
   que nunca exportou o nome — erro de módulo no boot, invisível para a suíte porque nenhum teste
   carrega o `server.js`.
+- **A suíte agora repara quando o Cockpit não abre.** Nenhum teste carregava o arquivo de entrada,
+  então um import quebrado passava por 225 testes verdes e só aparecia na hora de abrir o
+  programa. Um teste novo carrega o `server.js` de verdade — se ele não subir, a suíte fica
+  vermelha antes de qualquer um instalar a versão.
 
 ---
 
