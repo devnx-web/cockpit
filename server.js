@@ -24,6 +24,8 @@ import {
 import { createFileSearchService } from "./lib/file-search.js";
 import { pickProjectFields, validateCatalogFields } from "./lib/project-search.js";
 import { createDemandStore, defaultDemandsPath } from "./lib/demands.js";
+import { createFrontStore, defaultFrontsPath } from "./lib/fronts.js";
+import { createInventoryWriter, readDevice } from "./lib/inventory.js";
 import { createDispatcher } from "./lib/dispatch.js";
 import { createUsageService } from "./lib/usage/service.js";
 import {
@@ -51,6 +53,10 @@ let controlApi = null;
 let controlDescriptorPath = null;
 let usage = null; // coletor de uso de tokens; null se não subir (opcional)
 let demands = null; // registro de demandas do orquestrador; null antes do boot
+// Frentes de trabalho: a identidade que sobrevive ao terminal. `t1` é reciclado
+// a cada reinício; o uid da frente, não. Null antes do boot.
+let fronts = null;
+let inventory = null; // snapshot em disco de device + frentes; null antes do boot
 const teamAccounts = createTeamAccountsClient();
 const teamRouter = createTeamRouter({
   client: teamAccounts,
@@ -66,6 +72,7 @@ const lifeai = createLifeAiClient();
 const agentWake = createAgentWake({
   notifyLifeAi: (payload) => lifeai.cronWake(payload),
   resolveToken: (token) => findTerminalByWakeToken(token),
+  device: () => readDevice(),
   log: console,
 });
 const fileSearch = createFileSearchService();
@@ -225,6 +232,9 @@ function attachTerminalPty(session, terminal, { cwd, pathOk }) {
   const baseEnv = interactiveTerminalEnv(process.env, session.proj.env, {
     COCKPIT_PROJECT: session.proj.id,
     COCKPIT_TERMINAL: terminal.id,
+    // O endereço que sobrevive a fechar, reabrir e renomear — ao contrário de
+    // COCKPIT_TERMINAL, que é reciclado a cada sessão.
+    ...(terminal.frontUid ? { COCKPIT_FRONT: terminal.frontUid } : {}),
     COCKPIT: "1",
     // Onde o hook "o agente parou" bate. Sem SERVER_URL (PTY nascido antes da
     // porta ser conhecida) o hook fica sem endereço e sai calado.
@@ -346,9 +356,14 @@ async function createTerminalIn(session, name = null, meta = {}) {
     );
   }
 
+  const titulo = name || `Terminal ${session.terminals.size + 1}`;
+  // A frente é o endereço que dura: o terminal se pluga nela e pode morrer.
+  const frente = fronts?.ensure(session.proj.id, titulo) || null;
+
   const terminal = {
     id: tid,
-    name: name || `Terminal ${session.terminals.size + 1}`,
+    name: titulo,
+    frontUid: frente?.uid || null,
     pty: null,
     cols: 120,
     rows: 30,
@@ -380,6 +395,7 @@ async function createTerminalIn(session, name = null, meta = {}) {
   };
 
   session.terminals.set(tid, terminal);
+  inventory?.schedule();
 
   if (!pathOk) {
     const warn =
@@ -470,6 +486,9 @@ function killTerminal(session, tid, { hard = false } = {}) {
 
   session.terminals.delete(tid);
   agentWake.forget(session.proj.id, tid);
+  // A frente continua no registro: ela é o slot, e o terminal é só quem passou
+  // por ele. Apagá-la aqui devolveria o uid instável que este registro resolve.
+  inventory?.schedule();
   return true;
 }
 
@@ -584,6 +603,7 @@ function updateTerminalStatus(session, terminal) {
     demands?.onTerminalStatus(session.proj.id, terminal.id, status, text);
     // e o vigia da LifeAi acorda daqui, quando o agente não avisa sozinho
     agentWake.onTerminalStatus(session, terminal, status, text);
+    inventory?.schedule();
   }
 }
 
@@ -1126,6 +1146,34 @@ function terminalSummary(t) {
     startedAt: t.startedAt,
     lastActivity: Math.max(t.lastOutputTime, t.lastInputTime),
   };
+}
+
+/**
+ * O que o inventário em disco publica: as frentes conhecidas, cada uma com o
+ * terminal que a ocupa **agora** — ou nenhum, que é informação igualmente boa
+ * ("essa frente existe e está sem janela aberta"). Só rótulo e status: nenhuma
+ * saída de terminal, nenhum token, nenhum caminho de credencial.
+ */
+function collectInventoryFronts() {
+  if (!fronts) return [];
+  const ocupadas = new Map();
+  for (const session of sessions.values()) {
+    for (const terminal of session.terminals.values()) {
+      if (terminal.frontUid) ocupadas.set(terminal.frontUid, terminal);
+    }
+  }
+  return fronts.list().map((frente) => {
+    const terminal = ocupadas.get(frente.uid) || null;
+    return {
+      uid: frente.uid,
+      projectId: frente.projectId,
+      title: frente.title,
+      terminalId: terminal?.id || null,
+      status: terminal?.status || "closed",
+      statusText: terminal?.statusText || "",
+      lastSeenAt: frente.lastSeenAt || null,
+    };
+  });
 }
 
 /**
@@ -1723,7 +1771,14 @@ wss.on("connection", (ws) => {
       case "rename_terminal": {
         const t = session.terminals.get(msg.terminalId);
         if (t && msg.name) {
+          // O uid acompanha o terminal, não o nome: renomear na interface não
+          // pode fazer o vigia parar de acordar esta frente em silêncio.
+          const frente = t.frontUid
+            ? fronts?.rename(t.frontUid, msg.name)
+            : fronts?.ensure(session.proj.id, msg.name);
+          if (frente) t.frontUid = frente.uid;
           t.name = msg.name;
+          inventory?.schedule();
           broadcast({
             type: "terminal_renamed",
             projectId: session.proj.id,
@@ -2193,6 +2248,12 @@ async function shutdown(opts = {}) {
   usage = null;
   await demands?.close().catch(() => {});
   demands = null;
+  // O inventário fecha depois dos terminais: a última escrita mostra as frentes
+  // sem janela, que é a verdade de quem lê o arquivo com o Cockpit desligado.
+  await inventory?.close().catch(() => {});
+  inventory = null;
+  await fronts?.close().catch(() => {});
+  fronts = null;
   if (opts.exit !== false) process.exit(0);
 }
 
@@ -2244,6 +2305,20 @@ export async function startServer({
     log: (msg) => log.log?.(msg),
   });
   demands.load();
+
+  // Registro de frentes: precisa estar carregado antes do primeiro terminal
+  // nascer, senão o terminal abre sem uid e a frente vira nova a cada boot.
+  fronts = createFrontStore({
+    filePath: defaultFrontsPath(projectsPath),
+    log: (msg) => log.log?.(msg),
+  });
+  fronts.load();
+
+  // Inventário em disco: o que existe nesta máquina, endereçável por frente.
+  inventory = createInventoryWriter({
+    collect: () => collectInventoryFronts(),
+    log: (msg) => log.log?.(msg),
+  });
 
   // Política injetada (testes) fica fixa; a que vem de arquivo se relê sozinha
   // quando o JSON muda. O Cockpit fica aberto por dias com agentes dentro: sem

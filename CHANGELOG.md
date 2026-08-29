@@ -20,6 +20,24 @@ Datas em GMT-3 (Horário de Brasília).
   avisos que caem na mesma janela de 20s, e para no vigésimo da hora — a trava contra o laço
   "ela manda, ele responde em dois segundos, ela manda de novo". LifeAi fora do ar é silêncio,
   não erro.
+- **A frente de trabalho ganhou nome próprio.** O terminal é descartável — `t1`, `t2` são
+  sequenciais por sessão e voltam a ser usados no próximo reinício —, mas o trabalho não é: "BI e
+  indicadores" é a mesma frente hoje, amanhã e depois de três reinícios. Agora cada frente nasce
+  com um uid guardado em `fronts.json` (ao lado do `projects.json`), o terminal se pluga nela e
+  pode morrer à vontade, e **renomear preserva o uid**. Era essa a falha silenciosa: o vigia da
+  LifeAi casava a frente por prefixo do título, então renomear a janela o fazia parar de acordar
+  sem que nada estourasse. O uid vai para o ambiente do terminal (`COCKPIT_FRONT`), para o aviso
+  de `POST /v1/cron/wake` (junto do `device_uid`) e para a Control API (`frontUid`).
+- **O inventário da máquina em disco** (`~/.cockpit/inventory.json`): que frentes existem aqui, de
+  quem é a máquina e o que está aberto em cada uma agora, reescrito a cada nascimento, morte,
+  renome ou mudança de status. Arquivo, e não rota, pelo mesmo motivo que a tela Frentes lê o
+  disco: a hora em que mais se precisa saber o que está aberto é quando o processo não responde —
+  e com o `updatedAt` um snapshot velho se denuncia sozinho.
+
+### Corrigido
+- **O Cockpit não subia.** O `server.js` importava `constantTimeTokenEqual` de `lib/control-api.js`,
+  que nunca exportou o nome — erro de módulo no boot, invisível para a suíte porque nenhum teste
+  carrega o `server.js`.
 
 ---
 

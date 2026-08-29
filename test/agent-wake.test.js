@@ -53,6 +53,8 @@ test("terminal que trabalhou e parou avisa uma vez só", async () => {
   assert.equal(enviados.length, 1);
   assert.deepEqual(enviados[0], {
     project: "educari",
+    front_uid: null,
+    device_uid: null,
     terminal_id: "t1",
     terminal_title: "Auditoria Educari - retomada",
     event: "ocioso",
@@ -181,6 +183,32 @@ test("o nome do evento vindo de fora é higienizado", async () => {
   await res.pronto;
   // Este texto acaba em log e em campo de payload: nada de espaço nem pontuação.
   assert.equal(enviados[0].event, "hook:stoprm-rf");
+});
+
+test("o aviso leva o endereço estável da frente e da máquina", async () => {
+  const { wake, enviados, session, terminal } = bancada({
+    device: () => ({ uid: "e57c7217" }),
+  });
+  terminal.frontUid = "f_3a91c04e77b2";
+
+  trabalhaEPara(wake, session, terminal);
+  await drena();
+
+  // Sem estes dois campos, quem recebe o aviso só tem "t1" — que é reciclado a
+  // cada reinício do Cockpit — e o título, que qualquer renome muda.
+  assert.equal(enviados[0].front_uid, "f_3a91c04e77b2");
+  assert.equal(enviados[0].device_uid, "e57c7217");
+  assert.equal(enviados[0].terminal_title, "Auditoria Educari - retomada");
+});
+
+test("frente e máquina ainda sem uid não quebram o aviso", async () => {
+  const { wake, enviados, session, terminal } = bancada();
+
+  trabalhaEPara(wake, session, terminal);
+  await drena();
+
+  assert.equal(enviados[0].front_uid, null);
+  assert.equal(enviados[0].device_uid, null);
 });
 
 test("a ponte não responde por rota que não é dela", () => {
