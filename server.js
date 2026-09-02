@@ -971,6 +971,7 @@ function helloPayload() {
   return {
     type: "hello",
     version: APP_VERSION,
+    detachedProjects: detachedProjectIds(),
     system: {
       home: os.homedir(),
       platform: process.platform,
@@ -1315,10 +1316,12 @@ wss.on("connection", (ws) => {
     // um. É o que decide se um projeto tem plateia na hora de autorizar um
     // agente a trabalhar nele.
     if (msg.type === "window_scope") {
+      const antes = ws.__detachedProject || null;
       ws.__detachedProject =
         typeof msg.detachedProject === "string" && msg.detachedProject
           ? msg.detachedProject
           : null;
+      if (ws.__detachedProject !== antes) broadcastDetachedProjects();
       return;
     }
 
@@ -1989,12 +1992,42 @@ wss.on("connection", (ws) => {
     }
   });
 
-  ws.on("close", () => clients.delete(ws));
+  ws.on("close", () => {
+    clients.delete(ws);
+    // a janela desacoplada morreu (fechada, recarregada, ou o processo inteiro
+    // levado embora): quem sobrou precisa saber que o projeto voltou a ser
+    // fixável no mosaico
+    if (ws.__detachedProject) broadcastDetachedProjects();
+  });
 });
 
 function broadcast(msg) {
   const str = JSON.stringify(msg);
   for (const ws of clients) if (ws.readyState === 1) ws.send(str);
+}
+
+/**
+ * Os projetos que estão em janela própria agora.
+ *
+ * A verdade é o conjunto de clientes vivos, não um registro que alguém precise
+ * lembrar de apagar: janela desacoplada é WebSocket aberto declarando o seu
+ * `window_scope`, e WebSocket que cai o servidor percebe sozinho. Antes disto o
+ * renderer guardava a lista no localStorage e a janela se desmarcava no
+ * pagehide — que não roda quando o processo morre de uma vez —, então um quit,
+ * um kill ou um crash deixavam o projeto marcado como desacoplado para sempre,
+ * fora do seletor do mosaico e sem janela alguma para reabri-lo.
+ */
+function detachedProjectIds() {
+  const ids = new Set();
+  for (const ws of clients) {
+    if (ws.readyState !== 1) continue;
+    if (ws.__detachedProject) ids.add(ws.__detachedProject);
+  }
+  return [...ids];
+}
+
+function broadcastDetachedProjects() {
+  broadcast({ type: "detached_projects", ids: detachedProjectIds() });
 }
 
 function broadcastTerminalStatus(session, terminal) {

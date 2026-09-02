@@ -8,6 +8,29 @@ Datas em GMT-3 (Horário de Brasília).
 
 ---
 
+## [0.22.1] — 2026-09-02
+
+### Corrigido
+- **Projeto desacoplado sumia da lista e não voltava mais.** Quem estava em janela própria era
+  anotado no `localStorage`, e a própria janela desacoplada se apagava dali no `pagehide` — que
+  não roda quando o processo morre de uma vez: o `app.exit` do encerramento, um `kill`, um crash,
+  o fim da sessão gráfica. A anotação sobrevivia ao app, e como o seletor do mosaico esconde
+  projeto que já está em janela própria, o projeto sumia do "clique pra adicionar ao card" para
+  sempre, sem janela nenhuma aberta para justificar. Agora quem responde é o servidor: cada
+  janela já declarava seu escopo no `window_scope` do WebSocket, e a lista viva sai daí — vai no
+  `hello` e é retransmitida a cada janela que abre ou cai. Não existe mais registro que alguém
+  precise lembrar de apagar; socket que cai o servidor percebe sozinho.
+
+### Alterado
+- **Fechar o Cockpit fecha o Cockpit inteiro.** A última janela principal a fechar leva junto as
+  janelas desacopladas. Antes elas ficavam de pé sozinhas — sem sidebar e sem como reancorar o
+  projeto —, segurando o app vivo enquanto o usuário jurava já tê-lo fechado. Sem a confirmação
+  por projeto, que existe para o fechamento avulso: aqui o app está saindo e o shutdown do
+  servidor leva todos os PTYs junto. Fechar uma de várias janelas principais (Ctrl+Shift+N) não
+  mexe em nada.
+
+---
+
 ## [0.22.0] — 2026-08-29
 
 ### Adicionado

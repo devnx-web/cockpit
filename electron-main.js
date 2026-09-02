@@ -185,7 +185,32 @@ function makeWindow(serverUrl, { width, height, minWidth, minHeight, query = "" 
 // terminais, e o servidor já transmite tudo pra cada cliente conectado.
 function openMainWindow(serverUrl) {
   serverUrlRef = serverUrl;
-  return makeWindow(serverUrl, { minWidth: 980, minHeight: 600 });
+  const win = makeWindow(serverUrl, { minWidth: 980, minHeight: 600 });
+  win.__cockpitMain = true;
+
+  // Fechar a última janela principal fecha o Cockpit — e "o Cockpit" inclui as
+  // janelas desacopladas. Sem isto elas ficavam de pé sozinhas, sem sidebar e
+  // sem como reancorar o projeto, segurando o app vivo enquanto o usuário jurava
+  // já tê-lo fechado.
+  win.on("closed", () => {
+    const sobrouPrincipal = BrowserWindow.getAllWindows()
+      .some((w) => w.__cockpitMain && !w.isDestroyed());
+    if (!sobrouPrincipal) closeDetachedWindows();
+  });
+  return win;
+}
+
+// Encerra as janelas desacopladas sem passar pela confirmação do renderer: ela
+// existe para o fechamento avulso, em que os terminais do projeto seguiriam
+// rodando sem dono. Aqui o app inteiro está saindo e o shutdown do servidor
+// leva todos os PTYs junto — perguntar por projeto seria um interrogatório com
+// uma resposta só.
+function closeDetachedWindows() {
+  for (const win of detachedWindows.values()) {
+    if (!win || win.isDestroyed()) continue;
+    win.__cockpitClosing = true;
+    win.close();
+  }
 }
 
 // IPC: controles da janela (renderer chama via window.cockpitDesktop).

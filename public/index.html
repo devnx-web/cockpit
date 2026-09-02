@@ -4551,25 +4551,29 @@
     const DETACHED_PROJ = new URLSearchParams(location.search).get("detach") || null;
     if (DETACHED_PROJ) layoutMode = "focus";
 
-    // Quem está desacoplado agora. Vive no localStorage porque o evento "storage"
-    // é o canal mais barato entre janelas de mesma origem — e BrowserWindows do
-    // Electron compartilham a origem. A janela desacoplada é a dona do registro:
-    // se marca ao abrir e se desmarca ao fechar.
-    const DETACHED_KEY = "cockpit-detached-projs";
-    function detachedProjs() {
-      try {
-        const v = JSON.parse(localStorage.getItem(DETACHED_KEY) || "[]");
-        return new Set(Array.isArray(v) ? v : []);
-      } catch { return new Set(); }
-    }
+    // Quem está desacoplado agora, segundo o servidor. Cada janela declara seu
+    // escopo no `window_scope` do WebSocket, e a lista viva sai daí — chega no
+    // hello e é retransmitida a cada janela que abre ou cai.
+    //
+    // Isto já morou no localStorage, com a janela desacoplada se marcando ao
+    // abrir e se desmarcando no pagehide. Só que pagehide não roda quando o
+    // processo morre de uma vez — o app.exit do quit, um kill, um crash, o fim
+    // da sessão gráfica —, e a marca ficava presa sem janela nenhuma para
+    // justificá-la: o projeto sumia do seletor do mosaico para sempre. Um
+    // WebSocket que cai, ao contrário, o servidor sempre percebe.
+    let detachedSet = new Set();
     function isDetached(projId) {
-      return projId !== DETACHED_PROJ && detachedProjs().has(projId);
+      return projId !== DETACHED_PROJ && detachedSet.has(projId);
     }
-    function markDetached(projId, on) {
-      const set = detachedProjs();
-      if (on) set.add(projId); else set.delete(projId);
-      localStorage.setItem(DETACHED_KEY, JSON.stringify([...set]));
+    function setDetachedProjs(ids, { render = true } = {}) {
+      const next = new Set(Array.isArray(ids) ? ids : []);
+      if (next.size === detachedSet.size && [...next].every((id) => detachedSet.has(id))) return;
+      detachedSet = next;
+      if (render && !DETACHED_PROJ && layoutMode === "mosaic") renderMosaic();
     }
+    // Sobra das versões que guardavam isto no disco: ninguém mais lê, e deixá-la
+    // lá só faria a chave ressuscitar numa eventual volta atrás.
+    try { localStorage.removeItem("cockpit-detached-projs"); } catch {}
     // handles de janelas abertas por window.open (modo navegador, sem Electron)
     const detachedTabs = new Map();
 
@@ -4603,18 +4607,8 @@
       if (w) detachedTabs.set(projId, w);
     }
 
-    if (DETACHED_PROJ) {
-      markDetached(DETACHED_PROJ, true);
-      // pagehide cobre fechar, recarregar e navegar — inclusive no Safari, onde
-      // beforeunload nem sempre dispara
-      window.addEventListener("pagehide", () => markDetached(DETACHED_PROJ, false));
-    } else {
-      // outra janela desacoplou/reancorou algo: o card correspondente muda
-      window.addEventListener("storage", (e) => {
-        if (e.key !== DETACHED_KEY) return;
-        if (layoutMode === "mosaic") renderMosaic();
-      });
-    }
+    // Nada a registrar aqui: quem anuncia esta janela é o `window_scope` na
+    // abertura do WebSocket, e quem avisa as outras é o servidor.
     // gridLayout: nº de colunas por linha, ex. [2,2] = 2 linhas de 2, [3,1] =
     // linha de 3 + linha de 1. Layout totalmente customizável pelo usuário.
     const GRID_MAX_ROWS = 6, GRID_MAX_COLS = 6;
@@ -10502,6 +10496,8 @@
     function handleMessage(msg) {
       switch (msg.type) {
         case "hello": handleHello(msg); break;
+        // alguém desacoplou um projeto, ou a janela desacoplada foi fechada
+        case "detached_projects": setDetachedProjs(msg.ids); break;
         case "output": {
           writeTerminalOutput(msg.projectId, msg.terminalId, msg.data);
           // mantém o "parado há X" do painel vivo sem precisar de round-trip:
@@ -10858,6 +10854,10 @@
       // no HTML como "v0.4 · alpha" e dessincronizava todo release.
       const versionEl = document.getElementById("titleVersion");
       if (versionEl) versionEl.textContent = msg.version ? `v${msg.version}` : "";
+
+      // antes do render: o seletor do mosaico esconde projeto que já está em
+      // janela própria
+      setDetachedProjs(msg.detachedProjects, { render: false });
 
       projects = msg.projects.map((p) => ({
         id: p.id, name: p.name, path: p.path,
