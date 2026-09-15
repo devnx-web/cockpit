@@ -2137,7 +2137,7 @@ const server = http.createServer((req, res) => {
   if (u.pathname === "/accounts/usage") {
     const usage = teamRouter.status().connected
       ? teamRouter.usageTable()
-      : Promise.resolve({ claude: [], codex: [], central: true, connected: false });
+      : Promise.resolve({ claude: [], codex: [], gemini: [], central: true, connected: false });
     usage
       .then((table) => {
         res.writeHead(200, { "Content-Type": MIME[".json"], "Cache-Control": "no-cache" });

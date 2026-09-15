@@ -626,3 +626,130 @@ test("renovar empurra o vencimento sem trocar o segredo que o filho já leu", as
   assert.equal(client.renewClaudeCapability("cc-cockpit-inexistente"), false);
   t.mock.timers.reset();
 });
+
+const GEMINI_ACCOUNT = "44444444-4444-4444-8444-444444444444";
+
+function geminiSelection(id = GEMINI_ACCOUNT, suffix = "one", overrides = {}) {
+  const payload = JSON.stringify({
+    token: {
+      access_token: `google-access-${suffix}`,
+      token_type: "Bearer",
+      refresh_token: "",
+      expiry: "2099-01-01T00:00:00.000000+00:00",
+    },
+    auth_method: "consumer",
+  });
+  return {
+    account: { id, provider: "gemini", label: `Gemini ${suffix}` },
+    client: {
+      type: "antigravity_oauth_token",
+      path: ".gemini/antigravity-cli/antigravity-oauth-token",
+      payload,
+      expires_at: "2099-01-01T00:00:00Z",
+      ...overrides,
+    },
+  };
+}
+
+function fakeAgy(homeDir) {
+  const dir = path.join(homeDir, "fake-bin");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "agy");
+  fs.writeFileSync(file, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  return file;
+}
+
+async function selectGemini(t, selection = geminiSelection()) {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "cockpit-gemini-test-"));
+  t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
+  const geminiCliPath = fakeAgy(homeDir);
+  const fixture = makeFixture(t, ({ url, body }) => {
+    if (url.pathname === "/api/login") return json({ access_token: "jwt" });
+    if (url.pathname === "/api/cockpit-ai/device-tokens") return json({ token: "device" });
+    if (url.pathname === "/api/cockpit-ai/select" && body.provider === "gemini") return json(selection);
+    return json({}, 404);
+  }, { geminiCliPath });
+  await connect(fixture.client);
+  return { ...fixture, geminiCliPath };
+}
+
+test("a sessão Google é escrita num HOME por conta e o shim entra no PATH do PTY", async (t) => {
+  const { client, homeDir, geminiCliPath } = await selectGemini(t);
+
+  const selected = await client.selectBest("gemini");
+  assert.equal(selected.account.provider, "gemini");
+  const written = client.materializeGeminiSession();
+
+  const geminiRoot = path.join(homeDir, ".cockpit", "gemini");
+  assert.ok(written.path.startsWith(path.join(geminiRoot, "accounts")));
+  assert.ok(written.path.endsWith(path.join(".gemini", "antigravity-cli", "antigravity-oauth-token")));
+  assert.equal(fs.statSync(written.path).mode & 0o777, 0o600);
+
+  const stored = JSON.parse(fs.readFileSync(written.path, "utf8"));
+  assert.equal(stored.token.access_token, "google-access-one");
+  assert.equal(stored.token.refresh_token, "");
+
+  const env = client.enrichPtyEnv({ PATH: `/usr/bin:${path.join(geminiRoot, "bin", "stale")}` });
+  const shimDir = env.PATH.split(path.delimiter)[0];
+  assert.ok(shimDir.startsWith(path.join(geminiRoot, "bin")));
+  assert.equal(env.PATH.includes(path.join(geminiRoot, "bin", "stale")), false);
+  assert.ok(env.PATH.includes("/usr/bin"));
+
+  const shim = fs.readFileSync(path.join(shimDir, "agy"), "utf8");
+  const accountHome = path.dirname(path.dirname(path.dirname(written.path)));
+  // O keyring tem precedência sobre o arquivo no CLI 1.2.3: sem desligar o
+  // Secret Service do processo, o `agy` usaria o login pessoal do usuário.
+  assert.equal(
+    shim.includes(
+      `exec env HOME='${accountHome}' `
+      + `DBUS_SESSION_BUS_ADDRESS='unix:path=/nonexistent/cockpit-sem-keyring' `
+      + `'${geminiCliPath}' "$@"`,
+    ),
+    true,
+  );
+  assert.equal(fs.statSync(path.join(shimDir, "agy")).mode & 0o777, 0o700);
+
+  // Nada da sessão pode escapar para o status público.
+  assert.doesNotMatch(JSON.stringify(client.status()), /google-access-one/);
+});
+
+test("sem seleção Google o PTY aponta para um HOME vazio e é promovido quando a seleção chega", async (t) => {
+  const { client, homeDir } = await selectGemini(t);
+  const geminiRoot = path.join(homeDir, ".cockpit", "gemini");
+  const unavailableToken = path.join(
+    geminiRoot, "unavailable", ".gemini", "antigravity-cli", "antigravity-oauth-token",
+  );
+
+  const env = client.enrichPtyEnv({ PATH: "/usr/bin" });
+  assert.equal(env.PATH.split(path.delimiter)[0], path.join(geminiRoot, "bin", "unavailable"));
+  assert.equal(fs.existsSync(unavailableToken), false);
+
+  const shim = fs.readFileSync(path.join(geminiRoot, "bin", "unavailable", "agy"), "utf8");
+  assert.equal(shim.includes(`HOME='${path.join(geminiRoot, "unavailable")}'`), true);
+
+  await client.selectBest("gemini");
+  client.materializeGeminiSession();
+  assert.equal(fs.statSync(unavailableToken).mode & 0o777, 0o600);
+});
+
+test("um caminho de sessão fora do diretório do Cockpit é recusado", async (t) => {
+  const { client, homeDir } = await selectGemini(
+    t,
+    geminiSelection(GEMINI_ACCOUNT, "one", { path: "../../../.gemini/antigravity-cli/antigravity-oauth-token" }),
+  );
+  await assert.rejects(
+    () => client.selectBest("gemini"),
+    (error) => error instanceof TeamAccountsError && error.code === "UNSAFE_SERVER_RESPONSE",
+  );
+  assert.equal(fs.existsSync(path.join(homeDir, ".cockpit", "gemini", "accounts")), false);
+});
+
+test("um refresh token Google vindo do servidor é recusado", async (t) => {
+  const { client } = await selectGemini(t, geminiSelection(GEMINI_ACCOUNT, "one", {
+    payload: JSON.stringify({ token: { access_token: "a", refresh_token: "1//leaked" } }),
+  }));
+  await assert.rejects(
+    () => client.selectBest("gemini"),
+    (error) => error instanceof TeamAccountsError && error.code === "UNSAFE_SERVER_RESPONSE",
+  );
+});

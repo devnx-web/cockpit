@@ -688,6 +688,7 @@
     }
     .usage-acc-plat.claude { background: rgba(217,119,87,.18); color: #e0a07f; }
     .usage-acc-plat.codex  { background: rgba(74,222,128,.14); color: #74d39a; }
+    .usage-acc-plat.gemini { background: rgba(138,180,248,.16); color: #9ab7f5; }
     .usage-acc-plan {
       font-size: 8px; line-height: 1; color: var(--text-disabled); text-transform: uppercase;
       letter-spacing: .06em; font-variant-numeric: tabular-nums;
@@ -12484,6 +12485,7 @@
         const runtime = [
           ["claude", "Ailiv C", selected.claude],
           ["codex", "Ailiv G", selected.openai],
+          ["gemini", "Ailiv A", selected.gemini],
         ].map(([platform, label, account]) => `<div class="acc-row2 ${account ? "is-active" : ""}"><div class="acc-row2-head"><div class="acc-meta"><span class="usage-acc-plat ${platform}">${label}</span><span class="acc-email">${account ? escapeHtml(account.label || "selecionada pelo Laravel") : "aguardando seleção central"}</span></div>${account ? '<span class="acc-badge-active">● em uso</span>' : ""}</div></div>`).join("");
         panel.innerHTML = hubMarkup(status) +
           `<div class="acc-head team-divider-label"><div class="acc-title">Sessões recebidas</div><span class="team-central-mark">definidas pelo Laravel</span></div>` +

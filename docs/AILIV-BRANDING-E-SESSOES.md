@@ -12,6 +12,7 @@ O Cockpit apresenta os dois agentes com identidade interna Ailiv, sem alterar os
 |---|---|---|---|
 | **Ailiv C** | `claude` | `claude` | `CLAUDE_CONFIG_DIR` dentro de `~/.cockpit` |
 | **Ailiv G** | `openai` / `codex` | `codex` | `CODEX_HOME` por conta dentro de `~/.cockpit` |
+| **Ailiv A** | `gemini` / `antigravity` | `agy` | `HOME` por conta dentro de `~/.cockpit`, via shim no `PATH` (sem keyring) |
 
 Regra principal: **branding é visual; autenticação e protocolos continuam com os nomes originais**. Não renomear comandos, variáveis de ambiente, providers ou model IDs enviados às APIs.
 
@@ -316,7 +317,7 @@ O e-mail/label da conta não é inserido no HTML desse resumo, nem em `title` ou
 1. O Cockpit conecta ao DevNX Control por HTTPS.
 2. Login e senha são usados somente para obter um token de dispositivo.
 3. O token mínimo é salvo em `~/.cockpit/team-auth.json`, com permissão `0600`.
-4. No bootstrap, o Laravel escolhe a melhor conta disponível para `claude` e `openai`.
+4. No bootstrap, o Laravel escolhe a melhor conta disponível para `claude`, `openai` e `gemini`.
 5. A sessão selecionada é mantida pelo broker do Cockpit e aplicada somente a novos terminais.
 6. Consumo, validade, prioridade, renovação e disponibilidade continuam sendo responsabilidade do Laravel.
 
@@ -335,6 +336,10 @@ Nunca documentar usuário, senha, token de dispositivo, refresh token ou conteú
 - Ailiv C recebe o OAuth central por `CLAUDE_CODE_OAUTH_TOKEN`.
 - Ailiv G recebe um `CODEX_HOME` separado por conta. O diretório usa um hash do ID público da conta e preserva histórico por conta sem misturar autenticação.
 - O refresh token verdadeiro do Ailiv G fica no Laravel. O `auth.json` isolado recebe uma capability efêmera, resolvida apenas pelo endpoint loopback do Cockpit.
+- Ailiv A recebe um `HOME` separado por conta, pelo mesmo hash do ID público. O `agy` lê a sessão de um caminho fixo sob o `HOME` e não aceita variável de ambiente para redirecioná-lo; por isso o Cockpit põe `~/.cockpit/gemini/bin/<conta>` na frente do `PATH` do PTY, onde um shim `agy` executa o CLI real com o `HOME` da conta. O `HOME` do terminal e o login pessoal em `~/.gemini` não são tocados.
+- O shim também aponta o `DBUS_SESSION_BUS_ADDRESS` do processo do `agy` para um caminho inexistente. Medido no CLI 1.2.3: quando o Secret Service responde, o `agy` usa a sessão guardada no keyring e ignora o arquivo — trocar apenas o `HOME` faria o terminal autenticar na conta pessoal do usuário. O keyring em si não é alterado; só deixa de ser alcançável de dentro daquele processo.
+- Sem seleção Google, o shim aponta para um `HOME` vazio: o CLI pede login em vez de cair na conta pessoal. Quando a seleção chega, esse `HOME` fail-closed é promovido uma vez, como acontece com o `CODEX_HOME` do Ailiv G.
+- O refresh token do Ailiv A fica no Laravel. O arquivo de sessão recebe apenas o access token e é reescrito a cada bootstrap (a cada 15 min), sem nunca guardar credencial de longa duração na máquina.
 - Ao desconectar ou encerrar, material sensível temporário é removido; preferências e histórico isolado podem ser preservados.
 
 ### Rotas locais do Cockpit
@@ -440,6 +445,15 @@ Se o terminal voltar a ficar cinza depois de uma atualização, verificar primei
 - [ ] `/model` continua funcionando e a API recebe o model ID real.
 - [ ] A conta usada é a selecionada pelo DevNX Control.
 
+### Ailiv A
+
+- [ ] `command -v agy` aponta para o shim em `~/.cockpit/gemini/bin/`.
+- [ ] `agy` responde sem pedir login quando há conta Google selecionada.
+- [ ] `~/.gemini/antigravity-cli/` do usuário continua intocado.
+- [ ] O arquivo de sessão da conta está em modo `600` e o shim em `700`.
+- [ ] O shim define `DBUS_SESSION_BUS_ADDRESS` para um caminho inexistente (sem isso o CLI usa o keyring pessoal).
+- [ ] Sem seleção central, o `agy` pede login em vez de usar a conta pessoal.
+
 ### Cockpit
 
 - [ ] Atalhos mostram `ailiv c` e `ailiv g`.
@@ -469,6 +483,21 @@ Verificar:
 ### Ailiv C volta a pedir login
 
 Verificar se o DevNX Control selecionou uma conta Claude disponível, se `CLAUDE_CODE_OAUTH_TOKEN` está chegando apenas no PTY isolado e se `.claude.json` do perfil brokerado concluiu o onboarding.
+
+### Ailiv A volta a pedir login
+
+Verificar, nesta ordem:
+
+1. se o DevNX Control selecionou uma conta `gemini` disponível (a janela de 5h do plano é curta e o pool marca `limit_reached` com uma janela só);
+2. se `command -v agy` dentro do terminal do Cockpit aponta para `~/.cockpit/gemini/bin/<conta>/agy` — alias de shell, função ou caminho absoluto passam por fora do shim;
+2.1. se o shim ainda desliga o Secret Service: `tail -1 ~/.cockpit/gemini/bin/<conta>/agy` precisa conter `DBUS_SESSION_BUS_ADDRESS`. Sem isso o CLI não pede login — pior, entra silenciosamente na conta pessoal;
+3. se o `agy` está instalado no `PATH` do host: sem CLI o shim não é instalado e o diretório não entra no `PATH`.
+
+Um erro de elegibilidade (`Verify your account`) **não** é problema de sessão: é o Google sinalizando a conta, e só o dono resolve pelo link do alerta.
+
+> Em aberto: se o `agy` lê o arquivo de sessão apenas na partida, um terminal já
+> aberto morre quando o access token vence, mesmo com o arquivo reescrito. Nesse
+> caso, basta abrir um terminal novo.
 
 ### Ailiv G volta a pedir login
 

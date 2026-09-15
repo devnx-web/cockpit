@@ -40,6 +40,7 @@ function fakeClient(overrides = {}) {
       clientType: provider === "openai" ? "codex_oauth" : "claude_setup_token",
     }),
     materializeCodexAuth: async () => ({ path: "/tmp/broker/auth.json" }),
+    materializeGeminiSession: () => ({ path: "/tmp/broker/gemini/token" }),
     enrichPtyEnv: (env, { codexRefreshUrl }) => ({ ...env, CODEX_REFRESH_TOKEN_URL_OVERRIDE: codexRefreshUrl }),
     ...overrides,
   };
@@ -88,7 +89,7 @@ test("bootstrap materializes Codex auth before PTY environment enrichment", asyn
   });
 
   const result = await router.bootstrap();
-  assert.equal(result.selections.length, 2);
+  assert.equal(result.selections.length, 3);
   assert.equal(codexMaterialized, true);
   assert.equal(
     router.enrichPtyEnv({ TERM: "xterm" }).CODEX_REFRESH_TOKEN_URL_OVERRIDE,
@@ -124,10 +125,10 @@ test("stale PTY selections are refreshed once and concurrent refreshes are dedup
   release();
   await Promise.all([first, second]);
 
-  assert.equal(selections, 2);
+  assert.equal(selections, 3);
   const cached = await router.refreshSelectionsIfStale();
   assert.equal(cached.cached, true);
-  assert.equal(selections, 2);
+  assert.equal(selections, 3);
   assert.equal(materializations, 2);
 });
 
@@ -152,7 +153,7 @@ test("maxAgeMs zero forces a fresh backend selection for every terminal", async 
   await router.refreshSelectionsIfStale({ maxAgeMs: 0, retryMissingProviders: 0 });
   await router.refreshSelectionsIfStale({ maxAgeMs: 0, retryMissingProviders: 0 });
 
-  assert.equal(selections, 4);
+  assert.equal(selections, 6);
 });
 
 test("PTY preparation retries a transient missing provider selection", async () => {
@@ -198,7 +199,33 @@ test("manual optimize synchronizes usage before replacing provider selections", 
   await router.dispatch(request("POST", {}), { pathname: "/team/optimize" });
 
   assert.equal(events[0], "usage");
-  assert.deepEqual(new Set(events.slice(1)), new Set(["select:openai", "select:claude"]));
+  assert.deepEqual(new Set(events.slice(1)), new Set(["select:openai", "select:claude", "select:gemini"]));
+});
+
+// O Gemini é opcional: uma frota sem conta Google livre não pode ficar sem
+// terminal nem refazer o bootstrap a cada PTY por causa dele.
+test("uma seleção Google indisponível não invalida o cache das seleções obrigatórias", async () => {
+  const selected = {};
+  let selections = 0;
+  const client = fakeClient({
+    status: () => ({ connected: true, baseUrl: "https://control.example", selected }),
+    selectBest: async (provider) => {
+      selections += 1;
+      if (provider === "gemini") throw new Error("nenhuma conta Google disponível");
+      const account = { id: `${provider}-fresh`, provider, label: provider };
+      selected[provider] = account;
+      return { account };
+    },
+  });
+  const router = createTeamRouter({ client, brokerUrl: () => BROKER_URL });
+
+  const first = await router.refreshSelectionsIfStale({ retryMissingProviders: 0 });
+  assert.equal(first.selections.length, 2);
+  assert.equal(selections, 3);
+
+  const cached = await router.refreshSelectionsIfStale({ retryMissingProviders: 0 });
+  assert.equal(cached.cached, true);
+  assert.equal(selections, 3);
 });
 
 function collectResponse() {
